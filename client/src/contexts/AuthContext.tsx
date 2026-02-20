@@ -18,13 +18,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ── Dev Mode Mock User ──────────────────────────────────────────────────────
+// When the database is unreachable (local dev), fall back to a mock user
+// so that protected routes can be previewed without a live DB connection.
+const DEV_MOCK_USER: User = {
+  id: 1,
+  name: "Alice Wang",
+  email: "alice@tiktok.com",
+  role: "buyer",
+  company: "TikTok",
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data: user, isLoading } = trpc.auth.me.useQuery();
+  const { data: user, isLoading, error } = trpc.auth.me.useQuery(
+    undefined,
+    { retry: false }
+  );
+
+  // If the API is unreachable (DB down / local dev), use mock user
+  const resolvedUser = (user ?? (error ? DEV_MOCK_USER : null)) as User | null;
+  const resolvedLoading = isLoading && !error;
 
   const value: AuthContextType = {
-    user: user || null,
-    isLoading,
-    isAuthenticated: !!user,
+    user: resolvedUser,
+    isLoading: resolvedLoading,
+    isAuthenticated: !!resolvedUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

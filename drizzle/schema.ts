@@ -1,182 +1,317 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean } from "drizzle-orm/mysql-core";
-
 /**
- * 用户表 - 支持买家、工厂、普通用户三种角色
+ * RealSourcing Platform - Drizzle ORM Schema
+ * 与阿里云 RDS MySQL 数据库完全对齐
+ * 数据库: realsourcing @ rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com
  */
+import {
+  mysqlTable, int, varchar, text, json, decimal,
+  datetime, tinyint, boolean,
+} from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm";
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+// 实际表名: users
 export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }).unique(),
-  password: varchar("password", { length: 255 }), // 加密后的密码
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "buyer", "factory", "admin"]).default("user").notNull(),
-  avatar: text("avatar"), // 用户头像 URL
-  phone: varchar("phone", { length: 20 }),
-  company: text("company"), // 公司名称
-  position: text("position"), // 职位
-  bio: text("bio"), // 个人简介
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  id:           int("id").primaryKey().autoincrement(),
+  openId:       varchar("openId", { length: 64 }).notNull().unique(),
+  email:        varchar("email", { length: 320 }).unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  name:         varchar("name", { length: 100 }),
+  avatar:       varchar("avatar", { length: 500 }),
+  role:         varchar("role", { length: 20 }).notNull().default("user"),
+  status:       varchar("status", { length: 20 }).notNull().default("active"),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  lastSignedIn: datetime("lastLoginAt", { mode: "date", fsp: 3 }),
+  loginMethod:  varchar("loginMethod", { length: 50 }),
+  platform:     varchar("platform", { length: 50 }),
 });
 
-/**
- * Webinar 在线研讨会表
- */
-export const webinars = mysqlTable("webinars", {
-  id: int("id").autoincrement().primaryKey(),
-  title: varchar("title", { length: 255 }).notNull(),
-  description: text("description"),
-  coverImage: text("coverImage"), // 封面图片 URL
-  hostId: int("hostId").notNull(), // 主持人用户 ID
-  scheduledAt: timestamp("scheduledAt").notNull(), // 预定时间
-  duration: int("duration").notNull(), // 持续时间（分钟）
-  status: mysqlEnum("status", ["draft", "scheduled", "live", "completed", "cancelled"]).default("draft").notNull(),
-  maxParticipants: int("maxParticipants").default(100), // 最大参会人数
-  agoraChannelName: varchar("agoraChannelName", { length: 64 }), // Agora 频道名称
-  agoraToken: text("agoraToken"), // Agora Token
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-/**
- * Webinar 参会者表
- */
-export const webinarParticipants = mysqlTable("webinarParticipants", {
-  id: int("id").autoincrement().primaryKey(),
-  webinarId: int("webinarId").notNull(),
-  userId: int("userId").notNull(),
-  status: mysqlEnum("status", ["registered", "attended", "cancelled"]).default("registered").notNull(),
-  joinedAt: timestamp("joinedAt"),
-  leftAt: timestamp("leftAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-/**
- * 工厂表
- */
-export const factories = mysqlTable("factories", {
-  id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  logo: text("logo"), // 工厂 Logo URL
-  coverImage: text("coverImage"), // 封面图片 URL
-  ownerId: int("ownerId").notNull(), // 工厂所有者用户 ID
-  address: text("address"),
-  country: varchar("country", { length: 100 }),
-  city: varchar("city", { length: 100 }),
-  phone: varchar("phone", { length: 20 }),
-  email: varchar("email", { length: 320 }),
-  website: text("website"),
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("0.00"), // 评分 0-5
-  reviewCount: int("reviewCount").default(0), // 评价数量
-  certifications: text("certifications"), // 认证信息（JSON 格式）
-  established: int("established"), // 成立年份
-  employeeCount: int("employeeCount"), // 员工数量
-  verified: boolean("verified").default(false), // 是否认证
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-/**
- * 产品表
- */
-export const products = mysqlTable("products", {
-  id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  coverImage: text("coverImage"), // 封面图片 URL
-  images: text("images"), // 产品图片列表（JSON 格式）
-  factoryId: int("factoryId").notNull(), // 所属工厂 ID
-  category: varchar("category", { length: 100 }),
-  price: decimal("price", { precision: 10, scale: 2 }), // 价格
-  currency: varchar("currency", { length: 10 }).default("USD"),
-  moq: int("moq"), // 最小起订量（Minimum Order Quantity）
-  leadTime: int("leadTime"), // 交货时间（天）
-  specifications: text("specifications"), // 规格参数（JSON 格式）
-  tags: text("tags"), // 标签（JSON 格式）
-  status: mysqlEnum("status", ["draft", "active", "inactive"]).default("draft").notNull(),
-  viewCount: int("viewCount").default(0), // 浏览次数
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-/**
- * Webinar 与产品关联表
- */
-export const webinarProducts = mysqlTable("webinarProducts", {
-  id: int("id").autoincrement().primaryKey(),
-  webinarId: int("webinarId").notNull(),
-  productId: int("productId").notNull(),
-  displayOrder: int("displayOrder").default(0), // 展示顺序
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-/**
- * 工厂评价表
- */
-export const factoryReviews = mysqlTable("factoryReviews", {
-  id: int("id").autoincrement().primaryKey(),
-  factoryId: int("factoryId").notNull(),
-  userId: int("userId").notNull(),
-  rating: int("rating").notNull(), // 评分 1-5
-  comment: text("comment"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-/**
- * 消息通知表
- */
-export const notifications = mysqlTable("notifications", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(), // 接收者用户 ID
-  type: mysqlEnum("type", ["system", "webinar", "message", "review"]).notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  content: text("content"),
-  link: text("link"), // 相关链接
-  isRead: boolean("isRead").default(false),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-/**
- * 站内消息表
- */
-export const messages = mysqlTable("messages", {
-  id: int("id").autoincrement().primaryKey(),
-  senderId: int("senderId").notNull(), // 发送者用户 ID
-  receiverId: int("receiverId").notNull(), // 接收者用户 ID
-  subject: varchar("subject", { length: 255 }),
-  content: text("content").notNull(),
-  isRead: boolean("isRead").default(false),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-// 类型导出
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export type Webinar = typeof webinars.$inferSelect;
-export type InsertWebinar = typeof webinars.$inferInsert;
+// ─── User Profiles ────────────────────────────────────────────────────────────
+// 实际表名: user_profiles
+export const userProfiles = mysqlTable("user_profiles", {
+  id:        int("id").primaryKey().autoincrement(),
+  userId:    int("userId").notNull().unique(),
+  company:   varchar("company", { length: 255 }),
+  country:   varchar("country", { length: 100 }),
+  bio:       text("bio"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
 
-export type WebinarParticipant = typeof webinarParticipants.$inferSelect;
-export type InsertWebinarParticipant = typeof webinarParticipants.$inferInsert;
+// ─── Factories ────────────────────────────────────────────────────────────────
+// 实际表名: factories
+export const factories = mysqlTable("factories", {
+  id:           int("id").primaryKey().autoincrement(),
+  userId:       int("userId").notNull(),
+  name:         varchar("name", { length: 255 }).notNull(),
+  slug:         varchar("slug", { length: 255 }).unique(),
+  logo:         varchar("logo", { length: 500 }),
+  category:     varchar("category", { length: 100 }),
+  country:      varchar("country", { length: 100 }).default("China"),
+  city:         varchar("city", { length: 100 }),
+  description:  text("description"),
+  status:       varchar("status", { length: 20 }).notNull().default("pending"),
+  overallScore: decimal("overallScore", { precision: 3, scale: 2 }).default("0.00"),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
 
 export type Factory = typeof factories.$inferSelect;
 export type InsertFactory = typeof factories.$inferInsert;
 
+// ─── Factory Details (新表) ───────────────────────────────────────────────────
+export const factoryDetails = mysqlTable("factory_details", {
+  id:                 int("id").primaryKey().autoincrement(),
+  factoryId:          int("factoryId").notNull().unique(),
+  established:        int("established"),
+  employeeCount:      varchar("employeeCount", { length: 50 }),
+  annualRevenue:      varchar("annualRevenue", { length: 100 }),
+  certifications:     json("certifications"),
+  productionCapacity: json("productionCapacity"),
+  phone:              varchar("phone", { length: 30 }),
+  email:              varchar("email", { length: 255 }),
+  website:            varchar("website", { length: 500 }),
+  avgResponseTime:    varchar("avgResponseTime", { length: 20 }),
+  rating:             decimal("rating", { precision: 3, scale: 2 }).default("0.00"),
+  reviewCount:        int("reviewCount").default(0),
+  coverImage:         varchar("coverImage", { length: 500 }),
+  createdAt:          datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:          datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Webinars ─────────────────────────────────────────────────────────────────
+// 实际表名: webinars
+export const webinars = mysqlTable("webinars", {
+  id:          int("id").primaryKey().autoincrement(),
+  hostId:      int("hostId").notNull(),
+  title:       varchar("title", { length: 255 }).notNull(),
+  slug:        varchar("slug", { length: 255 }).unique(),
+  description: text("description"),
+  coverImage:  varchar("coverImage", { length: 500 }),
+  status:      varchar("status", { length: 20 }).notNull().default("draft"),
+  scheduledAt: datetime("scheduledAt", { mode: "date", fsp: 3 }),
+  duration:    int("duration").notNull().default(60),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:   datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type Webinar = typeof webinars.$inferSelect;
+export type InsertWebinar = typeof webinars.$inferInsert;
+
+// ─── Webinar Participants ─────────────────────────────────────────────────────
+// 实际表名: webinar_participants
+export const webinarParticipants = mysqlTable("webinar_participants", {
+  id:        int("id").primaryKey().autoincrement(),
+  webinarId: int("webinarId").notNull(),
+  userId:    int("userId"),
+  factoryId: int("factoryId"),
+  role:      varchar("role", { length: 20 }).notNull().default("attendee"),
+  status:    varchar("status", { length: 20 }).notNull().default("invited"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type WebinarParticipant = typeof webinarParticipants.$inferSelect;
+
+// ─── Webinar Registrations (新表) ─────────────────────────────────────────────
+export const webinarRegistrations = mysqlTable("webinar_registrations", {
+  id:           int("id").primaryKey().autoincrement(),
+  webinarId:    int("webinarId").notNull(),
+  userId:       int("userId").notNull(),
+  status:       varchar("status", { length: 20 }).notNull().default("registered"),
+  registeredAt: datetime("registeredAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+// 实际表名: products
+export const products = mysqlTable("products", {
+  id:          int("id").primaryKey().autoincrement(),
+  factoryId:   int("factoryId").notNull(),
+  name:        varchar("name", { length: 255 }).notNull(),
+  slug:        varchar("slug", { length: 255 }).unique(),
+  category:    varchar("category", { length: 100 }),
+  description: text("description"),
+  images:      json("images"),
+  status:      varchar("status", { length: 20 }).notNull().default("draft"),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:   datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = typeof products.$inferInsert;
 
-export type WebinarProduct = typeof webinarProducts.$inferSelect;
-export type InsertWebinarProduct = typeof webinarProducts.$inferInsert;
+// ─── Product Details (新表) ───────────────────────────────────────────────────
+export const productDetails = mysqlTable("product_details", {
+  id:           int("id").primaryKey().autoincrement(),
+  productId:    int("productId").notNull().unique(),
+  priceMin:     decimal("priceMin", { precision: 10, scale: 2 }),
+  priceMax:     decimal("priceMax", { precision: 10, scale: 2 }),
+  currency:     varchar("currency", { length: 10 }).default("USD"),
+  moq:          int("moq").default(1),
+  stock:        int("stock").default(0),
+  unit:         varchar("unit", { length: 20 }).default("件"),
+  model:        varchar("model", { length: 100 }),
+  brand:        varchar("brand", { length: 100 }),
+  size:         varchar("size", { length: 100 }),
+  weight:       varchar("weight", { length: 50 }),
+  material:     varchar("material", { length: 200 }),
+  features:     text("features"),
+  rating:       decimal("rating", { precision: 3, scale: 2 }).default("0.00"),
+  reviewCount:  int("reviewCount").default(0),
+  leadTimeDays: int("leadTimeDays"),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Webinar Products ─────────────────────────────────────────────────────────
+// 实际表名: webinar_products
+export const webinarProducts = mysqlTable("webinar_products", {
+  id:        int("id").primaryKey().autoincrement(),
+  webinarId: int("webinarId").notNull(),
+  productId: int("productId").notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+// 实际表名: messages
+export const messages = mysqlTable("messages", {
+  id:        int("id").primaryKey().autoincrement(),
+  webinarId: int("webinarId"),
+  senderId:  int("senderId").notNull(),
+  content:   text("content").notNull(),
+  type:      varchar("type", { length: 20 }).notNull().default("text"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+// 实际表名: subscriptions
+export const subscriptions = mysqlTable("subscriptions", {
+  id:        int("id").primaryKey().autoincrement(),
+  userId:    int("userId").notNull(),
+  planId:    varchar("planId", { length: 50 }).notNull(),
+  status:    varchar("status", { length: 20 }).notNull().default("active"),
+  startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Meetings (新表) ──────────────────────────────────────────────────────────
+export const meetings = mysqlTable("meetings", {
+  id:                  int("id").primaryKey().autoincrement(),
+  buyerId:             int("buyerId").notNull(),
+  factoryId:           int("factoryId").notNull(),
+  factoryUserId:       int("factoryUserId"),
+  title:               varchar("title", { length: 255 }).notNull(),
+  status:              varchar("status", { length: 20 }).notNull().default("scheduled"),
+  scheduledAt:         datetime("scheduledAt", { mode: "date", fsp: 3 }),
+  startedAt:           datetime("startedAt", { mode: "date", fsp: 3 }),
+  endedAt:             datetime("endedAt", { mode: "date", fsp: 3 }),
+  durationMinutes:     int("durationMinutes"),
+  recordingUrl:        varchar("recordingUrl", { length: 500 }),
+  recordingThumbnail:  varchar("recordingThumbnail", { length: 500 }),
+  transcript:          json("transcript"),
+  aiSummary:           json("aiSummary"),
+  aiReelUrl:           varchar("aiReelUrl", { length: 500 }),
+  aiReelThumbnail:     varchar("aiReelThumbnail", { length: 500 }),
+  productsShownCount:  int("productsShownCount").default(0),
+  productsLikedCount:  int("productsLikedCount").default(0),
+  inquiriesMadeCount:  int("inquiriesMadeCount").default(0),
+  agoraChannelName:    varchar("agoraChannelName", { length: 64 }),
+  followUpActions:     json("followUpActions"),
+  notes:               text("notes"),
+  createdAt:           datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:           datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type Meeting = typeof meetings.$inferSelect;
+export type InsertMeeting = typeof meetings.$inferInsert;
+
+// ─── Meeting Transcripts (新表) ───────────────────────────────────────────────
+export const meetingTranscripts = mysqlTable("meeting_transcripts", {
+  id:          int("id").primaryKey().autoincrement(),
+  meetingId:   int("meetingId").notNull(),
+  speakerId:   int("speakerId"),
+  speakerName: varchar("speakerName", { length: 100 }),
+  content:     text("content").notNull(),
+  timestamp:   varchar("timestamp", { length: 10 }),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+// ─── Inquiries (新表) ─────────────────────────────────────────────────────────
+export const inquiries = mysqlTable("inquiries", {
+  id:           int("id").primaryKey().autoincrement(),
+  buyerId:      int("buyerId").notNull(),
+  factoryId:    int("factoryId").notNull(),
+  productId:    int("productId"),
+  meetingId:    int("meetingId"),
+  quantity:     int("quantity"),
+  destination:  varchar("destination", { length: 255 }),
+  notes:        text("notes"),
+  status:       varchar("status", { length: 20 }).notNull().default("pending"),
+  replyContent: text("replyContent"),
+  repliedAt:    datetime("repliedAt", { mode: "date", fsp: 3 }),
+  quotedPrice:  decimal("quotedPrice", { precision: 10, scale: 2 }),
+  currency:     varchar("currency", { length: 10 }).default("USD"),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type Inquiry = typeof inquiries.$inferSelect;
+export type InsertInquiry = typeof inquiries.$inferInsert;
+
+// ─── Factory Reviews (新表) ───────────────────────────────────────────────────
+export const factoryReviews = mysqlTable("factory_reviews", {
+  id:        int("id").primaryKey().autoincrement(),
+  factoryId: int("factoryId").notNull(),
+  userId:    int("userId").notNull(),
+  rating:    int("rating").notNull(),
+  comment:   text("comment"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
 
 export type FactoryReview = typeof factoryReviews.$inferSelect;
-export type InsertFactoryReview = typeof factoryReviews.$inferInsert;
+
+// ─── Product Reviews (新表) ───────────────────────────────────────────────────
+export const productReviews = mysqlTable("product_reviews", {
+  id:        int("id").primaryKey().autoincrement(),
+  productId: int("productId").notNull(),
+  userId:    int("userId").notNull(),
+  rating:    int("rating").notNull(),
+  comment:   text("comment"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type ProductReview = typeof productReviews.$inferSelect;
+
+// ─── User Favorites (新表) ────────────────────────────────────────────────────
+export const userFavorites = mysqlTable("user_favorites", {
+  id:         int("id").primaryKey().autoincrement(),
+  userId:     int("userId").notNull(),
+  targetType: varchar("targetType", { length: 20 }).notNull(),
+  targetId:   int("targetId").notNull(),
+  createdAt:  datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type UserFavorite = typeof userFavorites.$inferSelect;
+
+// ─── Notifications (新表) ─────────────────────────────────────────────────────
+export const notifications = mysqlTable("notifications", {
+  id:        int("id").primaryKey().autoincrement(),
+  userId:    int("userId").notNull(),
+  type:      varchar("type", { length: 30 }).notNull(),
+  title:     varchar("title", { length: 255 }).notNull(),
+  content:   text("content"),
+  link:      varchar("link", { length: 500 }),
+  isRead:    tinyint("isRead").default(0),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
 
 export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = typeof notifications.$inferInsert;
-
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = typeof messages.$inferInsert;

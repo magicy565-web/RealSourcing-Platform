@@ -17,6 +17,11 @@ import WebinarLiveRoom from "./pages/WebinarLiveRoom";
 import PrivateMeetingRoom from "./pages/PrivateMeetingRoom";
 import MeetingReelGenerator from "./pages/MeetingReelGenerator";
 import Notifications from "./pages/Notifications";
+// ── New Detail Pages ──────────────────────────────────────────────────────────
+import WebinarDetail from "./pages/WebinarDetail";
+import FactoryDetail from "./pages/FactoryDetail";
+import ProductDetail from "./pages/ProductDetail";
+import MeetingDetail from "./pages/MeetingDetail";
 
 function Router() {
   return (
@@ -24,7 +29,7 @@ function Router() {
       {/* Public routes without Layout */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
-      
+
       {/* Protected routes without Layout (has its own sidebar) */}
       <Route path="/dashboard">
         <ProtectedRoute>
@@ -51,6 +56,7 @@ function Router() {
           <WebinarLiveRoom />
         </ProtectedRoute>
       </Route>
+      {/* Meeting live room (existing) */}
       <Route path="/meeting/:id">
         <ProtectedRoute>
           <PrivateMeetingRoom />
@@ -66,7 +72,29 @@ function Router() {
           <Notifications />
         </ProtectedRoute>
       </Route>
-      
+
+      {/* ── Detail Pages (new) ── */}
+      <Route path="/webinar/:id">
+        <ProtectedRoute>
+          <WebinarDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/factory/:id">
+        <ProtectedRoute>
+          <FactoryDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/product/:id">
+        <ProtectedRoute>
+          <ProductDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/meeting-detail/:id">
+        <ProtectedRoute>
+          <MeetingDetail />
+        </ProtectedRoute>
+      </Route>
+
       {/* Routes with Layout */}
       <Route path="/">
         <Layout>

@@ -191,7 +191,7 @@ export default function Webinars() {
               <Card
                 key={webinar.id}
                 className="glass-card hover:glow-purple transition-all group cursor-pointer"
-                onClick={() => setLocation(`/webinar-live/${webinar.id}`)}
+                onClick={() => setLocation(`/webinar/${webinar.id}`)}
               >
                 <CardContent className="p-0">
                   {/* Image */}

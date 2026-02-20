@@ -26,12 +26,8 @@ export default function Notifications() {
       toast.success("已全部标记为已读");
     },
   });
-  const deleteMutation = trpc.notifications.delete.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("已删除通知");
-    },
-  });
+  // Note: delete endpoint removed - use markAsRead instead
+  const deleteMutation = { mutate: (_: any) => toast.info("功能暂未开放"), isPending: false };
 
   const filteredNotifications = notifications.filter((n: any) => {
     if (filter === "unread") return !n.isRead;

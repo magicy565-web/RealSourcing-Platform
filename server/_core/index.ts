@@ -35,6 +35,41 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // ── Dev-only: instant login endpoint (bypasses DB) ──────────────────────────
+  // This sets a valid JWT cookie so protected routes work without a live DB.
+  if (process.env.NODE_ENV === "development") {
+    const { SignJWT } = await import("jose");
+    const { COOKIE_NAME } = await import("../../shared/const");
+    const { ENV } = await import("./env");
+    const { getSessionCookieOptions } = await import("./sdk") as any;
+    app.get("/api/dev-login", async (req, res) => {
+      try {
+        const secretKey = new TextEncoder().encode(ENV.cookieSecret || "dev-secret");
+        const token = await new SignJWT({
+          openId: "dev-user-001",
+          appId: ENV.appId || "dev-app",
+          name: "Alice Wang (Dev)",
+        })
+          .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+          .setExpirationTime("365d")
+          .sign(secretKey);
+        const cookieOpts = {
+          httpOnly: true,
+          secure: false,
+          sameSite: "lax" as const,
+          path: "/",
+          maxAge: 365 * 24 * 60 * 60 * 1000,
+        };
+        res.cookie(COOKIE_NAME, token, cookieOpts);
+        const redirect = (req.query.returnTo as string) || "/";
+        res.redirect(redirect);
+      } catch (e) {
+        res.status(500).send("Dev login failed: " + String(e));
+      }
+    });
+  }
+
   // tRPC API
   app.use(
     "/api/trpc",

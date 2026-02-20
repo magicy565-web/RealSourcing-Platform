@@ -1,201 +1,374 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, like, or } from "drizzle-orm";
 
-let connection: mysql.Connection;
-let db: any;
+let pool: mysql.Pool;
+let db: ReturnType<typeof drizzle<typeof schema>>;
 
 async function initDb() {
-  if (!connection) {
-    connection = await mysql.createConnection(process.env.DATABASE_URL!);
-    db = drizzle(connection, { schema, mode: "default" });
+  if (!pool) {
+    pool = mysql.createPool(process.env.DATABASE_URL!);
+    db = drizzle(pool, { schema, mode: "default" }) as any;
   }
   return db;
 }
 
-// Initialize immediately
 const dbPromise = initDb();
 export { db };
 
-// ========== User Operations ==========
+// ─── User Operations ──────────────────────────────────────────────────────────
 
 export async function getUserByEmail(email: string) {
   const database = await dbPromise;
-  const users = await database.select().from(schema.users).where(eq(schema.users.email, email));
-  return users[0];
+  const rows = await database.select().from(schema.users).where(eq(schema.users.email, email));
+  return rows[0];
 }
 
 export async function getUserById(id: number) {
   const database = await dbPromise;
-  const users = await database.select().from(schema.users).where(eq(schema.users.id, id));
-  return users[0];
+  const rows = await database.select().from(schema.users).where(eq(schema.users.id, id));
+  return rows[0];
 }
 
 export async function getUserByOpenId(openId: string) {
   const database = await dbPromise;
-  const users = await database.select().from(schema.users).where(eq(schema.users.openId, openId));
-  return users[0];
+  const rows = await database.select().from(schema.users).where(eq(schema.users.openId, openId));
+  return rows[0];
 }
 
-export async function upsertUser(data: typeof schema.users.$inferInsert) {
+export async function upsertUser(data: Partial<typeof schema.users.$inferInsert> & { openId: string }) {
   const database = await dbPromise;
   const existing = await getUserByOpenId(data.openId);
   if (existing) {
-    await database.update(schema.users).set(data).where(eq(schema.users.openId, data.openId));
+    await database.update(schema.users).set(data as any).where(eq(schema.users.openId, data.openId));
     return await getUserByOpenId(data.openId);
   } else {
-    await database.insert(schema.users).values(data);
+    await database.insert(schema.users).values(data as any);
     return await getUserByOpenId(data.openId);
   }
 }
 
 export async function createUser(data: typeof schema.users.$inferInsert) {
   const database = await dbPromise;
-  const result = await database.insert(schema.users).values(data);
-  return result;
+  return await database.insert(schema.users).values(data);
 }
 
-// ========== Webinar Operations ==========
+// ─── Webinar Operations ───────────────────────────────────────────────────────
 
 export async function getAllWebinars() {
-  return await db.select().from(schema.webinars).orderBy(desc(schema.webinars.createdAt));
+  const database = await dbPromise;
+  return await database.select().from(schema.webinars).orderBy(desc(schema.webinars.createdAt));
 }
 
 export async function getWebinarById(id: number) {
-  const webinars = await db.select().from(schema.webinars).where(eq(schema.webinars.id, id));
-  return webinars[0];
-}
-
-export async function getWebinarsByStatus(status: "draft" | "scheduled" | "live" | "completed" | "cancelled") {
-  return await db.select().from(schema.webinars).where(eq(schema.webinars.status, status));
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.webinars).where(eq(schema.webinars.id, id));
+  return rows[0];
 }
 
 export async function getWebinarsByHostId(hostId: number) {
-  return await db.select().from(schema.webinars).where(eq(schema.webinars.hostId, hostId));
+  const database = await dbPromise;
+  return await database.select().from(schema.webinars).where(eq(schema.webinars.hostId, hostId));
 }
 
 export async function createWebinar(data: typeof schema.webinars.$inferInsert) {
-  const result = await db.insert(schema.webinars).values(data);
-  return result;
+  const database = await dbPromise;
+  return await database.insert(schema.webinars).values(data);
 }
 
 export async function updateWebinar(id: number, data: Partial<typeof schema.webinars.$inferInsert>) {
-  const result = await db.update(schema.webinars).set(data).where(eq(schema.webinars.id, id));
-  return result;
+  const database = await dbPromise;
+  return await database.update(schema.webinars).set(data).where(eq(schema.webinars.id, id));
 }
 
-export async function deleteWebinar(id: number) {
-  const result = await db.delete(schema.webinars).where(eq(schema.webinars.id, id));
-  return result;
+export async function getWebinarParticipants(webinarId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.webinarParticipants)
+    .where(eq(schema.webinarParticipants.webinarId, webinarId));
 }
 
-// ========== Factory Operations ==========
+export async function registerForWebinar(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  // Check if already registered
+  const existing = await database.select().from(schema.webinarRegistrations)
+    .where(and(
+      eq(schema.webinarRegistrations.webinarId, webinarId),
+      eq(schema.webinarRegistrations.userId, userId)
+    ));
+  if (existing.length > 0) return existing[0];
+  await database.insert(schema.webinarRegistrations).values({ webinarId, userId, status: "registered" });
+  return { webinarId, userId, status: "registered" };
+}
+
+export async function getWebinarRegistration(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.webinarRegistrations)
+    .where(and(
+      eq(schema.webinarRegistrations.webinarId, webinarId),
+      eq(schema.webinarRegistrations.userId, userId)
+    ));
+  return rows[0];
+}
+
+// ─── Factory Operations ───────────────────────────────────────────────────────
 
 export async function getAllFactories() {
-  return await db.select().from(schema.factories).orderBy(desc(schema.factories.createdAt));
+  const database = await dbPromise;
+  return await database.select().from(schema.factories).orderBy(desc(schema.factories.createdAt));
 }
 
 export async function getFactoryById(id: number) {
-  const factories = await db.select().from(schema.factories).where(eq(schema.factories.id, id));
-  return factories[0];
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factories).where(eq(schema.factories.id, id));
+  return rows[0];
 }
 
-export async function getFactoriesByOwnerId(ownerId: number) {
-  return await db.select().from(schema.factories).where(eq(schema.factories.ownerId, ownerId));
+export async function getFactoryByUserId(userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factories).where(eq(schema.factories.userId, userId));
+  return rows[0];
+}
+
+export async function getFactoryDetails(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factoryDetails)
+    .where(eq(schema.factoryDetails.factoryId, factoryId));
+  return rows[0];
+}
+
+export async function searchFactories(query: string) {
+  const database = await dbPromise;
+  return await database.select().from(schema.factories).where(
+    or(
+      like(schema.factories.name, `%${query}%`),
+      like(schema.factories.category, `%${query}%`),
+      like(schema.factories.city, `%${query}%`)
+    )
+  );
 }
 
 export async function createFactory(data: typeof schema.factories.$inferInsert) {
-  const result = await db.insert(schema.factories).values(data);
-  return result;
+  const database = await dbPromise;
+  return await database.insert(schema.factories).values(data);
 }
 
 export async function updateFactory(id: number, data: Partial<typeof schema.factories.$inferInsert>) {
-  const result = await db.update(schema.factories).set(data).where(eq(schema.factories.id, id));
-  return result;
+  const database = await dbPromise;
+  return await database.update(schema.factories).set(data).where(eq(schema.factories.id, id));
 }
 
-export async function deleteFactory(id: number) {
-  const result = await db.delete(schema.factories).where(eq(schema.factories.id, id));
-  return result;
+// ─── Product Operations ───────────────────────────────────────────────────────
+
+export async function getAllProducts() {
+  const database = await dbPromise;
+  return await database.select().from(schema.products)
+    .orderBy(desc(schema.products.createdAt));
 }
 
-// ========== Product Operations ==========
+export async function getProductById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.products).where(eq(schema.products.id, id));
+  return rows[0];
+}
+
+export async function getProductDetails(productId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.productDetails)
+    .where(eq(schema.productDetails.productId, productId));
+  return rows[0];
+}
 
 export async function getProductsByFactoryId(factoryId: number) {
-  return await db.select().from(schema.products).where(eq(schema.products.factoryId, factoryId));
+  const database = await dbPromise;
+  return await database.select().from(schema.products)
+    .where(eq(schema.products.factoryId, factoryId))
+    .orderBy(desc(schema.products.createdAt));
 }
 
 export async function createProduct(data: typeof schema.products.$inferInsert) {
-  const result = await db.insert(schema.products).values(data);
-  return result;
+  const database = await dbPromise;
+  return await database.insert(schema.products).values(data);
 }
 
-// ========== Webinar Participant Operations ==========
-
-export async function getWebinarParticipants(webinarId: number) {
-  return await db.select().from(schema.webinarParticipants).where(eq(schema.webinarParticipants.webinarId, webinarId));
+export async function updateProduct(id: number, data: Partial<typeof schema.products.$inferInsert>) {
+  const database = await dbPromise;
+  return await database.update(schema.products).set(data).where(eq(schema.products.id, id));
 }
 
-export async function addWebinarParticipant(data: typeof schema.webinarParticipants.$inferInsert) {
-  const result = await db.insert(schema.webinarParticipants).values(data);
-  return result;
-}
-
-export async function removeWebinarParticipant(webinarId: number, userId: number) {
-  const result = await db.delete(schema.webinarParticipants).where(
-    and(
-      eq(schema.webinarParticipants.webinarId, webinarId),
-      eq(schema.webinarParticipants.userId, userId)
-    )
-  );
-  return result;
-}
-
-// ========== Factory Review Operations ==========
+// ─── Factory Review Operations ────────────────────────────────────────────────
 
 export async function getFactoryReviews(factoryId: number) {
-  return await db.select().from(schema.factoryReviews).where(eq(schema.factoryReviews.factoryId, factoryId));
+  const database = await dbPromise;
+  return await database.select().from(schema.factoryReviews)
+    .where(eq(schema.factoryReviews.factoryId, factoryId))
+    .orderBy(desc(schema.factoryReviews.createdAt));
 }
 
 export async function createFactoryReview(data: typeof schema.factoryReviews.$inferInsert) {
-  const result = await db.insert(schema.factoryReviews).values(data);
-  return result;
+  const database = await dbPromise;
+  return await database.insert(schema.factoryReviews).values(data);
 }
 
-// ========== Notification Operations ==========
+// ─── Product Review Operations ────────────────────────────────────────────────
+
+export async function getProductReviews(productId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.productReviews)
+    .where(eq(schema.productReviews.productId, productId))
+    .orderBy(desc(schema.productReviews.createdAt));
+}
+
+export async function createProductReview(data: typeof schema.productReviews.$inferInsert) {
+  const database = await dbPromise;
+  return await database.insert(schema.productReviews).values(data);
+}
+
+// ─── Meeting Operations ───────────────────────────────────────────────────────
+
+export async function getMeetingById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.meetings).where(eq(schema.meetings.id, id));
+  return rows[0];
+}
+
+export async function getMeetingsByBuyerId(buyerId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.meetings)
+    .where(eq(schema.meetings.buyerId, buyerId))
+    .orderBy(desc(schema.meetings.scheduledAt));
+}
+
+export async function getMeetingsByFactoryId(factoryId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.meetings)
+    .where(eq(schema.meetings.factoryId, factoryId))
+    .orderBy(desc(schema.meetings.scheduledAt));
+}
+
+export async function getMeetingTranscripts(meetingId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.meetingTranscripts)
+    .where(eq(schema.meetingTranscripts.meetingId, meetingId))
+    .orderBy(schema.meetingTranscripts.createdAt);
+}
+
+export async function createMeeting(data: typeof schema.meetings.$inferInsert) {
+  const database = await dbPromise;
+  return await database.insert(schema.meetings).values(data);
+}
+
+export async function updateMeeting(id: number, data: Partial<typeof schema.meetings.$inferInsert>) {
+  const database = await dbPromise;
+  return await database.update(schema.meetings).set(data).where(eq(schema.meetings.id, id));
+}
+
+// ─── Inquiry Operations ───────────────────────────────────────────────────────
+
+export async function getInquiryById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.inquiries).where(eq(schema.inquiries.id, id));
+  return rows[0];
+}
+
+export async function getInquiriesByBuyerId(buyerId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.inquiries)
+    .where(eq(schema.inquiries.buyerId, buyerId))
+    .orderBy(desc(schema.inquiries.createdAt));
+}
+
+export async function getInquiriesByFactoryId(factoryId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.inquiries)
+    .where(eq(schema.inquiries.factoryId, factoryId))
+    .orderBy(desc(schema.inquiries.createdAt));
+}
+
+export async function createInquiry(data: typeof schema.inquiries.$inferInsert) {
+  const database = await dbPromise;
+  return await database.insert(schema.inquiries).values(data);
+}
+
+export async function updateInquiry(id: number, data: Partial<typeof schema.inquiries.$inferInsert>) {
+  const database = await dbPromise;
+  return await database.update(schema.inquiries).set(data).where(eq(schema.inquiries.id, id));
+}
+
+// ─── User Favorites Operations ────────────────────────────────────────────────
+
+export async function getUserFavorites(userId: number, targetType?: string) {
+  const database = await dbPromise;
+  if (targetType) {
+    return await database.select().from(schema.userFavorites).where(
+      and(eq(schema.userFavorites.userId, userId), eq(schema.userFavorites.targetType, targetType))
+    );
+  }
+  return await database.select().from(schema.userFavorites)
+    .where(eq(schema.userFavorites.userId, userId));
+}
+
+export async function addUserFavorite(userId: number, targetType: string, targetId: number) {
+  const database = await dbPromise;
+  const existing = await checkUserFavorite(userId, targetType, targetId);
+  if (existing) return existing;
+  await database.insert(schema.userFavorites).values({ userId, targetType, targetId });
+  return { userId, targetType, targetId };
+}
+
+export async function removeUserFavorite(userId: number, targetType: string, targetId: number) {
+  const database = await dbPromise;
+  return await database.delete(schema.userFavorites).where(
+    and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, targetType),
+      eq(schema.userFavorites.targetId, targetId)
+    )
+  );
+}
+
+export async function checkUserFavorite(userId: number, targetType: string, targetId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.userFavorites).where(
+    and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, targetType),
+      eq(schema.userFavorites.targetId, targetId)
+    )
+  );
+  return rows[0] || null;
+}
+
+// ─── Notification Operations ──────────────────────────────────────────────────
 
 export async function getUserNotifications(userId: number) {
-  return await db.select().from(schema.notifications).where(eq(schema.notifications.userId, userId)).orderBy(desc(schema.notifications.createdAt));
+  const database = await dbPromise;
+  return await database.select().from(schema.notifications)
+    .where(eq(schema.notifications.userId, userId))
+    .orderBy(desc(schema.notifications.createdAt));
 }
 
 export async function createNotification(data: typeof schema.notifications.$inferInsert) {
-  const result = await db.insert(schema.notifications).values(data);
-  return result;
+  const database = await dbPromise;
+  return await database.insert(schema.notifications).values(data);
 }
 
 export async function markNotificationAsRead(id: number) {
-  const result = await db.update(schema.notifications).set({ isRead: true }).where(eq(schema.notifications.id, id));
-  return result;
-}
-
-export async function getUnreadNotificationsCount(userId: number) {
-  const result = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.notifications)
-    .where(and(eq(schema.notifications.userId, userId), eq(schema.notifications.isRead, false)));
-  return result[0]?.count || 0;
+  const database = await dbPromise;
+  return await database.update(schema.notifications).set({ isRead: 1 }).where(eq(schema.notifications.id, id));
 }
 
 export async function markAllNotificationsAsRead(userId: number) {
-  return db
-    .update(schema.notifications)
-    .set({ isRead: true })
+  const database = await dbPromise;
+  return await database.update(schema.notifications).set({ isRead: 1 })
     .where(eq(schema.notifications.userId, userId));
 }
 
-export async function deleteNotification(id: number, userId: number) {
-  return db
-    .delete(schema.notifications)
-    .where(and(eq(schema.notifications.id, id), eq(schema.notifications.userId, userId)));
+export async function getUnreadNotificationsCount(userId: number) {
+  const database = await dbPromise;
+  const rows = await database
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.notifications)
+    .where(and(eq(schema.notifications.userId, userId), eq(schema.notifications.isRead, 0)));
+  return rows[0]?.count || 0;
 }
