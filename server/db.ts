@@ -1,213 +1,180 @@
-import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, 
-  users,
-  webinars,
-  webinarParticipants,
-  factories,
-  products,
-  webinarProducts,
-  factoryReviews,
-  notifications,
-  messages
-} from "../drizzle/schema";
-import { ENV } from './_core/env';
+import mysql from "mysql2/promise";
+import * as schema from "../drizzle/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+let connection: mysql.Connection;
+let db: any;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+async function initDb() {
+  if (!connection) {
+    connection = await mysql.createConnection(process.env.DATABASE_URL!);
+    db = drizzle(connection, { schema, mode: "default" });
   }
-  return _db;
+  return db;
 }
 
-// ============= 用户相关操作 =============
+// Initialize immediately
+const dbPromise = initDb();
+export { db };
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod", "password", "avatar", "phone", "company", "position", "bio"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
-
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
+// ========== User Operations ==========
 
 export async function getUserByEmail(email: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function createUser(user: InsertUser) {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not available");
-  }
-
-  const result = await db.insert(users).values(user);
-  return result;
+  const database = await dbPromise;
+  const users = await database.select().from(schema.users).where(eq(schema.users.email, email));
+  return users[0];
 }
 
 export async function getUserById(id: number) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  const database = await dbPromise;
+  const users = await database.select().from(schema.users).where(eq(schema.users.id, id));
+  return users[0];
 }
 
-// ============= Webinar 相关操作 =============
+export async function getUserByOpenId(openId: string) {
+  const database = await dbPromise;
+  const users = await database.select().from(schema.users).where(eq(schema.users.openId, openId));
+  return users[0];
+}
 
-export async function getWebinars(limit: number = 20, offset: number = 0) {
-  const db = await getDb();
-  if (!db) return [];
+export async function upsertUser(data: typeof schema.users.$inferInsert) {
+  const database = await dbPromise;
+  const existing = await getUserByOpenId(data.openId);
+  if (existing) {
+    await database.update(schema.users).set(data).where(eq(schema.users.openId, data.openId));
+    return await getUserByOpenId(data.openId);
+  } else {
+    await database.insert(schema.users).values(data);
+    return await getUserByOpenId(data.openId);
+  }
+}
 
-  return await db.select().from(webinars).orderBy(desc(webinars.scheduledAt)).limit(limit).offset(offset);
+export async function createUser(data: typeof schema.users.$inferInsert) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.users).values(data);
+  return result;
+}
+
+// ========== Webinar Operations ==========
+
+export async function getAllWebinars() {
+  return await db.select().from(schema.webinars).orderBy(desc(schema.webinars.createdAt));
 }
 
 export async function getWebinarById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const result = await db.select().from(webinars).where(eq(webinars.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  const webinars = await db.select().from(schema.webinars).where(eq(schema.webinars.id, id));
+  return webinars[0];
 }
 
-// ============= 工厂相关操作 =============
+export async function getWebinarsByStatus(status: "draft" | "scheduled" | "live" | "completed" | "cancelled") {
+  return await db.select().from(schema.webinars).where(eq(schema.webinars.status, status));
+}
 
-export async function getFactories(limit: number = 20, offset: number = 0) {
-  const db = await getDb();
-  if (!db) return [];
+export async function getWebinarsByHostId(hostId: number) {
+  return await db.select().from(schema.webinars).where(eq(schema.webinars.hostId, hostId));
+}
 
-  return await db.select().from(factories).orderBy(desc(factories.rating)).limit(limit).offset(offset);
+export async function createWebinar(data: typeof schema.webinars.$inferInsert) {
+  const result = await db.insert(schema.webinars).values(data);
+  return result;
+}
+
+export async function updateWebinar(id: number, data: Partial<typeof schema.webinars.$inferInsert>) {
+  const result = await db.update(schema.webinars).set(data).where(eq(schema.webinars.id, id));
+  return result;
+}
+
+export async function deleteWebinar(id: number) {
+  const result = await db.delete(schema.webinars).where(eq(schema.webinars.id, id));
+  return result;
+}
+
+// ========== Factory Operations ==========
+
+export async function getAllFactories() {
+  return await db.select().from(schema.factories).orderBy(desc(schema.factories.createdAt));
 }
 
 export async function getFactoryById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const result = await db.select().from(factories).where(eq(factories.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  const factories = await db.select().from(schema.factories).where(eq(schema.factories.id, id));
+  return factories[0];
 }
 
-// ============= 产品相关操作 =============
-
-export async function getProducts(limit: number = 20, offset: number = 0) {
-  const db = await getDb();
-  if (!db) return [];
-
-  return await db.select().from(products).orderBy(desc(products.createdAt)).limit(limit).offset(offset);
+export async function getFactoriesByOwnerId(ownerId: number) {
+  return await db.select().from(schema.factories).where(eq(schema.factories.ownerId, ownerId));
 }
 
-export async function getProductById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+export async function createFactory(data: typeof schema.factories.$inferInsert) {
+  const result = await db.insert(schema.factories).values(data);
+  return result;
 }
+
+export async function updateFactory(id: number, data: Partial<typeof schema.factories.$inferInsert>) {
+  const result = await db.update(schema.factories).set(data).where(eq(schema.factories.id, id));
+  return result;
+}
+
+export async function deleteFactory(id: number) {
+  const result = await db.delete(schema.factories).where(eq(schema.factories.id, id));
+  return result;
+}
+
+// ========== Product Operations ==========
 
 export async function getProductsByFactoryId(factoryId: number) {
-  const db = await getDb();
-  if (!db) return [];
-
-  return await db.select().from(products).where(eq(products.factoryId, factoryId));
+  return await db.select().from(schema.products).where(eq(schema.products.factoryId, factoryId));
 }
 
-// ============= 通知相关操作 =============
-
-export async function getNotificationsByUserId(userId: number, limit: number = 20) {
-  const db = await getDb();
-  if (!db) return [];
-
-  return await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(limit);
+export async function createProduct(data: typeof schema.products.$inferInsert) {
+  const result = await db.insert(schema.products).values(data);
+  return result;
 }
 
-// ============= 消息相关操作 =============
+// ========== Webinar Participant Operations ==========
 
-export async function getMessagesByUserId(userId: number, limit: number = 20) {
-  const db = await getDb();
-  if (!db) return [];
+export async function getWebinarParticipants(webinarId: number) {
+  return await db.select().from(schema.webinarParticipants).where(eq(schema.webinarParticipants.webinarId, webinarId));
+}
 
-  return await db.select().from(messages).where(eq(messages.receiverId, userId)).orderBy(desc(messages.createdAt)).limit(limit);
+export async function addWebinarParticipant(data: typeof schema.webinarParticipants.$inferInsert) {
+  const result = await db.insert(schema.webinarParticipants).values(data);
+  return result;
+}
+
+export async function removeWebinarParticipant(webinarId: number, userId: number) {
+  const result = await db.delete(schema.webinarParticipants).where(
+    and(
+      eq(schema.webinarParticipants.webinarId, webinarId),
+      eq(schema.webinarParticipants.userId, userId)
+    )
+  );
+  return result;
+}
+
+// ========== Factory Review Operations ==========
+
+export async function getFactoryReviews(factoryId: number) {
+  return await db.select().from(schema.factoryReviews).where(eq(schema.factoryReviews.factoryId, factoryId));
+}
+
+export async function createFactoryReview(data: typeof schema.factoryReviews.$inferInsert) {
+  const result = await db.insert(schema.factoryReviews).values(data);
+  return result;
+}
+
+// ========== Notification Operations ==========
+
+export async function getUserNotifications(userId: number) {
+  return await db.select().from(schema.notifications).where(eq(schema.notifications.userId, userId)).orderBy(desc(schema.notifications.createdAt));
+}
+
+export async function createNotification(data: typeof schema.notifications.$inferInsert) {
+  const result = await db.insert(schema.notifications).values(data);
+  return result;
+}
+
+export async function markNotificationAsRead(id: number) {
+  const result = await db.update(schema.notifications).set({ isRead: true }).where(eq(schema.notifications.id, id));
+  return result;
 }

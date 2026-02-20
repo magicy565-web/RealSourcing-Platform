@@ -11,6 +11,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Webinars from "./pages/Webinars";
 import Factories from "./pages/Factories";
+import FactoryDashboard from "./pages/FactoryDashboard";
 
 function Router() {
   return (
@@ -22,7 +23,8 @@ function Router() {
       {/* Dashboard without Layout (has its own sidebar) */}
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/webinars" component={Webinars} />
-      <Route path="/factories" component={Factories} />
+        <Route path="/factories" component={Factories} />
+        <Route path="/factory-dashboard" component={FactoryDashboard} />
       
       {/* Routes with Layout */}
       <Route path="/">
