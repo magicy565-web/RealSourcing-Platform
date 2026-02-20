@@ -1,5 +1,6 @@
 import { createContext, useContext, ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
 
 interface User {
   id: number;
@@ -14,6 +15,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,10 +32,28 @@ const DEV_MOCK_USER: User = {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+
   const { data: user, isLoading, error } = trpc.auth.me.useQuery(
     undefined,
     { retry: false }
   );
+
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      utils.auth.me.invalidate();
+      setLocation("/login");
+    },
+    onError: () => {
+      // Force redirect even on error
+      setLocation("/login");
+    },
+  });
+
+  const logout = () => {
+    logoutMutation.mutate();
+  };
 
   // If the API is unreachable (DB down / local dev), use mock user
   const resolvedUser = (user ?? (error ? DEV_MOCK_USER : null)) as User | null;
@@ -43,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: resolvedUser,
     isLoading: resolvedLoading,
     isAuthenticated: !!resolvedUser,
+    logout,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

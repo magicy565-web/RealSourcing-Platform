@@ -19,10 +19,13 @@ export default function Login() {
     password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
+  const utils = trpc.useUtils();
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("登录成功！");
+      // 强制刷新 auth.me，确保 ProtectedRoute 能识别登录状态
+      await utils.auth.me.invalidate();
       setLocation(returnTo);
     },
     onError: (error: any) => {
