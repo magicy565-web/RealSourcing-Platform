@@ -5,10 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Building2, Mail, Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 export default function Login() {
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -18,7 +19,7 @@ export default function Login() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
       toast.success("登录成功！");
-      window.location.href = "/";
+      setLocation("/dashboard");
     },
     onError: (error: any) => {
       toast.error(error.message || "登录失败，请检查邮箱和密码");

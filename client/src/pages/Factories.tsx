@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { Search, Filter, MapPin, Star, Users, Bell, User, Building2, Award, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Factories() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
@@ -217,7 +219,11 @@ export default function Factories() {
           {/* Factory Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredFactories.map((factory) => (
-              <Card key={factory.id} className="glass-card hover:glow-purple transition-all group cursor-pointer">
+              <Card
+                key={factory.id}
+                className="glass-card hover:glow-purple transition-all group cursor-pointer"
+                onClick={() => setLocation(`/factory/${factory.id}`)}
+              >
                 <CardContent className="p-0">
                   {/* Image */}
                   <div className="relative overflow-hidden rounded-t-lg">

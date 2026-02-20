@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { Search, Filter, Calendar, Building2, Users, Bell, User, Radio } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Webinars() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -186,7 +188,11 @@ export default function Webinars() {
           {/* Webinar Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredWebinars.map((webinar) => (
-              <Card key={webinar.id} className="glass-card hover:glow-purple transition-all group cursor-pointer">
+              <Card
+                key={webinar.id}
+                className="glass-card hover:glow-purple transition-all group cursor-pointer"
+                onClick={() => setLocation(`/webinar-live/${webinar.id}`)}
+              >
                 <CardContent className="p-0">
                   {/* Image */}
                   <div className="relative overflow-hidden rounded-t-lg">
