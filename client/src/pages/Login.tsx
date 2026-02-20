@@ -9,7 +9,11 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 export default function Login() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  
+  // 获取返回路径
+  const searchParams = new URLSearchParams(window.location.search);
+  const returnTo = searchParams.get("returnTo") || "/dashboard";
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -19,7 +23,7 @@ export default function Login() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
       toast.success("登录成功！");
-      setLocation("/dashboard");
+      setLocation(returnTo);
     },
     onError: (error: any) => {
       toast.error(error.message || "登录失败，请检查邮箱和密码");

@@ -2,6 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BuyerSidebar from "@/components/BuyerSidebar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
 import { 
   Radio, 
   Calendar, 
@@ -15,10 +17,19 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // 如果是工厂用户，重定向到工厂 Dashboard
+  if (user?.role === "factory") {
+    setLocation("/factory-dashboard");
+    return null;
+  }
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <BuyerSidebar userRole="buyer" />
+      <BuyerSidebar userRole={user?.role || "buyer"} />
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">

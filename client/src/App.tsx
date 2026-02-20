@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -23,14 +24,42 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       
-      {/* Dashboard without Layout (has its own sidebar) */}
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/webinars" component={Webinars} />
-        <Route path="/factories" component={Factories} />
-        <Route path="/factory-dashboard" component={FactoryDashboard} />
-        <Route path="/webinar-live/:id" component={WebinarLiveRoom} />
-        <Route path="/meeting/:id" component={PrivateMeetingRoom} />
-        <Route path="/meeting-reel-generator/:id" component={MeetingReelGenerator} />
+      {/* Protected routes without Layout (has its own sidebar) */}
+      <Route path="/dashboard">
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/webinars">
+        <ProtectedRoute>
+          <Webinars />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/factories">
+        <ProtectedRoute>
+          <Factories />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/factory-dashboard">
+        <ProtectedRoute requiredRole="factory">
+          <FactoryDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/webinar-live/:id">
+        <ProtectedRoute>
+          <WebinarLiveRoom />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/meeting/:id">
+        <ProtectedRoute>
+          <PrivateMeetingRoom />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/meeting-reel-generator/:id">
+        <ProtectedRoute>
+          <MeetingReelGenerator />
+        </ProtectedRoute>
+      </Route>
       
       {/* Routes with Layout */}
       <Route path="/">

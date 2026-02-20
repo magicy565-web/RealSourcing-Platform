@@ -191,3 +191,27 @@
 - [ ] 测试所有页面跳转和返回功能
 - [ ] 测试 API 错误处理和加载状态
 - [ ] 创建最终检查点
+
+## 实现用户状态管理
+
+### Phase 1: 用户认证上下文和状态管理
+- [x] 创建 AuthContext 提供全局用户状态
+- [x] 实现 useAuth Hook 获取当前用户信息
+- [x] 更新 main.tsx 添加 AuthProvider
+
+### Phase 2: 受保护路由
+- [x] 创建 ProtectedRoute 组件
+- [x] 未登录用户自动重定向到登录页
+- [x] 保存原始访问路径，登录后返回
+
+### Phase 3: 基于角色的 Dashboard
+- [x] Dashboard 页面根据用户角色显示不同内容
+- [x] 买家用户显示 BuyerDashboard
+- [x] 工厂用户显示 FactoryDashboard
+- [x] 更新侧边栏根据角色显示不同菜单
+
+### Phase 4: 测试和交付
+- [x] 测试登录后的状态管理
+- [x] 测试受保护路由重定向
+- [x] 测试不同角色的 Dashboard 显示
+- [ ] 创建最终检查点

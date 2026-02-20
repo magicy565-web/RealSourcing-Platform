@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
-  userRole?: "buyer" | "factory" | "user";
+  userRole?: "buyer" | "factory" | "user" | "admin";
 }
 
 export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
