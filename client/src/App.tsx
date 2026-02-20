@@ -12,6 +12,9 @@ import Dashboard from "./pages/Dashboard";
 import Webinars from "./pages/Webinars";
 import Factories from "./pages/Factories";
 import FactoryDashboard from "./pages/FactoryDashboard";
+import WebinarLiveRoom from "./pages/WebinarLiveRoom";
+import PrivateMeetingRoom from "./pages/PrivateMeetingRoom";
+import MeetingReelGenerator from "./pages/MeetingReelGenerator";
 
 function Router() {
   return (
@@ -25,6 +28,9 @@ function Router() {
       <Route path="/webinars" component={Webinars} />
         <Route path="/factories" component={Factories} />
         <Route path="/factory-dashboard" component={FactoryDashboard} />
+        <Route path="/webinar-live/:id" component={WebinarLiveRoom} />
+        <Route path="/meeting/:id" component={PrivateMeetingRoom} />
+        <Route path="/meeting-reel-generator/:id" component={MeetingReelGenerator} />
       
       {/* Routes with Layout */}
       <Route path="/">
