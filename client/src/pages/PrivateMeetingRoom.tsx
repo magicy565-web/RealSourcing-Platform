@@ -1,8 +1,10 @@
 import { X, Mic, MicOff, Video, VideoOff, Monitor, MoreVertical, Bookmark, MessageSquare, ShoppingCart, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 export default function PrivateMeetingRoom() {
+  const [, setLocation] = useLocation();
   const [micOn, setMicOn] = useState(true);
   const [videoOn, setVideoOn] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([1, 3, 5]);
@@ -39,7 +41,11 @@ export default function PrivateMeetingRoom() {
       {/* 顶部控制栏 */}
       <div className="fixed top-0 left-0 right-0 h-16 bg-[#0F0F23]/80 backdrop-blur-xl border-b border-purple-500/20 flex items-center justify-between px-6 z-50">
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10">
+          <Button
+            variant="outline"
+            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+            onClick={() => setLocation("/dashboard")}
+          >
             <X className="w-4 h-4 mr-2" />
             结束会议
           </Button>

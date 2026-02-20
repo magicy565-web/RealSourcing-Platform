@@ -1,11 +1,51 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Building2, Video, TrendingUp, Search, CheckCircle2, Users } from "lucide-react";
+import { Building2, Video, TrendingUp, Search, CheckCircle2, Users, Bell, User } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Home() {
   return (
     <div className="min-h-screen">
+      {/* Navigation Bar */}
+      <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-border/50">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <Link href="/">
+              <div className="flex items-center gap-3 cursor-pointer">
+                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
+                  <Building2 className="w-6 h-6 text-purple-400" />
+                </div>
+                <span className="text-2xl font-bold">RealSourcing</span>
+              </div>
+            </Link>
+
+            {/* Nav Links */}
+            <div className="hidden md:flex items-center gap-8">
+              <Link href="/">
+                <span className="text-foreground hover:text-purple-400 cursor-pointer transition-colors">首页</span>
+              </Link>
+              <Link href="/webinars">
+                <span className="text-foreground hover:text-purple-400 cursor-pointer transition-colors">在线研讨会</span>
+              </Link>
+              <Link href="/factories">
+                <span className="text-foreground hover:text-purple-400 cursor-pointer transition-colors">工厂</span>
+              </Link>
+              <span className="text-muted-foreground hover:text-purple-400 cursor-pointer transition-colors">产品</span>
+            </div>
+
+            {/* Auth Buttons */}
+            <div className="flex items-center gap-4">
+              <Link href="/login">
+                <Button variant="ghost">登录</Button>
+              </Link>
+              <Link href="/register">
+                <Button className="btn-gradient-purple">免费注册</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 overflow-hidden">
         {/* 背景装饰 */}
@@ -38,9 +78,11 @@ export default function Home() {
                   免费注册工厂
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto border-purple-500/50 hover:bg-purple-500/10">
-                观看演示 ▸
-              </Button>
+              <Link href="/webinars">
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto border-purple-500/50 hover:bg-purple-500/10">
+                  观看演示 ▸
+                </Button>
+              </Link>
             </div>
 
             {/* 数据展示 */}

@@ -1,8 +1,10 @@
 import { ArrowLeft, Play, Sparkles, Clock, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 export default function MeetingReelGenerator() {
+  const [, setLocation] = useLocation();
   const [selectedTemplate, setSelectedTemplate] = useState("launch");
   const [duration, setDuration] = useState("30s");
   const [format, setFormat] = useState("9:16");
@@ -28,7 +30,10 @@ export default function MeetingReelGenerator() {
       {/* 顶部栏 */}
       <div className="fixed top-0 left-0 right-0 h-16 bg-[#0F0F23]/80 backdrop-blur-xl border-b border-purple-500/20 flex items-center justify-between px-6 z-50">
         <div className="flex items-center gap-4">
-          <button className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
+          <button
+            onClick={() => setLocation("/dashboard")}
+            className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+          >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <div>

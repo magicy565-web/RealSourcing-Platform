@@ -157,9 +157,14 @@
 ### Phase 1: 页面跳转和导航交互
 - [x] 修复 Webinars 页面：点击卡片跳转到 Webinar 直播间
 - [x] 修复 Factories 页面：点击卡片跳转到工厂详情页
-- [ ] 修复 Dashboard 侧边栏：点击菜单项跳转到对应页面
-- [ ] 修复工厂 Dashboard 侧边栏：点击菜单项跳转到对应页面
+- [x] 修复 Dashboard 侧边栏：点击菜单项跳转到对应页面
+- [x] 修复工厂 Dashboard 侧边栏：点击菜单项跳转到对应页面
 - [x] 修复登录/注册页面：成功后跳转到 Dashboard
+- [x] 修复首页导航栏按钮跳转
+- [x] 修复首页 CTA 按钮跳转
+- [x] 修复 Webinar 直播间返回按钮
+- [x] 修复 1:1 会议室返回按钮
+- [x] 修复 Meeting Reel 生成器返回按钮
 
 ### Phase 2: 实现后端 API
 - [ ] 实现 Webinar CRUD API（创建、读取、更新、删除）
