@@ -85,7 +85,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "UNAUTHORIZED", message: "邮箱或密码错误" });
         }
         const secretKey = new TextEncoder().encode(ENV.cookieSecret);
-        const token = await new SignJWT({ openId: user.openId })
+        const token = await new SignJWT({
+          openId: user.openId,
+          appId: ENV.appId || "realsourcing",
+          name: user.name || user.email || "User",
+        })
           .setProtectedHeader({ alg: "HS256", typ: "JWT" })
           .setExpirationTime("365d")
           .sign(secretKey);
