@@ -16,6 +16,7 @@ import FactoryDashboard from "./pages/FactoryDashboard";
 import WebinarLiveRoom from "./pages/WebinarLiveRoom";
 import PrivateMeetingRoom from "./pages/PrivateMeetingRoom";
 import MeetingReelGenerator from "./pages/MeetingReelGenerator";
+import Notifications from "./pages/Notifications";
 
 function Router() {
   return (
@@ -58,6 +59,11 @@ function Router() {
       <Route path="/meeting-reel-generator/:id">
         <ProtectedRoute>
           <MeetingReelGenerator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/notifications">
+        <ProtectedRoute>
+          <Notifications />
         </ProtectedRoute>
       </Route>
       

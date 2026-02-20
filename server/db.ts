@@ -178,3 +178,24 @@ export async function markNotificationAsRead(id: number) {
   const result = await db.update(schema.notifications).set({ isRead: true }).where(eq(schema.notifications.id, id));
   return result;
 }
+
+export async function getUnreadNotificationsCount(userId: number) {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.notifications)
+    .where(and(eq(schema.notifications.userId, userId), eq(schema.notifications.isRead, false)));
+  return result[0]?.count || 0;
+}
+
+export async function markAllNotificationsAsRead(userId: number) {
+  return db
+    .update(schema.notifications)
+    .set({ isRead: true })
+    .where(eq(schema.notifications.userId, userId));
+}
+
+export async function deleteNotification(id: number, userId: number) {
+  return db
+    .delete(schema.notifications)
+    .where(and(eq(schema.notifications.id, id), eq(schema.notifications.userId, userId)));
+}

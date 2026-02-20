@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import { 
   LayoutDashboard, 
   Video, 
@@ -21,12 +22,15 @@ interface SidebarProps {
 
 export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
   const [location] = useLocation();
+  const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery(undefined, {
+    refetchInterval: 30000, // 每 30 秒刷新一次
+  });
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", badge: null },
     { icon: Video, label: "Webinars", href: "/webinars", badge: null },
     { icon: Building2, label: "Factories", href: "/factories", badge: null },
-    { icon: MessageSquare, label: "Messages", href: "/messages", badge: 3 },
+    { icon: MessageSquare, label: "Notifications", href: "/notifications", badge: unreadCount > 0 ? unreadCount : null },
     { icon: FileText, label: "Reports", href: "/reports", badge: null },
     { icon: CreditCard, label: "Subscription", href: "/subscription", badge: null },
     { icon: BarChart3, label: "Quota", href: "/quota", badge: null },

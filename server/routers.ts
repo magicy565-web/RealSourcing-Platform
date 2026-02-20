@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
-import { createUser, getUserByEmail, getUserById } from "./db";
+import { createUser, getUserByEmail, getUserById, getUserNotifications, getUnreadNotificationsCount, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification, createNotification } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
 import { ENV } from "./_core/env";
@@ -143,6 +143,52 @@ export const appRouter = router({
         return {
           success: true,
         };
+      }),
+  }),
+
+  notifications: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const notifications = await getUserNotifications(ctx.user.id);
+      return notifications;
+    }),
+
+    unreadCount: protectedProcedure.query(async ({ ctx }) => {
+      const count = await getUnreadNotificationsCount(ctx.user.id);
+      return count;
+    }),
+
+    markAsRead: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await markNotificationAsRead(input.id);
+        return { success: true };
+      }),
+
+    markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
+      await markAllNotificationsAsRead(ctx.user.id);
+      return { success: true };
+    }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await deleteNotification(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          userId: z.number(),
+          type: z.enum(["system", "webinar", "message", "review"]),
+          title: z.string(),
+          content: z.string(),
+          link: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await createNotification(input);
+        return { success: true };
       }),
   }),
 });
