@@ -1,6 +1,17 @@
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { 
+  InsertUser, 
+  users,
+  webinars,
+  webinarParticipants,
+  factories,
+  products,
+  webinarProducts,
+  factoryReviews,
+  notifications,
+  messages
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -17,6 +28,8 @@ export async function getDb() {
   }
   return _db;
 }
+
+// ============= 用户相关操作 =============
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
@@ -35,7 +48,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "loginMethod", "password", "avatar", "phone", "company", "position", "bio"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -89,4 +102,112 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createUser(user: InsertUser) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(users).values(user);
+  return result;
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// ============= Webinar 相关操作 =============
+
+export async function getWebinars(limit: number = 20, offset: number = 0) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(webinars).orderBy(desc(webinars.scheduledAt)).limit(limit).offset(offset);
+}
+
+export async function getWebinarById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(webinars).where(eq(webinars.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// ============= 工厂相关操作 =============
+
+export async function getFactories(limit: number = 20, offset: number = 0) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(factories).orderBy(desc(factories.rating)).limit(limit).offset(offset);
+}
+
+export async function getFactoryById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(factories).where(eq(factories.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// ============= 产品相关操作 =============
+
+export async function getProducts(limit: number = 20, offset: number = 0) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(products).orderBy(desc(products.createdAt)).limit(limit).offset(offset);
+}
+
+export async function getProductById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getProductsByFactoryId(factoryId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(products).where(eq(products.factoryId, factoryId));
+}
+
+// ============= 通知相关操作 =============
+
+export async function getNotificationsByUserId(userId: number, limit: number = 20) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(limit);
+}
+
+// ============= 消息相关操作 =============
+
+export async function getMessagesByUserId(userId: number, limit: number = 20) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(messages).where(eq(messages.receiverId, userId)).orderBy(desc(messages.createdAt)).limit(limit);
+}
