@@ -240,3 +240,36 @@
 - [x] 测试通知标记已读
 - [x] 测试通知删除
 - [ ] 创建最终检查点
+
+## PRD 3.1 P0 核心功能闭环（Manus AI 接力开发 - 2026-02-21）
+
+### P0.1 - 实时翻译前端深度集成
+- [x] 重写 AgoraTranscription.tsx，移除 mock 数据
+- [x] 通过 tRPC 真实调用 agora.startTranslation / stopTranslation
+- [x] 通过 Agora RTM SDK 订阅 {channelName}_stt 频道接收实时字幕推送
+- [x] 支持双语字幕显示（原文 + 翻译）、语言设置面板、折叠/展开
+- [x] 支持复制/下载转录文本，自动滚动到最新字幕
+- [x] 兼容 Agora RTM SDK v1 和 v2 API
+
+### P0.2 - 云端录制自动化与 S3 存储
+- [x] 会议加载后 2 秒自动触发 startRecording
+- [x] 顶部状态栏实时显示 REC 录制指示器（红色动画）
+- [x] 会议结束时自动调用 stopRecording，传入 meetingId 和 durationMinutes
+- [x] 增强 agora.stopRecording API：停止后自动将 recordingUrl 写入 meetings 表
+- [x] 新增 meetings.updateRecording API，支持手动更新录制信息
+- [x] 录制失败时显示 warning badge，不阻断会议主流程
+
+### P0.3 - 会议中一键申请样品
+- [x] 产品侧边栏每个产品卡片新增 'Sample' 按钮（琥珀色渐变样式）
+- [x] 点击弹出 SampleRequestModal 内联弹窗（不离开会议室）
+- [x] 弹窗支持：数量调节(1-10)、收货地址填写、特殊要求备注、价格预估
+- [x] 两步确认流程（form → confirm），防止误操作
+- [x] 提交成功后在聊天面板显示系统消息
+- [x] 直接调用 trpc.sampleOrders.create，与现有 SampleOrder 逻辑复用
+
+### 其他改进
+- [x] PrivateMeetingRoom 侧边栏新增 Products/Chat 双标签切换
+- [x] 产品卡片展示真实图片、价格、MOQ 信息
+- [x] 修复 WebinarLiveRoom.tsx AgoraTranscription 缺少 userId prop 的 TS 错误
+- [x] TypeScript 零错误通过 pnpm check 验证
+- [x] 已提交 commit: 57f5e73 并推送到 origin/main
