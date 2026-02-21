@@ -22,9 +22,14 @@ export const users = mysqlTable("users", {
   status:       varchar("status", { length: 20 }).notNull().default("active"),
   createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
-  lastSignedIn: datetime("lastLoginAt", { mode: "date", fsp: 3 }),
-  loginMethod:  varchar("loginMethod", { length: 50 }),
-  platform:     varchar("platform", { length: 50 }),
+  lastSignedIn:          datetime("lastLoginAt", { mode: "date", fsp: 3 }),
+  loginMethod:           varchar("loginMethod", { length: 50 }),
+  platform:              varchar("platform", { length: 50 }),
+  interestedCategories:  json("interestedCategories"),
+  orderScale:            varchar("orderScale", { length: 50 }),
+  targetMarkets:         json("targetMarkets"),
+  certifications:        json("certifications"),
+  onboardingCompleted:   tinyint("onboardingCompleted").default(0),
 });
 
 export type User = typeof users.$inferSelect;
@@ -315,3 +320,39 @@ export const notifications = mysqlTable("notifications", {
 });
 
 export type Notification = typeof notifications.$inferSelect;
+
+// ─── Webinar Reels (新表) ─────────────────────────────────────────────────────
+export const webinarReels = mysqlTable("webinar_reels", {
+  id:                 int("id").primaryKey().autoincrement(),
+  webinarId:          int("webinarId").notNull(),
+  userId:             int("userId").notNull(),
+  clips:              json("clips"),
+  bgm:                varchar("bgm", { length: 255 }),
+  subtitlesEnabled:   tinyint("subtitlesEnabled").default(1),
+  aiCopy:             text("aiCopy"),
+  hashtags:           json("hashtags"),
+  status:             varchar("status", { length: 50 }).notNull().default("draft"),
+  publishedPlatforms: json("publishedPlatforms"),
+  createdAt:          datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:          datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type WebinarReel = typeof webinarReels.$inferSelect;
+export type InsertWebinarReel = typeof webinarReels.$inferInsert;
+
+// ─── Webinar Likes (新表) ─────────────────────────────────────────────────────
+export const webinarLikes = mysqlTable("webinar_likes", {
+  id:        int("id").primaryKey().autoincrement(),
+  webinarId: int("webinarId").notNull(),
+  userId:    int("userId").notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type WebinarLike = typeof webinarLikes.$inferSelect;
+
+// ─── Factory Follows (新表) ───────────────────────────────────────────────────
+export const factoryFollows = mysqlTable("factory_follows", {
+  id:        int("id").primaryKey().autoincrement(),
+  factoryId: int("factoryId").notNull(),
+  userId:    int("userId").notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryFollow = typeof factoryFollows.$inferSelect;

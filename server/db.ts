@@ -512,3 +512,175 @@ export async function upsertUserProfile(userId: number, data: Partial<typeof sch
   }
   return { success: true };
 }
+
+// ─── Webinar Likes Operations ─────────────────────────────────────────────────
+export async function likeWebinar(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  try {
+    await database.insert(schema.webinarLikes).values({ webinarId, userId });
+  } catch {
+    // duplicate key — already liked
+  }
+  const rows = await database.select({ count: sql<number>`COUNT(*)` })
+    .from(schema.webinarLikes)
+    .where(eq(schema.webinarLikes.webinarId, webinarId));
+  return { likeCount: Number(rows[0]?.count ?? 0) };
+}
+
+export async function unlikeWebinar(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  await database.delete(schema.webinarLikes)
+    .where(and(
+      eq(schema.webinarLikes.webinarId, webinarId),
+      eq(schema.webinarLikes.userId, userId)
+    ));
+  const rows = await database.select({ count: sql<number>`COUNT(*)` })
+    .from(schema.webinarLikes)
+    .where(eq(schema.webinarLikes.webinarId, webinarId));
+  return { likeCount: Number(rows[0]?.count ?? 0) };
+}
+
+export async function checkWebinarLike(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.webinarLikes)
+    .where(and(
+      eq(schema.webinarLikes.webinarId, webinarId),
+      eq(schema.webinarLikes.userId, userId)
+    ));
+  return rows.length > 0;
+}
+
+export async function getWebinarLikeCount(webinarId: number) {
+  const database = await dbPromise;
+  const rows = await database.select({ count: sql<number>`COUNT(*)` })
+    .from(schema.webinarLikes)
+    .where(eq(schema.webinarLikes.webinarId, webinarId));
+  return Number(rows[0]?.count ?? 0);
+}
+
+// ─── Webinar Raise Hand Operations ────────────────────────────────────────────
+export async function raiseHand(webinarId: number, userId: number) {
+  const database = await dbPromise;
+  await database.update(schema.webinarParticipants)
+    .set({ raisedHand: true } as any)
+    .where(and(
+      eq(schema.webinarParticipants.webinarId, webinarId),
+      eq(schema.webinarParticipants.userId, userId)
+    ));
+  return { success: true };
+}
+
+// ─── Webinar Reels Operations ─────────────────────────────────────────────────
+export async function createWebinarReel(data: typeof schema.webinarReels.$inferInsert) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.webinarReels).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getWebinarReelById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.webinarReels)
+    .where(eq(schema.webinarReels.id, id));
+  return rows[0] || null;
+}
+
+export async function updateWebinarReel(id: number, data: Partial<typeof schema.webinarReels.$inferInsert>) {
+  const database = await dbPromise;
+  await database.update(schema.webinarReels)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.webinarReels.id, id));
+  return { success: true };
+}
+
+export async function getWebinarReelsByWebinar(webinarId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.webinarReels)
+    .where(eq(schema.webinarReels.webinarId, webinarId))
+    .orderBy(desc(schema.webinarReels.createdAt));
+}
+
+// ─── Factory Follows (dedicated table) ────────────────────────────────────────
+export async function followFactoryDedicated(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  try {
+    await database.insert(schema.factoryFollows).values({ factoryId, userId });
+  } catch {
+    // duplicate key
+  }
+  return { success: true };
+}
+
+export async function unfollowFactoryDedicated(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  await database.delete(schema.factoryFollows)
+    .where(and(
+      eq(schema.factoryFollows.factoryId, factoryId),
+      eq(schema.factoryFollows.userId, userId)
+    ));
+  return { success: true };
+}
+
+export async function checkFactoryFollowDedicated(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factoryFollows)
+    .where(and(
+      eq(schema.factoryFollows.factoryId, factoryId),
+      eq(schema.factoryFollows.userId, userId)
+    ));
+  return rows.length > 0;
+}
+
+export async function getFollowedFactoriesDedicated(userId: number) {
+  const database = await dbPromise;
+  const follows = await database.select().from(schema.factoryFollows)
+    .where(eq(schema.factoryFollows.userId, userId));
+  if (follows.length === 0) return [];
+  const factoryIds = follows.map(f => f.factoryId);
+  const allFactories = await database.select().from(schema.factories);
+  return allFactories.filter(f => factoryIds.includes(f.id));
+}
+
+// ─── Onboarding Operations ────────────────────────────────────────────────────
+export async function saveUserOnboardingPreferences(userId: number, prefs: {
+  interestedCategories?: string[];
+  orderScale?: string;
+  targetMarkets?: string[];
+  certifications?: string[];
+}) {
+  const database = await dbPromise;
+  await database.update(schema.users)
+    .set({
+      interestedCategories: prefs.interestedCategories as any,
+      orderScale: prefs.orderScale,
+      targetMarkets: prefs.targetMarkets as any,
+      certifications: prefs.certifications as any,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId));
+  return { success: true };
+}
+
+export async function completeUserOnboarding(userId: number) {
+  const database = await dbPromise;
+  await database.update(schema.users)
+    .set({ onboardingCompleted: 1 as any, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+  return { success: true };
+}
+
+// ─── Factory Start Meeting ─────────────────────────────────────────────────────
+export async function startMeetingWithFactory(buyerId: number, factoryId: number) {
+  const database = await dbPromise;
+  const factory = await getFactoryById(factoryId);
+  const title = factory ? `1:1 选品会 — ${factory.name}` : `Meeting with Factory #${factoryId}`;
+  const result = await database.insert(schema.meetings).values({
+    buyerId,
+    factoryId,
+    title,
+    status: "scheduled",
+    scheduledAt: new Date(),
+  });
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { meetingId: id };
+}

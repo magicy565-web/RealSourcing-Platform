@@ -36,6 +36,17 @@ import {
   searchAll,
   // User Profile
   getUserProfile, upsertUserProfile,
+  // Webinar Likes
+  likeWebinar, unlikeWebinar, checkWebinarLike, getWebinarLikeCount,
+  raiseHand,
+  // Webinar Reels
+  createWebinarReel, getWebinarReelById, updateWebinarReel, getWebinarReelsByWebinar,
+  // Factory Follows (dedicated)
+  followFactoryDedicated, unfollowFactoryDedicated, checkFactoryFollowDedicated, getFollowedFactoriesDedicated,
+  // Onboarding
+  saveUserOnboardingPreferences, completeUserOnboarding,
+  // Factory Start Meeting
+  startMeetingWithFactory,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -166,27 +177,28 @@ export const appRouter = router({
     byId: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
-        const webinar = await getWebinarById(input.id);
+          const webinar = await getWebinarById(input.id);
         if (!webinar) throw new TRPCError({ code: "NOT_FOUND", message: "Webinar 不存在" });
-
         // 获取主持人信息
         const host = await getUserById(webinar.hostId);
-
-        // 获取关联产品（通过 webinar_products 表）
+        // 获取主持人关联的工厂信息和产品列表
+        const factory = host ? await getFactoryByUserId(host.id) : null;
+        const factoryProducts = factory ? await getProductsByFactoryId(factory.id) : [];
         // 获取参会者数量
         const participants = await getWebinarParticipants(webinar.id);
-
         // 检查当前用户是否已报名
         let isRegistered = false;
         if (ctx.user) {
           const reg = await getWebinarRegistration(webinar.id, ctx.user.id);
           isRegistered = !!reg;
         }
-
         return {
           ...webinar,
           host: host ? { id: host.id, name: host.name, avatar: host.avatar } : null,
+          factory: factory ? { id: factory.id, name: factory.name, logo: factory.logo, city: factory.city, country: factory.country } : null,
+          products: factoryProducts,
           participantCount: participants.length,
+          participants: participants.slice(0, 50), // 最多返回50个参会者
           isRegistered,
         };
       }),
@@ -377,20 +389,18 @@ export const appRouter = router({
         const meeting = await getMeetingById(input.id);
         if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
 
-        // 获取工厂信息
+          // 获取工厂信息
         const factory = await getFactoryById(meeting.factoryId);
         const factoryDetails = await getFactoryDetails(meeting.factoryId);
-
+        // 获取工厂产品列表（供选品会使用）
+        const factoryProducts = await getProductsByFactoryId(meeting.factoryId);
         // 获取买家信息
         const buyer = await getUserById(meeting.buyerId);
-
         // 获取会议字幕
         const transcripts = await getMeetingTranscripts(meeting.id);
-
         // 获取关联询价
         const inquiries = await getInquiriesByBuyerId(meeting.buyerId);
         const meetingInquiries = inquiries.filter(i => i.meetingId === meeting.id);
-
         return {
           ...meeting,
           factory: factory ? {
@@ -401,6 +411,7 @@ export const appRouter = router({
             country: factory.country,
             details: factoryDetails || null,
           } : null,
+          factoryProducts,
           buyer: buyer ? { id: buyer.id, name: buyer.name, avatar: buyer.avatar } : null,
           transcripts,
           inquiries: meetingInquiries,
@@ -556,6 +567,145 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         const fav = await checkUserFavorite(ctx.user.id, input.targetType, input.targetId);
         return !!fav;
+      }),
+  }),
+
+  // ── Onboarding ──────────────────────────────────────────────────────────────
+  onboarding: router({
+    savePreferences: protectedProcedure
+      .input(z.object({
+        interestedCategories: z.array(z.string()).optional(),
+        orderScale: z.string().optional(),
+        targetMarkets: z.array(z.string()).optional(),
+        certifications: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await saveUserOnboardingPreferences(ctx.user.id, input);
+      }),
+    complete: protectedProcedure.mutation(async ({ ctx }) => {
+      return await completeUserOnboarding(ctx.user.id);
+    }),
+  }),
+
+  // ── Reel ──────────────────────────────────────────────────────────────────────
+  reel: router({
+    generateClips: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .mutation(async ({ input }) => {
+        // AI 生成片段（模拟，实际可接入 AI 服务）
+        const clips = [
+          { id: 1, start: 300, end: 323, label: "产品首次展示", icon: "🎯", selected: true },
+          { id: 2, start: 765, end: 785, label: "价格谈判关键点", icon: "💰", selected: true },
+          { id: 3, start: 1110, end: 1130, label: "工厂实力展示", icon: "🏭", selected: false },
+          { id: 4, start: 1560, end: 1580, label: "客户提问精彩回答", icon: "💬", selected: false },
+        ];
+        return { webinarId: input.webinarId, clips };
+      }),
+    generateMeetingClips: protectedProcedure
+      .input(z.object({
+        meetingId: z.number(),
+        template: z.string().optional(),
+        duration: z.string().optional(),
+        format: z.string().optional(),
+        subtitle: z.string().optional(),
+        watermark: z.boolean().optional(),
+        bgm: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // AI 生成会议 Reel 片段（模拟，实际可接入 AI 服务）
+        const clips = [
+          { id: 1, start: 300, end: 323, label: "Product first shown", icon: "🎯", selected: true },
+          { id: 2, start: 765, end: 785, label: "Price negotiation", icon: "💰", selected: true },
+          { id: 3, start: 1110, end: 1130, label: "Factory tour", icon: "🏭", selected: false },
+          { id: 4, start: 1560, end: 1580, label: "Key Q&A moment", icon: "💬", selected: false },
+        ];
+        return { meetingId: input.meetingId, clips, template: input.template, format: input.format };
+      }),
+    generateCopy: protectedProcedure
+      .input(z.object({
+        webinarId: z.number(),
+        platform: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const copy = `🚀 深圳科技工厂最新智能硬件产品发布！\n\n✅ 智能手表 Pro | MOQ 500件 | $89起\n✅ 无线耳机 | MOQ 1000件 | $45起\n✅ 移动电源 | MOQ 2000件 | $25起\n\n💡 工厂直供，品质保证，支持定制\n📩 私信询价，48小时内回复`;
+        const hashtags = ["#深圳工厂", "#智能硬件", "#跨境电商", "#工厂直供", "#RealSourcing"];
+        return { copy, hashtags };
+      }),
+    saveDraft: protectedProcedure
+      .input(z.object({
+        webinarId: z.number(),
+        clips: z.any().optional(),
+        bgm: z.string().optional(),
+        subtitlesEnabled: z.boolean().optional(),
+        aiCopy: z.string().optional(),
+        hashtags: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await createWebinarReel({
+          webinarId: input.webinarId,
+          userId: ctx.user.id,
+          clips: input.clips,
+          bgm: input.bgm,
+          subtitlesEnabled: input.subtitlesEnabled ? 1 : 0,
+          aiCopy: input.aiCopy,
+          hashtags: input.hashtags,
+          status: "draft",
+        });
+        return result;
+      }),
+    publish: protectedProcedure
+      .input(z.object({
+        reelId: z.number(),
+        platforms: z.array(z.string()),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const reel = await getWebinarReelById(input.reelId);
+        if (!reel) throw new TRPCError({ code: "NOT_FOUND", message: "Reel 不存在" });
+        if (reel.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        await updateWebinarReel(input.reelId, {
+          status: "published",
+          publishedPlatforms: input.platforms,
+        });
+        return { success: true, platforms: input.platforms };
+      }),
+    byWebinar: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .query(async ({ input }) => {
+        return await getWebinarReelsByWebinar(input.webinarId);
+      }),
+  }),
+
+  // ── Webinar Live ──────────────────────────────────────────────────────────────
+  webinarLive: router({
+    like: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await likeWebinar(input.webinarId, ctx.user.id);
+      }),
+    unlike: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await unlikeWebinar(input.webinarId, ctx.user.id);
+      }),
+    checkLike: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return await checkWebinarLike(input.webinarId, ctx.user.id);
+      }),
+    likeCount: publicProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .query(async ({ input }) => {
+        return await getWebinarLikeCount(input.webinarId);
+      }),
+    raiseHand: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await raiseHand(input.webinarId, ctx.user.id);
+      }),
+    startMeeting: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await startMeetingWithFactory(ctx.user.id, input.factoryId);
       }),
   }),
 
