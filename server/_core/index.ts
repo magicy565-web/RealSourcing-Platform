@@ -2,29 +2,26 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import { execSync } from "child_process";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
-function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise(resolve => {
-    const server = net.createServer();
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-    server.on("error", () => resolve(false));
-  });
-}
-
-async function findAvailablePort(startPort: number = 3000): Promise<number> {
-  for (let port = startPort; port < startPort + 20; port++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
+/**
+ * 强制释放指定端口：kill 所有占用该端口的进程（当前进程除外）。
+ * 这确保 tsx watch 热重载时，旧进程不会导致端口漂移。
+ */
+function forceReleasePort(port: number): void {
+  try {
+    // fuser -k 会 kill 占用该端口的所有进程
+    execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+    // 等待端口完全释放
+    execSync("sleep 0.5", { stdio: "ignore" });
+  } catch {
+    // 忽略错误（端口本来就没被占用时 fuser 会返回非零退出码）
   }
-  throw new Error(`No available port found starting from ${startPort}`);
 }
 
 async function startServer() {
@@ -85,12 +82,10 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const port = parseInt(process.env.PORT || "3000");
 
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
+  // 强制释放端口，确保热重载时不会漂移到其他端口
+  forceReleasePort(port);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
