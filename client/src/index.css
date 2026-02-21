@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -44,120 +42,123 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* ============================================================
+   RealSourcing 黑紫色主题设计系统
+   主色：紫色 #7c3aed (violet-700)
+   背景：深黑 #0f0c1a → #1a1625
+   内容区：深灰 #12101e
+   卡片：#1e1a2e
+   ============================================================ */
 :root {
-  /* RealSourcing 深色紫色主题 - 使用 OKLCH 格式 */
   --radius: 0.75rem;
-  
-  /* 紫色主色调 */
-  --primary: oklch(0.70 0.25 280);
+
+  /* ── 主色：紫色 ── */
+  --primary: oklch(0.52 0.26 293);          /* violet-700 #7c3aed */
   --primary-foreground: oklch(1 0 0);
-  
-  /* 深色背景 */
-  --background: oklch(0.15 0.02 280);
-  --foreground: oklch(1 0 0);
-  
-  /* 卡片 - 玻璃态效果 */
-  --card: oklch(0.18 0.02 280 / 0.6);
-  --card-foreground: oklch(1 0 0);
-  
-  /* Popover */
-  --popover: oklch(0.18 0.02 280);
-  --popover-foreground: oklch(1 0 0);
-  
-  /* 次要色 */
-  --secondary: oklch(0.22 0.02 280);
-  --secondary-foreground: oklch(1 0 0);
-  
-  /* 柔和色 */
-  --muted: oklch(0.25 0.02 280);
-  --muted-foreground: oklch(0.70 0 0);
-  
-  /* 强调色 - 紫色 */
-  --accent: oklch(0.70 0.25 280);
-  --accent-foreground: oklch(1 0 0);
-  
-  /* 破坏性操作 - 红色 */
+
+  /* ── 全局背景：深黑 ── */
+  --background: oklch(0.10 0.02 280);       /* #0f0c1a */
+  --foreground: oklch(0.95 0.01 280);       /* 近白 */
+
+  /* ── 卡片：深紫灰 ── */
+  --card: oklch(0.14 0.025 280);            /* #1e1a2e */
+  --card-foreground: oklch(0.95 0.01 280);
+
+  /* ── Popover ── */
+  --popover: oklch(0.14 0.025 280);
+  --popover-foreground: oklch(0.95 0.01 280);
+
+  /* ── 次要色 ── */
+  --secondary: oklch(0.20 0.03 280);
+  --secondary-foreground: oklch(0.85 0.02 280);
+
+  /* ── 柔和色 ── */
+  --muted: oklch(0.18 0.025 280);
+  --muted-foreground: oklch(0.60 0.02 280);
+
+  /* ── 强调色：紫色系 ── */
+  --accent: oklch(0.22 0.05 290);
+  --accent-foreground: oklch(0.80 0.12 290);
+
+  /* ── 破坏性 ── */
   --destructive: oklch(0.60 0.24 25);
   --destructive-foreground: oklch(1 0 0);
-  
-  /* 边框 - 紫色半透明 */
-  --border: oklch(0.70 0.25 280 / 0.3);
-  --input: oklch(0.70 0.25 280 / 0.25);
-  --ring: oklch(0.70 0.25 280);
-  
-  /* Chart colors */
-  --chart-1: oklch(0.60 0.20 280);
-  --chart-2: oklch(0.65 0.22 270);
-  --chart-3: oklch(0.70 0.25 260);
-  --chart-4: oklch(0.75 0.20 250);
-  --chart-5: oklch(0.80 0.15 240);
-  
-  /* Sidebar */
-  --sidebar: oklch(0.12 0.02 280);
-  --sidebar-foreground: oklch(1 0 0);
-  --sidebar-primary: oklch(0.70 0.25 280);
+
+  /* ── 边框：深紫灰 ── */
+  --border: oklch(0.25 0.03 280 / 0.6);
+  --input: oklch(0.22 0.03 280);
+  --ring: oklch(0.52 0.26 293);
+
+  /* ── Chart colors：紫色系 ── */
+  --chart-1: oklch(0.52 0.26 293);
+  --chart-2: oklch(0.60 0.22 280);
+  --chart-3: oklch(0.65 0.18 270);
+  --chart-4: oklch(0.70 0.14 260);
+  --chart-5: oklch(0.75 0.10 250);
+
+  /* ── Sidebar：更深的黑紫 ── */
+  --sidebar: oklch(0.08 0.02 280);          /* #0a0814 */
+  --sidebar-foreground: oklch(0.92 0.01 280);
+  --sidebar-primary: oklch(0.65 0.22 293);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.25 0.02 280);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.70 0.25 280 / 0.3);
-  --sidebar-ring: oklch(0.70 0.25 280);
+  --sidebar-accent: oklch(0.18 0.04 285);
+  --sidebar-accent-foreground: oklch(0.85 0.02 280);
+  --sidebar-border: oklch(0.22 0.03 280 / 0.5);
+  --sidebar-ring: oklch(0.52 0.26 293);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     font-variation-settings: 'opsz' 32;
-    background: linear-gradient(135deg, #0a0a0a 0%, #1a0b2e 100%);
+    /* 深黑紫渐变背景 */
+    background: linear-gradient(135deg, #0f0c1a 0%, #12101e 50%, #0f0c1a 100%);
     min-height: 100vh;
   }
 
-  /* 渐变背景网格效果 */
+  /* 微妙的网格纹理 */
   body::before {
     content: '';
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: 
-      linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
     pointer-events: none;
     z-index: 0;
   }
 
-  /* 确保内容在网格之上 */
   #root {
     position: relative;
     z-index: 1;
   }
 
-  /* 自定义滚动条 */
+  /* 自定义滚动条 - 紫色系 */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: rgba(15, 15, 25, 0.4);
+    background: oklch(0.12 0.02 280);
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(139, 92, 246, 0.5);
-    border-radius: 4px;
+    background: oklch(0.35 0.10 290);
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(139, 92, 246, 0.7);
+    background: oklch(0.52 0.20 293);
   }
-  
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -172,7 +173,7 @@
 }
 
 @layer components {
-  /* Container 自定义 */
+  /* Container */
   .container {
     width: 100%;
     margin-left: auto;
@@ -200,73 +201,164 @@
       max-width: 1440px;
     }
   }
-  
-  /* 玻璃态卡片 */
+
+  /* ── 玻璃态卡片（深色背景专用） ── */
   .glass-card {
-    background: rgba(15, 15, 25, 0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+    background: oklch(0.14 0.025 280 / 0.8);
+    border: 1px solid oklch(0.30 0.06 290 / 0.3);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.3),
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
     border-radius: var(--radius);
+    backdrop-filter: blur(12px);
   }
 
-  /* 紫色光晕效果 */
+  /* ── 紫色光晕 ── */
   .glow-purple {
-    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+    box-shadow:
+      0 0 0 1px oklch(0.52 0.26 293 / 0.25),
+      0 4px 24px oklch(0.52 0.26 293 / 0.20),
+      0 0 40px oklch(0.52 0.26 293 / 0.08);
   }
 
-  /* 渐变按钮 */
+  /* ── 紫色渐变按钮 ── */
   .btn-gradient-purple {
-    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
-    transition: all 0.3s ease;
+    background: linear-gradient(135deg, oklch(0.52 0.26 293) 0%, oklch(0.58 0.28 280) 100%);
+    color: white;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px oklch(0.52 0.26 293 / 0.35);
   }
 
   .btn-gradient-purple:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px oklch(0.52 0.26 293 / 0.50);
   }
 
-  /* 状态标签 */
+  /* ── 状态标签 ── */
   .badge-live {
-    @apply bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold uppercase;
+    @apply bg-red-500 text-white px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
   }
 
   .badge-upcoming {
-    @apply bg-blue-500 text-white px-2 py-1 rounded text-xs font-semibold uppercase;
+    @apply bg-violet-600 text-white px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide;
   }
 
   .badge-past {
-    @apply bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold uppercase;
+    @apply bg-white/20 text-white/70 px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide;
+  }
+
+  /* ── 公告横幅 ── */
+  .announcement-banner {
+    background: linear-gradient(90deg, oklch(0.52 0.26 293) 0%, oklch(0.58 0.28 280) 100%);
+    color: white;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  /* ── 统计数字卡片（深色） ── */
+  .stat-card {
+    background: oklch(0.14 0.025 280 / 0.6);
+    border: 1px solid oklch(0.30 0.06 290 / 0.25);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    backdrop-filter: blur(8px);
+  }
+
+  .stat-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px oklch(0.52 0.26 293 / 0.2);
+    transform: translateY(-2px);
+    border-color: oklch(0.52 0.26 293 / 0.3);
+  }
+
+  /* ── Input 深色主题覆盖 ── */
+  input, textarea, select {
+    background-color: oklch(0.18 0.025 280) !important;
+    border-color: oklch(0.28 0.04 285 / 0.6) !important;
+    color: oklch(0.95 0.01 280) !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: oklch(0.50 0.02 280) !important;
+  }
+
+  input:focus, textarea:focus {
+    border-color: oklch(0.52 0.26 293 / 0.7) !important;
+    box-shadow: 0 0 0 3px oklch(0.52 0.26 293 / 0.15) !important;
   }
 }
 
 @layer utilities {
-  /* 文本渐变 */
+  /* ── 紫色文字渐变 ── */
   .text-gradient-purple {
-    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+    background: linear-gradient(135deg, oklch(0.75 0.22 293) 0%, oklch(0.80 0.18 280) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
-  /* 动画 */
+  /* ── 亮紫色文字渐变（Hero 标题用） ── */
+  .text-gradient-blue {
+    background: linear-gradient(135deg, oklch(0.72 0.24 293) 0%, oklch(0.78 0.20 275) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── 字体规范 ── */
+  .text-display   { font-size: 3.5rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+  .text-heading-1 { font-size: 2.25rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+  .text-heading-2 { font-size: 1.5rem;  font-weight: 600; line-height: 1.3; }
+  .text-heading-3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
+  .text-body-lg   { font-size: 1.125rem; font-weight: 400; line-height: 1.6; }
+  .text-body      { font-size: 1rem;    font-weight: 400; line-height: 1.6; }
+  .text-caption   { font-size: 0.875rem; font-weight: 400; line-height: 1.5; }
+
+  /* ── 动画 ── */
   .animate-glow {
-    animation: glow 2s ease-in-out infinite alternate;
+    animation: glow-purple 2s ease-in-out infinite alternate;
   }
 
-  @keyframes glow {
-    from {
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
-    }
-    to {
-      box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
-    }
+  @keyframes glow-purple {
+    from { box-shadow: 0 0 10px oklch(0.52 0.26 293 / 0.20); }
+    to   { box-shadow: 0 0 30px oklch(0.52 0.26 293 / 0.45); }
   }
 
-  /* 渐变边框 */
+  /* ── 渐变边框 ── */
   .border-gradient-purple {
     border: 1px solid transparent;
-    background: linear-gradient(#0a0a0a, #0a0a0a) padding-box,
-                linear-gradient(135deg, #8b5cf6, #a855f7) border-box;
+    background:
+      linear-gradient(oklch(0.14 0.025 280), oklch(0.14 0.025 280)) padding-box,
+      linear-gradient(135deg, oklch(0.52 0.26 293), oklch(0.58 0.28 275)) border-box;
+  }
+
+  /* ── 卡片悬停 ── */
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px oklch(0.52 0.26 293 / 0.2);
+    border-color: oklch(0.52 0.26 293 / 0.3) !important;
+  }
+
+  /* ── 侧边栏背景 ── */
+  .sidebar-bg {
+    background: oklch(0.08 0.02 280);
+  }
+
+  /* ── 隐藏滚动条 ── */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

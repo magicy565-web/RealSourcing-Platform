@@ -9,21 +9,30 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default:
+          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md active:scale-[0.98]",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-white shadow-sm hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-transparent shadow-xs hover:bg-accent dark:bg-transparent dark:border-input dark:hover:bg-input/50",
+          "border border-primary/30 bg-transparent text-primary shadow-xs hover:bg-primary/5 hover:border-primary/50 dark:bg-transparent dark:border-input dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
-          "hover:bg-accent dark:hover:bg-accent/50",
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // 新增：蓝色渐变变体（用于 Hero CTA）
+        gradient:
+          "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-600 active:scale-[0.98]",
+        // 新增：白色轮廓变体（用于深色背景上）
+        "outline-white":
+          "border border-white/40 bg-transparent text-white hover:bg-white/10 hover:border-white/60",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        lg: "h-11 rounded-lg px-6 has-[>svg]:px-4 text-base",
+        // 新增：xl 尺寸，用于 Hero 区大号 CTA 按钮
+        xl: "h-14 rounded-xl px-8 has-[>svg]:px-6 text-lg font-semibold",
         icon: "size-9",
         "icon-sm": "size-8",
         "icon-lg": "size-10",

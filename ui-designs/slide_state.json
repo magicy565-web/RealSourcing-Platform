@@ -1,0 +1,84 @@
+{
+  "project_info": {
+    "title": "Hero Section — 首页英雄区",
+    "created": 1771649181.6016195,
+    "last_updated": 1771649344.4941847,
+    "total_slides": 6
+  },
+  "slides": [
+    {
+      "id": "hero_section",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "sidebar_nav",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "dashboard_cards",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "webinar_card",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "login_form",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "factory_card",
+      "state": "edited",
+      "pageNum": 6
+    }
+  ],
+  "outline": [
+    {
+      "id": "hero_section",
+      "title": "Hero Section — 首页英雄区",
+      "summary": "展示 RealSourcing 平台首页 Hero 区域的完整 UI 设计，黑紫色渐变背景，大标题、副标题、CTA 按钮组、数据统计栏",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    },
+    {
+      "id": "sidebar_nav",
+      "title": "Sidebar Navigation — 侧边栏导航",
+      "summary": "展示深黑色侧边栏导航组件，包含 Logo、搜索框、分组菜单项（激活/默认状态）、升级横幅和用户信息区",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    },
+    {
+      "id": "dashboard_cards",
+      "title": "Dashboard Cards — 数据统计卡片",
+      "summary": "展示 Dashboard 页面的数据统计卡片组合，包含 KPI 卡片、进度条、图表区域，黑紫色主题",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    },
+    {
+      "id": "webinar_card",
+      "title": "Webinar Card — 研讨会卡片",
+      "summary": "展示 Webinar 列表页的卡片网格布局，包含封面图、LIVE 状态徽章、标题、时间、参与按钮",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    },
+    {
+      "id": "login_form",
+      "title": "Login Form — 登录表单",
+      "summary": "展示登录页面的两栏布局，左侧黑紫色品牌区，右侧深色表单区（邮箱、密码、登录按钮、社交登录）",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    },
+    {
+      "id": "factory_card",
+      "title": "Factory Card — 工厂卡片",
+      "summary": "展示工厂大厅页面的工厂卡片网格，包含工厂图片、认证徽章、评分、地点、查看详情按钮",
+      "image_plan": "Use a suitable image if needed",
+      "slide_template_key": null
+    }
+  ]
+}

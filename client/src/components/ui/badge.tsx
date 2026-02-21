@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-semibold w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden uppercase tracking-wide",
   {
     variants: {
       variant: {
@@ -17,6 +17,27 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // 语义化状态变体
+        live:
+          "border-transparent bg-red-500 text-white shadow-sm shadow-red-500/20",
+        upcoming:
+          "border-transparent bg-blue-500 text-white shadow-sm shadow-blue-500/20",
+        past:
+          "border-transparent bg-gray-400 text-white",
+        // 新增：成功/信息变体
+        success:
+          "border-transparent bg-emerald-500 text-white",
+        info:
+          "border-transparent bg-sky-500 text-white",
+        // 新增：轻量变体（浅色背景）
+        "live-soft":
+          "border-red-200 bg-red-50 text-red-700",
+        "upcoming-soft":
+          "border-blue-200 bg-blue-50 text-blue-700",
+        "past-soft":
+          "border-gray-200 bg-gray-50 text-gray-600",
+        "new":
+          "border-transparent bg-orange-500 text-white",
       },
     },
     defaultVariants: {
