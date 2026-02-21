@@ -250,6 +250,12 @@ export const appRouter = router({
         // 获取工厂评价
         const reviews = await getFactoryReviews(input.id);
 
+        // GTM 3.1: 获取AI验厂、运营指标、Reel视频、可连线时间
+        const verification = await getFactoryVerification(input.id);
+        const metrics = await getFactoryMetrics(input.id);
+        const reels = await getFactoryReels(input.id);
+        const availabilities = await getFactoryAvailabilities(input.id);
+
         // 检查收藏状态
         let isFavorited = false;
         if (ctx.user) {
@@ -263,6 +269,10 @@ export const appRouter = router({
           products,
           reviews,
           isFavorited,
+          verification: verification || null,
+          metrics: metrics || null,
+          reels: reels || [],
+          availabilities: availabilities || [],
         };
       }),
 
@@ -311,6 +321,31 @@ export const appRouter = router({
     myFollowed: protectedProcedure.query(async ({ ctx }) => {
       return await getFollowedFactories(ctx.user.id);
     }),
+
+    // GTM 3.1 endpoints
+    verification: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getFactoryVerification(input.factoryId);
+      }),
+
+    metrics: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getFactoryMetrics(input.factoryId);
+      }),
+
+    reels: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getFactoryReels(input.factoryId);
+      }),
+
+    availabilities: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getFactoryAvailabilities(input.factoryId);
+      }),
   }),
 
   // ── Products ──────────────────────────────────────────────────────────────────

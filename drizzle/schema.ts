@@ -49,6 +49,7 @@ export const userProfiles = mysqlTable("user_profiles", {
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 // 实际表名: factories
+// GTM 3.1 升级：包含 AI 验厂、沉浸式体验、实时交互等新字段
 export const factories = mysqlTable("factories", {
   id:           int("id").primaryKey().autoincrement(),
   userId:       int("userId").notNull(),
@@ -61,12 +62,103 @@ export const factories = mysqlTable("factories", {
   description:  text("description"),
   status:       varchar("status", { length: 20 }).notNull().default("pending"),
   overallScore: decimal("overallScore", { precision: 3, scale: 2 }).default("0.00"),
+  
+  // P0: Real-time status fields (实时状态)
+  isOnline:           tinyint("isOnline").notNull().default(0),
+  lastOnlineAt:       datetime("lastOnlineAt", { mode: "date", fsp: 3 }),
+  availableForCall:   tinyint("availableForCall").notNull().default(0),
+  averageResponseTime: int("averageResponseTime").default(0),
+  
+  // P0: Video & Certification fields (视频与认证)
+  hasReel:            tinyint("hasReel").notNull().default(0),
+  videoVerificationUrl: varchar("videoVerificationUrl", { length: 500 }),
+  certificationStatus: varchar("certificationStatus", { length: 20 }).default("pending"),
+  certificationDate:  datetime("certificationDate", { mode: "date", fsp: 3 }),
+  
+  // P1: Operational data fields (运营数据)
+  viewCount:          int("viewCount").notNull().default(0),
+  favoriteCount:      int("favoriteCount").notNull().default(0),
+  responseRate:       decimal("responseRate", { precision: 5, scale: 2 }).default("0.00"),
+  languagesSpoken:    json("languagesSpoken"),
+  isFeatured:         tinyint("isFeatured").notNull().default(0),
+  featuredUntil:      datetime("featuredUntil", { mode: "date", fsp: 3 }),
+  
   createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
 
 export type Factory = typeof factories.$inferSelect;
 export type InsertFactory = typeof factories.$inferInsert;
+
+// ─── Factory Verifications ────────────────────────────────────────────────────
+// 存储 AI 验厂评分和合规数据
+export const factoryVerifications = mysqlTable("factory_verifications", {
+  id:                    int("id").primaryKey().autoincrement(),
+  factoryId:             int("factoryId").notNull().unique(),
+  aiVerificationScore:   int("aiVerificationScore").notNull().default(0),
+  aiVerificationReason:  json("aiVerificationReason"),
+  complianceScore:       int("complianceScore").notNull().default(0),
+  trustBadges:           json("trustBadges"),
+  lastVerificationAt:    datetime("lastVerificationAt", { mode: "date", fsp: 3 }),
+  verificationExpiresAt: datetime("verificationExpiresAt", { mode: "date", fsp: 3 }),
+  createdAt:             datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:             datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type FactoryVerification = typeof factoryVerifications.$inferSelect;
+
+// ─── Factory Metrics ──────────────────────────────────────────────────────────
+// 存储交易和运营统计
+export const factoryMetrics = mysqlTable("factory_metrics", {
+  id:                   int("id").primaryKey().autoincrement(),
+  factoryId:            int("factoryId").notNull().unique(),
+  totalMeetings:        int("totalMeetings").notNull().default(0),
+  totalSampleRequests:  int("totalSampleRequests").notNull().default(0),
+  sampleConversionRate: decimal("sampleConversionRate", { precision: 5, scale: 2 }).default("0.00"),
+  totalOrders:          int("totalOrders").notNull().default(0),
+  totalOrderValue:      decimal("totalOrderValue", { precision: 15, scale: 2 }).default("0.00"),
+  disputeRate:          decimal("disputeRate", { precision: 5, scale: 2 }).default("0.00"),
+  reelCount:            int("reelCount").notNull().default(0),
+  reelViewCount:        int("reelViewCount").notNull().default(0),
+  createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:            datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type FactoryMetrics = typeof factoryMetrics.$inferSelect;
+
+// ─── Factory Reels ────────────────────────────────────────────────────────────
+// 管理沉浸式展厅的视频 Reel 内容
+export const factoryReels = mysqlTable("factory_reels", {
+  id:           int("id").primaryKey().autoincrement(),
+  factoryId:    int("factoryId").notNull(),
+  title:        varchar("title", { length: 255 }).notNull(),
+  description:  text("description"),
+  videoUrl:     varchar("videoUrl", { length: 500 }).notNull(),
+  thumbnailUrl: varchar("thumbnailUrl", { length: 500 }),
+  duration:     int("duration").notNull(),
+  keyframes:    json("keyframes"),
+  viewCount:    int("viewCount").notNull().default(0),
+  status:       varchar("status", { length: 20 }).default("published"),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:    datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type FactoryReel = typeof factoryReels.$inferSelect;
+
+// ─── Factory Availabilities ───────────────────────────────────────────────────
+// 管理工厂的可连线时间段
+export const factoryAvailabilities = mysqlTable("factory_availabilities", {
+  id:        int("id").primaryKey().autoincrement(),
+  factoryId: int("factoryId").notNull(),
+  dayOfWeek: int("dayOfWeek").notNull(),
+  startTime: varchar("startTime", { length: 5 }).notNull(),
+  endTime:   varchar("endTime", { length: 5 }).notNull(),
+  timezone:  varchar("timezone", { length: 50 }).default("Asia/Shanghai"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+
+export type FactoryAvailability = typeof factoryAvailabilities.$inferSelect;
 
 // ─── Factory Details (新表) ───────────────────────────────────────────────────
 export const factoryDetails = mysqlTable("factory_details", {

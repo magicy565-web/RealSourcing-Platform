@@ -158,6 +158,80 @@ export async function updateFactory(id: number, data: Partial<typeof schema.fact
   return await database.update(schema.factories).set(data).where(eq(schema.factories.id, id));
 }
 
+// ─── Factory Verifications (GTM 3.1) ──────────────────────────────────────────
+export async function getFactoryVerification(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factoryVerifications)
+    .where(eq(schema.factoryVerifications.factoryId, factoryId));
+  return rows[0];
+}
+
+export async function upsertFactoryVerification(factoryId: number, data: Partial<typeof schema.factoryVerifications.$inferInsert>) {
+  const database = await dbPromise;
+  const existing = await getFactoryVerification(factoryId);
+  if (existing) {
+    return await database.update(schema.factoryVerifications)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.factoryVerifications.factoryId, factoryId));
+  } else {
+    return await database.insert(schema.factoryVerifications)
+      .values({ factoryId, ...data } as any);
+  }
+}
+
+// ─── Factory Metrics (GTM 3.1) ────────────────────────────────────────────────
+export async function getFactoryMetrics(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factoryMetrics)
+    .where(eq(schema.factoryMetrics.factoryId, factoryId));
+  return rows[0];
+}
+
+export async function upsertFactoryMetrics(factoryId: number, data: Partial<typeof schema.factoryMetrics.$inferInsert>) {
+  const database = await dbPromise;
+  const existing = await getFactoryMetrics(factoryId);
+  if (existing) {
+    return await database.update(schema.factoryMetrics)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.factoryMetrics.factoryId, factoryId));
+  } else {
+    return await database.insert(schema.factoryMetrics)
+      .values({ factoryId, ...data } as any);
+  }
+}
+
+// ─── Factory Reels (GTM 3.1) ──────────────────────────────────────────────────
+export async function getFactoryReels(factoryId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.factoryReels)
+    .where(eq(schema.factoryReels.factoryId, factoryId))
+    .orderBy(desc(schema.factoryReels.createdAt));
+}
+
+export async function createFactoryReel(data: typeof schema.factoryReels.$inferInsert) {
+  const database = await dbPromise;
+  return await database.insert(schema.factoryReels).values(data);
+}
+
+// ─── Factory Availabilities (GTM 3.1) ─────────────────────────────────────────
+export async function getFactoryAvailabilities(factoryId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.factoryAvailabilities)
+    .where(eq(schema.factoryAvailabilities.factoryId, factoryId))
+    .orderBy(schema.factoryAvailabilities.dayOfWeek);
+}
+
+export async function setFactoryAvailabilities(factoryId: number, availabilities: typeof schema.factoryAvailabilities.$inferInsert[]) {
+  const database = await dbPromise;
+  // 删除现有的可用时间段
+  await database.delete(schema.factoryAvailabilities)
+    .where(eq(schema.factoryAvailabilities.factoryId, factoryId));
+  // 插入新的可用时间段
+  if (availabilities.length > 0) {
+    return await database.insert(schema.factoryAvailabilities).values(availabilities);
+  }
+}
+
 // ─── Product Operations ───────────────────────────────────────────────────────
 
 export async function getAllProducts() {
