@@ -52,11 +52,11 @@ export function FactoryTrustBadges({
   }
 
   // 高评分徽章
-  if (overallScore >= 4.5) {
+  if (typeof overallScore === 'number' && overallScore >= 4.5) {
     badges.push({
       id: "highscore",
       icon: TrendingUp,
-      label: `${overallScore.toFixed(1)} 星`,
+      label: `${Number(overallScore).toFixed(1)} 星`,
       color: "from-amber-500/20 to-amber-600/20",
       border: "border-amber-500/40",
       text: "text-amber-300",
@@ -65,7 +65,7 @@ export function FactoryTrustBadges({
   }
 
   // 信任徽章
-  if (status === "verified" && overallScore >= 4.0) {
+  if (status === "verified" && typeof overallScore === 'number' && overallScore >= 4.0) {
     badges.push({
       id: "trusted",
       icon: Shield,

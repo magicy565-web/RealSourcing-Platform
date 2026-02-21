@@ -1,1 +1,153 @@
-import { useFactoryAIRecommendation } from "@/hooks/useFactoryAIRecommendation";\nimport { Button } from "@/components/ui/button";\nimport { Loader2, Sparkles, CheckCircle2, AlertCircle } from \"lucide-react\";\n\ninterface FactoryAIRecommendationProps {\n  factoryId: number;\n  compact?: boolean; // 紧凑模式（用于卡片）\n  buyerPreferences?: {\n    preferredCategories?: string[];\n    preferredCountries?: string[];\n    minQualityScore?: number;\n  };\n}\n\n/**\n * FactoryAIRecommendation 组件\n * \n * 展示 OpenAI 生成的工厂推荐理由\n * - 主要推荐理由（一句话，高转化）\n * - 详细推荐理由（3-5 条，基于数据）\n * - 信任指标（3-4 条，强化信任）\n */\nexport function FactoryAIRecommendation({\n  factoryId,\n  compact = false,\n  buyerPreferences,\n}: FactoryAIRecommendationProps) {\n  const { recommendation, isLoading, error, requestRecommendation, hasRequested } =\n    useFactoryAIRecommendation(factoryId, buyerPreferences);\n\n  // 紧凑模式：只显示主要推荐理由和请求按钮\n  if (compact) {\n    return (\n      <div className=\"space-y-2\">\n        {!hasRequested && (\n          <Button\n            size=\"sm\"\n            variant=\"ghost\"\n            className=\"w-full text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-500/10\"\n            onClick={requestRecommendation}\n          >\n            <Sparkles className=\"w-3 h-3 mr-1\" />\n            查看 AI 推荐理由\n          </Button>\n        )}\n\n        {isLoading && (\n          <div className=\"flex items-center gap-2 text-xs text-slate-400 py-2\">\n            <Loader2 className=\"w-3 h-3 animate-spin\" />\n            <span>AI 正在分析中...</span>\n          </div>\n        )}\n\n        {error && (\n          <div className=\"flex items-center gap-2 text-xs text-red-400 py-2\">\n            <AlertCircle className=\"w-3 h-3\" />\n            <span>{error}</span>\n          </div>\n        )}\n\n        {recommendation && !isLoading && (\n          <div className=\"bg-violet-500/10 border border-violet-500/20 rounded-lg p-2\">\n            <div className=\"flex items-start gap-2\">\n              <Sparkles className=\"w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5\" />\n              <p className=\"text-xs text-violet-300 font-medium\">{recommendation.mainReason}</p>\n            </div>\n          </div>\n        )}\n      </div>\n    );\n  }\n\n  // 完整模式：显示所有推荐信息\n  return (\n    <div className=\"space-y-4 bg-gradient-to-br from-violet-950/20 to-slate-950/20 border border-violet-500/20 rounded-lg p-4\">\n      {/* 标题 */}\n      <div className=\"flex items-center gap-2\">\n        <Sparkles className=\"w-5 h-5 text-violet-400\" />\n        <h3 className=\"text-sm font-semibold text-white\">AI 推荐分析</h3>\n      </div>\n\n      {/* 加载状态 */}\n      {isLoading && (\n        <div className=\"flex items-center gap-3 py-4\">\n          <Loader2 className=\"w-5 h-5 text-violet-400 animate-spin\" />\n          <p className=\"text-sm text-slate-400\">AI 正在深度分析该工厂的数据...</p>\n        </div>\n      )}\n\n      {/* 错误状态 */}\n      {error && !isLoading && (\n        <div className=\"flex items-start gap-3 py-4 bg-red-500/10 border border-red-500/20 rounded p-3\">\n          <AlertCircle className=\"w-5 h-5 text-red-400 flex-shrink-0 mt-0.5\" />\n          <div>\n            <p className=\"text-sm text-red-300 font-medium\">生成推荐失败</p>\n            <p className=\"text-xs text-red-400 mt-1\">{error}</p>\n          </div>\n        </div>\n      )}\n\n      {/* 推荐内容 */}\n      {recommendation && !isLoading && (\n        <div className=\"space-y-3\">\n          {/* 主要推荐理由 */}\n          <div className=\"bg-violet-600/20 border-l-2 border-violet-500 pl-3 py-2\">\n            <p className=\"text-sm font-semibold text-violet-300\">{recommendation.mainReason}</p>\n          </div>\n\n          {/* 详细推荐理由 */}\n          {recommendation.detailedReasons.length > 0 && (\n            <div className=\"space-y-2\">\n              <p className=\"text-xs font-semibold text-slate-300 uppercase tracking-wider\">详细理由</p>\n              <ul className=\"space-y-1.5\">\n                {recommendation.detailedReasons.map((reason, idx) => (\n                  <li key={idx} className=\"flex items-start gap-2 text-xs text-slate-300\">\n                    <CheckCircle2 className=\"w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5\" />\n                    <span>{reason}</span>\n                  </li>\n                ))}\n              </ul>\n            </div>\n          )}\n\n          {/* 信任指标 */}\n          {recommendation.trustIndicators.length > 0 && (\n            <div className=\"space-y-2 pt-2 border-t border-slate-700/50\">\n              <p className=\"text-xs font-semibold text-slate-300 uppercase tracking-wider\">信任指标</p>\n              <ul className=\"space-y-1.5\">\n                {recommendation.trustIndicators.map((indicator, idx) => (\n                  <li key={idx} className=\"flex items-start gap-2 text-xs text-slate-300\">\n                    <CheckCircle2 className=\"w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5\" />\n                    <span>{indicator}</span>\n                  </li>\n                ))}\n              </ul>\n            </div>\n          )}\n        </div>\n      )}\n\n      {/* 初始状态：请求按钮 */}\n      {!hasRequested && !isLoading && !recommendation && !error && (\n        <Button\n          onClick={requestRecommendation}\n          className=\"w-full bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 text-white text-sm\"\n        >\n          <Sparkles className=\"w-4 h-4 mr-2\" />\n          生成 AI 推荐分析\n        </Button>\n      )}\n    </div>\n  );\n}\n
+import { useFactoryAIRecommendation } from "@/hooks/useFactoryAIRecommendation";
+import { Button } from "@/components/ui/button";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+
+interface FactoryAIRecommendationProps {
+  factoryId: number;
+  compact?: boolean; // 紧凑模式（用于卡片）
+  buyerPreferences?: {
+    preferredCategories?: string[];
+    preferredCountries?: string[];
+    minQualityScore?: number;
+  };
+}
+
+/**
+ * FactoryAIRecommendation 组件
+ * 
+ * 展示 OpenAI 生成的工厂推荐理由
+ * - 主要推荐理由（一句话，高转化）
+ * - 详细推荐理由（3-5 条，基于数据）
+ * - 信任指标（3-4 条，强化信任）
+ */
+export function FactoryAIRecommendation({
+  factoryId,
+  compact = false,
+  buyerPreferences,
+}: FactoryAIRecommendationProps) {
+  const { recommendation, isLoading, error, requestRecommendation, hasRequested } =
+    useFactoryAIRecommendation(factoryId, buyerPreferences);
+
+  // 紧凑模式：只显示主要推荐理由和请求按钮
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        {!hasRequested && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="w-full text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+            onClick={requestRecommendation}
+          >
+            <Sparkles className="w-3 h-3 mr-1" />
+            查看 AI 推荐理由
+          </Button>
+        )}
+
+        {isLoading && (
+          <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span>AI 正在分析中...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-red-400 py-2">
+            <AlertCircle className="w-3 h-3" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {recommendation && !isLoading && (
+          <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-2">
+            <div className="flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-violet-300 font-medium">{recommendation.mainReason}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 完整模式：显示所有推荐信息
+  return (
+    <div className="space-y-4 bg-gradient-to-br from-violet-950/20 to-slate-950/20 border border-violet-500/20 rounded-lg p-4">
+      {/* 标题 */}
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-5 h-5 text-violet-400" />
+        <h3 className="text-sm font-semibold text-white">AI 推荐分析</h3>
+      </div>
+
+      {/* 加载状态 */}
+      {isLoading && (
+        <div className="flex items-center gap-3 py-4">
+          <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+          <p className="text-sm text-slate-400">AI 正在深度分析该工厂的数据...</p>
+        </div>
+      )}
+
+      {/* 错误状态 */}
+      {error && !isLoading && (
+        <div className="flex items-start gap-3 py-4 bg-red-500/10 border border-red-500/20 rounded p-3">
+          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-red-300 font-medium">生成推荐失败</p>
+            <p className="text-xs text-red-400 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* 推荐内容 */}
+      {recommendation && !isLoading && (
+        <div className="space-y-3">
+          {/* 主要推荐理由 */}
+          <div className="bg-violet-600/20 border-l-2 border-violet-500 pl-3 py-2">
+            <p className="text-sm font-semibold text-violet-300">{recommendation.mainReason}</p>
+          </div>
+
+          {/* 详细推荐理由 */}
+          {recommendation.detailedReasons.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">详细理由</p>
+              <ul className="space-y-1.5">
+                {recommendation.detailedReasons.map((reason, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 信任指标 */}
+          {recommendation.trustIndicators.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-700/50">
+              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">信任指标</p>
+              <ul className="space-y-1.5">
+                {recommendation.trustIndicators.map((indicator, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <span>{indicator}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 初始状态：请求按钮 */}
+      {!hasRequested && !isLoading && !recommendation && !error && (
+        <Button
+          onClick={requestRecommendation}
+          className="w-full bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 text-white text-sm"
+        >
+          <Sparkles className="w-4 h-4 mr-2" />
+          生成 AI 推荐分析
+        </Button>
+      )}
+    </div>
+  );
+}

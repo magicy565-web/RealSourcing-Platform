@@ -48,6 +48,11 @@ import {
   saveUserOnboardingPreferences, completeUserOnboarding,
   // Factory Start Meeting
   startMeetingWithFactory,
+  // GTM 3.1 Factory Extensions
+  getFactoryVerification, upsertFactoryVerification,
+  getFactoryMetrics, upsertFactoryMetrics,
+  getFactoryReels, createFactoryReel, deleteFactoryReel,
+  getFactoryAvailabilities, upsertFactoryAvailability,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";

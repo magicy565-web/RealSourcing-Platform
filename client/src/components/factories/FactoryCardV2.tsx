@@ -4,6 +4,7 @@ import { Award, MapPin, Star, ArrowRight, Loader2, Zap, Play, TrendingUp } from 
 import { FactoryTrustBadges } from "./FactoryTrustBadges";
 import { FactoryMatchScore } from "./FactoryMatchScore";
 import { FactoryQuickActions } from "./FactoryQuickActions";
+import { FactoryAIRecommendation } from "./FactoryAIRecommendation";
 import { useState } from "react";
 
 interface FactoryCardV2Props {
@@ -146,6 +147,12 @@ export function FactoryCardV2({
               </div>
             </div>
           )}
+
+          {/* AI 推荐理由（紧凑模式） */}
+          <FactoryAIRecommendation
+            factoryId={factory.id}
+            compact={true}
+          />
 
           {/* 快捷操作栏 */}
           <FactoryQuickActions

@@ -4,10 +4,11 @@
  */
 
 import OpenAI from "openai";
+import { ENV } from "./_core/env";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
+  apiKey: ENV.openaiApiKey,
+  baseURL: ENV.openaiBaseUrl,
 });
 
 /**
@@ -52,13 +53,20 @@ export async function generateFactoryRecommendation(
   detailedReasons: string[]; // 详细推荐理由（3-5 条）
   trustIndicators: string[]; // 信任指标（3-4 条）
 }> {
+  // 【临时方案】直接使用降级推荐，绕过 OpenAI API 问题
+  // TODO: 后续恢复 OpenAI API 调用
+  console.log("📌 使用本地规则生成推荐理由（降级方案）");
+  return generateFallbackRecommendation(factory);
+
+  // 原始实现（已注释，待恢复）
+  /*
   try {
     // 构建 Prompt
     const prompt = buildFactoryRecommendationPrompt(factory, buyerContext);
 
     // 调用 OpenAI API
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4-mini",
+      model: ENV.openaiModel,
       messages: [
         {
           role: "system",
@@ -72,7 +80,7 @@ export async function generateFactoryRecommendation(
           content: prompt,
         },
       ],
-      temperature: 0.7, // 适度的创意和多样性
+      temperature: 0.7,
       max_tokens: 500,
       top_p: 0.9,
     });
@@ -87,6 +95,7 @@ export async function generateFactoryRecommendation(
     // 降级处理：返回基于规则的推荐
     return generateFallbackRecommendation(factory);
   }
+  */
 }
 
 /**

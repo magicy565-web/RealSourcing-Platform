@@ -4,6 +4,7 @@ import { Award, MapPin, Star, ArrowRight, Loader2, Zap } from "lucide-react";
 import { FactoryTrustBadges } from "./FactoryTrustBadges";
 import { FactoryMatchScore } from "./FactoryMatchScore";
 import { FactoryQuickActions } from "./FactoryQuickActions";
+import { FactoryAIRecommendation } from "./FactoryAIRecommendation";
 import { useState } from "react";
 
 interface Factory {
@@ -143,6 +144,12 @@ export function FactoryCard({
             isFavorited={isFavorited}
             matchTags={matchScore?.tags}
             isOnline={onlineStatus?.isOnline}
+          />
+
+          {/* 【新增】AI 推荐理由（紧凑模式）*/}
+          <FactoryAIRecommendation
+            factoryId={parseInt(factory.id, 10)}
+            compact={true}
           />
 
           {/* 【新增】快捷操作切换 */}
