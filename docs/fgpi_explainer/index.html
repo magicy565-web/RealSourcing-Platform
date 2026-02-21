@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FGPI — 工厂增长伙伴指数 | RealSourcing</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #0a0a0f; color: #e2e8f0; }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card-glow {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: all 0.3s ease;
+    }
+    .card-glow:hover {
+      border-color: rgba(167,139,250,0.4);
+      background: rgba(167,139,250,0.05);
+      transform: translateY(-2px);
+    }
+
+    .pillar-bar {
+      height: 6px;
+      border-radius: 3px;
+      transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn { transition: all 0.2s; }
+    .tab-btn.active {
+      background: rgba(167,139,250,0.15);
+      border-color: rgba(167,139,250,0.6);
+      color: #a78bfa;
+    }
+
+    .vs-row:hover { background: rgba(167,139,250,0.05); }
+
+    .metric-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid;
+    }
+
+    .webinar-step {
+      position: relative;
+      padding-left: 48px;
+    }
+    .webinar-step::before {
+      content: attr(data-step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: white;
+    }
+
+    .score-ring {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: conic-gradient(#a78bfa 0% 87%, rgba(255,255,255,0.1) 87% 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .score-ring::before {
+      content: '';
+      position: absolute;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: #0a0a0f;
+    }
+    .score-ring span {
+      position: relative;
+      z-index: 1;
+      font-size: 28px;
+      font-weight: 800;
+      color: #a78bfa;
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ═══════════════════════════════════════════ HERO ═══ -->
+  <section class="relative overflow-hidden px-6 py-24 text-center">
+    <div class="absolute inset-0 opacity-20" style="background: radial-gradient(ellipse 80% 50% at 50% -20%, #7c3aed, transparent);"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-8"
+           style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;">
+        RealSourcing 3.1 · 新商业标准
+      </div>
+      <h1 class="text-5xl md:text-7xl font-black mb-6 leading-tight">
+        <span class="gradient-text">FGPI</span>
+      </h1>
+      <p class="text-2xl md:text-3xl font-bold text-white mb-4">工厂增长伙伴指数</p>
+      <p class="text-lg text-slate-400 max-w-2xl mx-auto mb-12">
+        Factory Growth Partner Index — 全球首套以<strong class="text-white">增长力</strong>而非生产力为核心的工厂评估体系。
+        不问你成立多少年，只问你能帮我增长多少。
+      </p>
+      <div class="flex flex-wrap justify-center gap-4">
+        <a href="#buyer" class="px-8 py-3 rounded-xl font-semibold text-white"
+           style="background:linear-gradient(135deg,#7c3aed,#2563eb);">
+          我是采购商 →
+        </a>
+        <a href="#factory" class="px-8 py-3 rounded-xl font-semibold card-glow">
+          我是工厂 →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ THE PROBLEM ═══ -->
+  <section class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl font-bold text-white mb-4">旧规则已经失效</h2>
+      <p class="text-slate-400 max-w-xl mx-auto">阿里巴巴的指标体系是为工业时代设计的。它无法回答现代 DTC 卖家最关心的问题。</p>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Old -->
+      <div class="card-glow rounded-2xl p-8" style="border-color:rgba(239,68,68,0.2);">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+               style="background:rgba(239,68,68,0.15);color:#f87171;">✕</div>
+          <span class="font-semibold text-slate-300">传统平台在衡量什么</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 text-slate-500">
+            <span class="text-red-400">—</span> 成立年份（20年老厂 ≠ 懂 Dropshipping）
+          </div>
+          <div class="flex items-center gap-3 text-slate-500">
+            <span class="text-red-400">—</span> 员工人数（500人 ≠ 快速响应）
+          </div>
+          <div class="flex items-center gap-3 text-slate-500">
+            <span class="text-red-400">—</span> 金牌供应商年限（花钱买的徽章）
+          </div>
+          <div class="flex items-center gap-3 text-slate-500">
+            <span class="text-red-400">—</span> 产品图片数量（PS 过的展示图）
+          </div>
+          <div class="flex items-center gap-3 text-slate-500">
+            <span class="text-red-400">—</span> 自我描述文字（无法验证的宣称）
+          </div>
+        </div>
+      </div>
+      <!-- New -->
+      <div class="card-glow rounded-2xl p-8" style="border-color:rgba(167,139,250,0.3);">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+               style="background:rgba(167,139,250,0.15);color:#a78bfa;">✓</div>
+          <span class="font-semibold text-white">FGPI 在衡量什么</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 text-slate-300">
+            <span class="text-violet-400">→</span> Dropshipping 履约能力（ERP 实况验证）
+          </div>
+          <div class="flex items-center gap-3 text-slate-300">
+            <span class="text-violet-400">→</span> 内容资产制造效率（白底图/短视频素材）
+          </div>
+          <div class="flex items-center gap-3 text-slate-300">
+            <span class="text-violet-400">→</span> 病毒传播指数（爆款产品的社媒表现）
+          </div>
+          <div class="flex items-center gap-3 text-slate-300">
+            <span class="text-violet-400">→</span> 小单快反支持度（柔性生产线实况）
+          </div>
+          <div class="flex items-center gap-3 text-slate-300">
+            <span class="text-violet-400">→</span> 产品上新迭代周期（新款从打样到上架）
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ FOUR PILLARS ═══ -->
+  <section class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl font-bold text-white mb-4">FGPI 四大支柱</h2>
+      <p class="text-slate-400">每个支柱都有明确的权重和可量化指标，全部通过 Webinar 实况验证</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-12">
+
+      <!-- Pillar 1 -->
+      <div class="card-glow rounded-2xl p-8">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <div class="text-xs font-semibold text-violet-400 mb-1">支柱 01 · 权重 35%</div>
+            <h3 class="text-xl font-bold text-white">敏捷履约能力</h3>
+            <p class="text-sm text-slate-400 mt-1">Agile Fulfillment</p>
+          </div>
+          <div class="text-4xl">⚡</div>
+        </div>
+        <div class="space-y-3 mb-6">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">Dropshipping 履约能力</span>
+            <span class="text-violet-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">小单快反支持度 (MOQ 灵活性)</span>
+            <span class="text-violet-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">平均订单响应时长</span>
+            <span class="text-blue-400 font-semibold">重要</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">FBA/海外仓补货经验</span>
+            <span class="text-blue-400 font-semibold">重要</span>
+          </div>
+        </div>
+        <div class="pt-4 border-t border-white/5">
+          <div class="text-xs text-slate-500 mb-2">Webinar 验证方式</div>
+          <div class="text-sm text-slate-300">📹 镜头切到仓库，实况展示 ERP 系统打印一件代发面单的全流程</div>
+        </div>
+      </div>
+
+      <!-- Pillar 2 -->
+      <div class="card-glow rounded-2xl p-8" style="border-color:rgba(52,211,153,0.2);">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <div class="text-xs font-semibold text-emerald-400 mb-1">支柱 02 · 权重 30%</div>
+            <h3 class="text-xl font-bold text-white">市场与内容生长力</h3>
+            <p class="text-sm text-slate-400 mt-1">Market & Content Growth</p>
+          </div>
+          <div class="text-4xl">🚀</div>
+        </div>
+        <div class="space-y-3 mb-6">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">内容资产制造效率</span>
+            <span class="text-emerald-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">病毒传播指数 (Viral Index)</span>
+            <span class="text-emerald-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">产品上新与迭代周期</span>
+            <span class="text-blue-400 font-semibold">重要</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">营销渠道认知度</span>
+            <span class="text-blue-400 font-semibold">重要</span>
+          </div>
+        </div>
+        <div class="pt-4 border-t border-white/5">
+          <div class="text-xs text-slate-500 mb-2">Webinar 验证方式</div>
+          <div class="text-sm text-slate-300">📹 镜头切到工厂摄影棚，展示打样当天同步产出短视频素材的全流程</div>
+        </div>
+      </div>
+
+      <!-- Pillar 3 -->
+      <div class="card-glow rounded-2xl p-8" style="border-color:rgba(96,165,250,0.2);">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <div class="text-xs font-semibold text-blue-400 mb-1">支柱 03 · 权重 20%</div>
+            <h3 class="text-xl font-bold text-white">沟通与决策效率</h3>
+            <p class="text-sm text-slate-400 mt-1">Communication & Decision Velocity</p>
+          </div>
+          <div class="text-4xl">💬</div>
+        </div>
+        <div class="space-y-3 mb-6">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">首次响应时间</span>
+            <span class="text-blue-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">样品转化率</span>
+            <span class="text-blue-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">决策层英语流利度</span>
+            <span class="text-slate-400 font-semibold">加分</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">数字化工具采用率</span>
+            <span class="text-slate-400 font-semibold">加分</span>
+          </div>
+        </div>
+        <div class="pt-4 border-t border-white/5">
+          <div class="text-xs text-slate-500 mb-2">Webinar 验证方式</div>
+          <div class="text-sm text-slate-300">📹 工厂老板/工程师直接用英文与采购商实时对话，无翻译中间人</div>
+        </div>
+      </div>
+
+      <!-- Pillar 4 -->
+      <div class="card-glow rounded-2xl p-8" style="border-color:rgba(251,191,36,0.2);">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <div class="text-xs font-semibold text-amber-400 mb-1">支柱 04 · 权重 15%</div>
+            <h3 class="text-xl font-bold text-white">全球化与合规视野</h3>
+            <p class="text-sm text-slate-400 mt-1">Global & Compliance Readiness</p>
+          </div>
+          <div class="text-4xl">🌍</div>
+        </div>
+        <div class="space-y-3 mb-6">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">出口市场广度</span>
+            <span class="text-amber-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">国际认证完整度</span>
+            <span class="text-amber-400 font-semibold">核心</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">全球代理网络</span>
+            <span class="text-slate-400 font-semibold">加分</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">ESG 报告透明度</span>
+            <span class="text-slate-400 font-semibold">加分</span>
+          </div>
+        </div>
+        <div class="pt-4 border-t border-white/5">
+          <div class="text-xs text-slate-500 mb-2">Webinar 验证方式</div>
+          <div class="text-sm text-slate-300">📹 展示全球买家地图和实际出口单据，用数据证明全球化程度</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ RADAR DEMO ═══ -->
+  <section class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl font-bold text-white mb-4">FGPI 评分卡示例</h2>
+      <p class="text-slate-400">每家工厂都有一张独一无二的增长力画像，采购商可以一眼看出这家工厂是否适合自己的业务模式</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 items-center">
+      <!-- Radar Chart -->
+      <div class="card-glow rounded-2xl p-8">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="font-bold text-white">Guangzhou Audio Tech</h3>
+            <p class="text-sm text-slate-400">消费电子 · 广州</p>
+          </div>
+          <div class="score-ring">
+            <span>87</span>
+          </div>
+        </div>
+        <div style="height:280px;">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Score Breakdown -->
+      <div class="space-y-5">
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-slate-300">⚡ 敏捷履约能力</span>
+            <span class="text-sm font-bold text-violet-400">92 / 100</span>
+          </div>
+          <div class="h-2 rounded-full" style="background:rgba(255,255,255,0.08);">
+            <div class="h-2 rounded-full pillar-bar" style="width:92%;background:linear-gradient(90deg,#7c3aed,#a78bfa);"></div>
+          </div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <span class="metric-chip" style="border-color:rgba(167,139,250,0.3);color:#a78bfa;background:rgba(167,139,250,0.08);">✓ Dropshipping</span>
+            <span class="metric-chip" style="border-color:rgba(167,139,250,0.3);color:#a78bfa;background:rgba(167,139,250,0.08);">✓ FBA 贴标</span>
+            <span class="metric-chip" style="border-color:rgba(167,139,250,0.3);color:#a78bfa;background:rgba(167,139,250,0.08);">✓ 小单 MOQ 50+</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-slate-300">🚀 市场与内容生长力</span>
+            <span class="text-sm font-bold text-emerald-400">85 / 100</span>
+          </div>
+          <div class="h-2 rounded-full" style="background:rgba(255,255,255,0.08);">
+            <div class="h-2 rounded-full pillar-bar" style="width:85%;background:linear-gradient(90deg,#059669,#34d399);"></div>
+          </div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <span class="metric-chip" style="border-color:rgba(52,211,153,0.3);color:#34d399;background:rgba(52,211,153,0.08);">✓ 白底图 24h 交付</span>
+            <span class="metric-chip" style="border-color:rgba(52,211,153,0.3);color:#34d399;background:rgba(52,211,153,0.08);">Viral Index 78</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-slate-300">💬 沟通与决策效率</span>
+            <span class="text-sm font-bold text-blue-400">88 / 100</span>
+          </div>
+          <div class="h-2 rounded-full" style="background:rgba(255,255,255,0.08);">
+            <div class="h-2 rounded-full pillar-bar" style="width:88%;background:linear-gradient(90deg,#1d4ed8,#60a5fa);"></div>
+          </div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <span class="metric-chip" style="border-color:rgba(96,165,250,0.3);color:#60a5fa;background:rgba(96,165,250,0.08);">首次响应 &lt; 2h</span>
+            <span class="metric-chip" style="border-color:rgba(96,165,250,0.3);color:#60a5fa;background:rgba(96,165,250,0.08);">样品转化率 67%</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-slate-300">🌍 全球化与合规视野</span>
+            <span class="text-sm font-bold text-amber-400">79 / 100</span>
+          </div>
+          <div class="h-2 rounded-full" style="background:rgba(255,255,255,0.08);">
+            <div class="h-2 rounded-full pillar-bar" style="width:79%;background:linear-gradient(90deg,#b45309,#fbbf24);"></div>
+          </div>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <span class="metric-chip" style="border-color:rgba(251,191,36,0.3);color:#fbbf24;background:rgba(251,191,36,0.08);">出口 23 国</span>
+            <span class="metric-chip" style="border-color:rgba(251,191,36,0.3);color:#fbbf24;background:rgba(251,191,36,0.08);">CE / FCC / RoHS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ BUYER SECTION ═══ -->
+  <section id="buyer" class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="card-glow rounded-3xl p-10 md:p-16" style="border-color:rgba(167,139,250,0.2);">
+      <div class="flex items-center gap-4 mb-10">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+             style="background:rgba(167,139,250,0.15);">🛒</div>
+        <div>
+          <div class="text-xs text-violet-400 font-semibold mb-1">FOR BUYERS</div>
+          <h2 class="text-2xl font-bold text-white">如果你是采购商</h2>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8">
+        <div>
+          <div class="text-3xl mb-4">🔍</div>
+          <h3 class="font-bold text-white mb-3">FGPI 告诉你什么</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            一个 FGPI 87 分的工厂，意味着它在 Dropshipping 履约、内容素材产出、响应速度和全球认证上，都经过了<strong class="text-white">实况 Webinar 验证</strong>，不是自我宣称，是镜头前的现场证明。
+          </p>
+        </div>
+        <div>
+          <div class="text-3xl mb-4">⚡</div>
+          <h3 class="font-bold text-white mb-3">你的决策速度</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            传统采购：3 个月飞中国 → 踩坑 → 重新找。<br/><br/>
+            RealSourcing：打开 FGPI 评分卡 → 参加 Webinar → 当场下单。<strong class="text-white">从 90 天到 90 分钟。</strong>
+          </p>
+        </div>
+        <div>
+          <div class="text-3xl mb-4">📈</div>
+          <h3 class="font-bold text-white mb-3">你真正节省的是什么</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            不是采购成本，而是<strong class="text-white">增长时间</strong>。当你不再需要花 80% 的精力甄别供应商，你的日程表就可以全部用来打磨产品、做营销、拓展市场。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ FACTORY SECTION ═══ -->
+  <section id="factory" class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="card-glow rounded-3xl p-10 md:p-16" style="border-color:rgba(52,211,153,0.2);">
+      <div class="flex items-center gap-4 mb-10">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+             style="background:rgba(52,211,153,0.15);">🏭</div>
+        <div>
+          <div class="text-xs text-emerald-400 font-semibold mb-1">FOR FACTORIES</div>
+          <h2 class="text-2xl font-bold text-white">如果你是工厂</h2>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8 mb-10">
+        <div>
+          <div class="text-3xl mb-4">🏆</div>
+          <h3 class="font-bold text-white mb-3">FGPI 是你的新名片</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            在阿里巴巴，你的竞争对手是价格。在 RealSourcing，你的竞争优势是<strong class="text-white">增长力</strong>。一个 FGPI 90+ 的工厂，吸引的是愿意长期合作、订单量持续增长的优质买家，而不是只比价格的一次性客户。
+          </p>
+        </div>
+        <div>
+          <div class="text-3xl mb-4">📹</div>
+          <h3 class="font-bold text-white mb-3">Webinar 是你的舞台</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            你不需要再写一堆没人看的文字描述。一场 60 分钟的 Webinar，让全球买家亲眼看到你的仓库、你的摄影棚、你的生产线。<strong class="text-white">眼见为实，比任何广告都有效。</strong>
+          </p>
+        </div>
+        <div>
+          <div class="text-3xl mb-4">🌐</div>
+          <h3 class="font-bold text-white mb-3">你进入的是高端俱乐部</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            RealSourcing 只接受通过 FGPI 验证的"新物种"工厂入场。这意味着你的每一个竞争对手，都是真正懂增长的工厂。<strong class="text-white">这里没有价格战，只有价值竞争。</strong>
+          </p>
+        </div>
+      </div>
+
+      <!-- How to improve FGPI -->
+      <div class="border-t border-white/5 pt-10">
+        <h3 class="font-bold text-white mb-6">如何提升你的 FGPI 评分？</h3>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="webinar-step" data-step="1">
+            <div style="padding-left:0; margin-left:48px;">
+              <h4 class="font-semibold text-white mb-1">申请 Webinar 验证</h4>
+              <p class="text-sm text-slate-400">提交申请，RealSourcing 团队将安排一场 60 分钟的实况验厂，用镜头证明你的每一项能力。</p>
+            </div>
+          </div>
+          <div class="webinar-step" data-step="2">
+            <div style="padding-left:0; margin-left:48px;">
+              <h4 class="font-semibold text-white mb-1">完善你的能力档案</h4>
+              <p class="text-sm text-slate-400">上传你的 ERP 截图、内容素材作品集、出口认证文件，让 AI 自动计算你的初始 FGPI 评分。</p>
+            </div>
+          </div>
+          <div class="webinar-step" data-step="3">
+            <div style="padding-left:0; margin-left:48px;">
+              <h4 class="font-semibold text-white mb-1">积累买家体感评价</h4>
+              <p class="text-sm text-slate-400">每次交易完成后，买家会为你打上体感标签（如"FBA 条码无缝"、"快速打样"），这些真实口碑会持续提升你的 FGPI。</p>
+            </div>
+          </div>
+          <div class="webinar-step" data-step="4">
+            <div style="padding-left:0; margin-left:48px;">
+              <h4 class="font-semibold text-white mb-1">追踪你的 Viral Index</h4>
+              <p class="text-sm text-slate-400">RealSourcing 会自动追踪你生产的产品在 TikTok/Reels 上的表现，爆款产品会显著提升你的市场生长力评分。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ VS TABLE ═══ -->
+  <section class="px-6 py-20 max-w-6xl mx-auto fade-in">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl font-bold text-white mb-4">FGPI vs. 传统平台指标</h2>
+      <p class="text-slate-400">一张表格，看清两套世界观的本质差异</p>
+    </div>
+    <div class="card-glow rounded-2xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04);">
+            <th class="text-left px-6 py-4 text-slate-400 font-medium">评估维度</th>
+            <th class="text-center px-6 py-4 text-slate-400 font-medium">传统平台 (阿里巴巴)</th>
+            <th class="text-center px-6 py-4 font-medium" style="color:#a78bfa;">RealSourcing FGPI</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">核心问题</td>
+            <td class="px-6 py-4 text-center text-slate-500">这家工厂能生产什么？</td>
+            <td class="px-6 py-4 text-center text-violet-300">这家工厂能帮我增长什么？</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">信任来源</td>
+            <td class="px-6 py-4 text-center text-slate-500">平台年限、交易量（可刷）</td>
+            <td class="px-6 py-4 text-center text-violet-300">Webinar 实况验证 + 买家体感词云</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">Dropshipping 支持</td>
+            <td class="px-6 py-4 text-center text-slate-500">无法评估</td>
+            <td class="px-6 py-4 text-center text-violet-300">ERP 实况演示，核心指标</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">内容素材能力</td>
+            <td class="px-6 py-4 text-center text-slate-500">无法评估</td>
+            <td class="px-6 py-4 text-center text-violet-300">内容资产制造效率，核心指标</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">病毒传播潜力</td>
+            <td class="px-6 py-4 text-center text-slate-500">无法评估</td>
+            <td class="px-6 py-4 text-center text-violet-300">Viral Index，自动追踪社媒数据</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">成立年限</td>
+            <td class="px-6 py-4 text-center text-slate-500">核心指标（越久越好）</td>
+            <td class="px-6 py-4 text-center text-violet-300">不纳入评估（与增长力无关）</td>
+          </tr>
+          <tr class="vs-row border-t border-white/5">
+            <td class="px-6 py-4 text-slate-300">数据护城河</td>
+            <td class="px-6 py-4 text-center text-slate-500">商品数据库（可被复制）</td>
+            <td class="px-6 py-4 text-center text-violet-300">增长力行为数据（无法复制）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ FOOTER ═══ -->
+  <footer class="px-6 py-12 text-center border-t border-white/5">
+    <p class="text-slate-600 text-sm">© 2026 RealSourcing · FGPI v2.0 · 工厂增长伙伴指数</p>
+    <p class="text-slate-700 text-xs mt-2">The new standard for factory evaluation in the AI era.</p>
+  </footer>
+
+  <script>
+    // ── Radar Chart ──────────────────────────────────────────
+    const ctx = document.getElementById('radarChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: ['敏捷履约', '内容生长力', '沟通效率', '全球视野', 'Viral Index'],
+        datasets: [{
+          label: 'Guangzhou Audio Tech',
+          data: [92, 85, 88, 79, 78],
+          backgroundColor: 'rgba(167,139,250,0.15)',
+          borderColor: '#a78bfa',
+          borderWidth: 2,
+          pointBackgroundColor: '#a78bfa',
+          pointBorderColor: '#0a0a0f',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            min: 0, max: 100,
+            ticks: { display: false, stepSize: 25 },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            angleLines: { color: 'rgba(255,255,255,0.06)' },
+            pointLabels: {
+              color: '#94a3b8',
+              font: { size: 11, weight: '500' }
+            }
+          }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // ── Intersection Observer for fade-in ────────────────────
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
