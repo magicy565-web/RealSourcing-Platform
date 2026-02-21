@@ -118,6 +118,9 @@ importers:
       agora-access-token:
         specifier: ^2.0.4
         version: 2.0.4
+      agora-extension-beauty-effect:
+        specifier: 1.0.2-beta
+        version: 1.0.2-beta
       agora-rtc-react:
         specifier: ^2.5.1
         version: 2.5.1(react@19.2.1)
@@ -2413,6 +2416,9 @@ packages:
   agora-access-token@2.0.4:
     resolution: {integrity: sha512-RtOIvi4PqV1ok3rdnopMZeVwiUqZgG9Pp56kqxJc5cU/+ljRBzs1Al+IThD5ahm528dGsdY1TyP1bJdqmgBCbQ==}
     deprecated: The package has been deprecated. Please use 'agora-token' instead, sorry for the inconvenience caused.
+
+  agora-extension-beauty-effect@1.0.2-beta:
+    resolution: {integrity: sha512-nCEznllqgZiLmyzvUF4RxWdHXuFrVUWYlKhyl3ianvfF/9DY2551QQBuiRv6uPVsy4TEEWMwBX91EwxPX7v4Ig==}
 
   agora-rtc-react@2.5.1:
     resolution: {integrity: sha512-ORPbV02p8dZ2GhQxo5kTarc0BYjObc2IeqRPv9mi5/fxDI5nMY6kg54R5fUvLQU05H3Q5Kecq7M2kuZzHfNo5Q==}
@@ -6882,6 +6888,8 @@ snapshots:
     dependencies:
       crc-32: 1.2.0
       cuint: 0.2.2
+
+  agora-extension-beauty-effect@1.0.2-beta: {}
 
   agora-rtc-react@2.5.1(react@19.2.1):
     dependencies:

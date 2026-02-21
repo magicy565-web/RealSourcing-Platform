@@ -47,6 +47,7 @@
     "@trpc/react-query": "^11.6.0",
     "@trpc/server": "^11.6.0",
     "agora-access-token": "^2.0.4",
+    "agora-extension-beauty-effect": "1.0.2-beta",
     "agora-rtc-react": "^2.5.1",
     "agora-rtc-sdk-ng": "^4.24.2",
     "agora-rtm-sdk": "2.2.3-1",

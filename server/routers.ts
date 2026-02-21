@@ -3,6 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { agoraTokenService } from "./_core/agora";
+import { agoraTranslationService } from "./_core/agoraTranslation";
+import { agoraRecordingService } from "./_core/agoraRecording";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
@@ -112,6 +114,93 @@ export const appRouter = router({
             message: 'Failed to generate RTC token',
           });
         }
+      }),
+
+    startTranslation: publicProcedure
+      .input(z.object({
+        channelName: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        subscribeUid: z.union([z.string(), z.number()]).optional(),
+        language: z.string().default('en'),
+        translateLanguage: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraTranslationService.startSTT({
+          channelName: input.channelName,
+          uid: input.uid,
+          subscribeUid: input.subscribeUid,
+          language: input.language,
+          translateLanguage: input.translateLanguage,
+        });
+        if (result.status === 'failed') {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.message || 'Failed to start translation',
+          });
+        }
+        return result;
+      }),
+
+    stopTranslation: publicProcedure
+      .input(z.object({
+        taskId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraTranslationService.stopSTT(input.taskId);
+        return result;
+      }),
+
+    startRecording: publicProcedure
+      .input(z.object({
+        channelName: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        recordingMode: z.enum(['composite', 'individual']).default('composite'),
+        videoProfile: z.enum(['HD', 'SD', 'FHD', '4K']).default('HD'),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraRecordingService.startRecording({
+          channelName: input.channelName,
+          uid: input.uid,
+          recordingMode: input.recordingMode,
+          videoProfile: input.videoProfile,
+        });
+        if (result.status === 'failed') {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.message || 'Failed to start recording',
+          });
+        }
+        return result;
+      }),
+
+    stopRecording: publicProcedure
+      .input(z.object({
+        resourceId: z.string().min(1),
+        sid: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraRecordingService.stopRecording(input.resourceId, input.sid);
+        return result;
+      }),
+
+    getRecordingStatus: publicProcedure
+      .input(z.object({
+        resourceId: z.string().min(1),
+        sid: z.string().min(1),
+      }))
+      .query(async ({ input }) => {
+        const result = await agoraRecordingService.getRecordingStatus(input.resourceId, input.sid);
+        return result;
+      }),
+
+    getActiveRecordings: publicProcedure
+      .query(() => {
+        return agoraRecordingService.getActiveRecordings();
+      }),
+
+    getActiveTasks: publicProcedure
+      .query(() => {
+        return agoraTranslationService.getActiveTasks();
       }),
   }),
 
