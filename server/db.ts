@@ -372,3 +372,143 @@ export async function getUnreadNotificationsCount(userId: number) {
     .where(and(eq(schema.notifications.userId, userId), eq(schema.notifications.isRead, 0)));
   return rows[0]?.count || 0;
 }
+
+// ─── Inquiry Messages (using messages table with inquiryId stored in webinarId field) ──
+// Note: messages table has webinarId field; we repurpose it as contextId for inquiry messages
+// by storing inquiryId as a negative number to distinguish from webinar messages.
+// A cleaner approach: filter by type='inquiry' and match senderId/content patterns.
+// For now we use a dedicated approach: store inquiryId in webinarId as negative value.
+
+export async function getInquiryMessages(inquiryId: number) {
+  const database = await dbPromise;
+  // Use webinarId = -inquiryId as a convention to store inquiry messages
+  const rows = await database.select().from(schema.messages)
+    .where(and(
+      eq(schema.messages.webinarId, -inquiryId),
+      eq(schema.messages.type, "inquiry")
+    ))
+    .orderBy(schema.messages.createdAt);
+  return rows;
+}
+
+export async function createInquiryMessage(data: {
+  inquiryId: number;
+  senderId: number;
+  content: string;
+}) {
+  const database = await dbPromise;
+  await database.insert(schema.messages).values({
+    webinarId: -data.inquiryId,
+    senderId: data.senderId,
+    content: data.content,
+    type: "inquiry",
+  });
+  return { success: true };
+}
+
+// ─── Factory Follows (using user_favorites with targetType='factory_follow') ──
+
+export async function followFactory(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  const existing = await database.select().from(schema.userFavorites)
+    .where(and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, "factory_follow"),
+      eq(schema.userFavorites.targetId, factoryId)
+    ));
+  if (existing.length === 0) {
+    await database.insert(schema.userFavorites).values({
+      userId,
+      targetType: "factory_follow",
+      targetId: factoryId,
+    });
+  }
+  return { following: true };
+}
+
+export async function unfollowFactory(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  await database.delete(schema.userFavorites)
+    .where(and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, "factory_follow"),
+      eq(schema.userFavorites.targetId, factoryId)
+    ));
+  return { following: false };
+}
+
+export async function checkFactoryFollow(factoryId: number, userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.userFavorites)
+    .where(and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, "factory_follow"),
+      eq(schema.userFavorites.targetId, factoryId)
+    ));
+  return rows.length > 0;
+}
+
+export async function getFollowedFactories(userId: number) {
+  const database = await dbPromise;
+  const follows = await database.select().from(schema.userFavorites)
+    .where(and(
+      eq(schema.userFavorites.userId, userId),
+      eq(schema.userFavorites.targetType, "factory_follow")
+    ));
+  if (follows.length === 0) return [];
+  const factoryIds = follows.map(f => f.targetId);
+  const factories = await database.select().from(schema.factories);
+  return factories.filter(f => factoryIds.includes(f.id));
+}
+
+// ─── Full-text Search ─────────────────────────────────────────────────────────
+
+export async function searchAll(query: string) {
+  const database = await dbPromise;
+  const pattern = `%${query}%`;
+  const [factories, products, webinars] = await Promise.all([
+    database.select().from(schema.factories)
+      .where(or(
+        like(schema.factories.name, pattern),
+        like(schema.factories.description, pattern),
+        like(schema.factories.category, pattern)
+      ))
+      .limit(10),
+    database.select().from(schema.products)
+      .where(or(
+        like(schema.products.name, pattern),
+        like(schema.products.description, pattern),
+        like(schema.products.category, pattern)
+      ))
+      .limit(10),
+    database.select().from(schema.webinars)
+      .where(or(
+        like(schema.webinars.title, pattern),
+        like(schema.webinars.description, pattern)
+      ))
+      .limit(10),
+  ]);
+  return { factories, products, webinars };
+}
+
+// ─── User Profile Operations ──────────────────────────────────────────────────
+
+export async function getUserProfile(userId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.userProfiles)
+    .where(eq(schema.userProfiles.userId, userId));
+  return rows[0] || null;
+}
+
+export async function upsertUserProfile(userId: number, data: Partial<typeof schema.userProfiles.$inferInsert>) {
+  const database = await dbPromise;
+  const existing = await getUserProfile(userId);
+  if (existing) {
+    await database.update(schema.userProfiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.userProfiles.userId, userId));
+  } else {
+    await database.insert(schema.userProfiles).values({ userId, ...data });
+  }
+  return { success: true };
+}

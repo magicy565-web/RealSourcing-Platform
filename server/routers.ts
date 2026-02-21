@@ -26,8 +26,16 @@ import {
   // Inquiry
   getInquiryById, getInquiriesByBuyerId, getInquiriesByFactoryId,
   createInquiry, updateInquiry,
+  // Inquiry Messages
+  getInquiryMessages, createInquiryMessage,
   // Favorites
   getUserFavorites, addUserFavorite, removeUserFavorite, checkUserFavorite,
+  // Factory Follow
+  followFactory, unfollowFactory, checkFactoryFollow, getFollowedFactories,
+  // Search
+  searchAll,
+  // User Profile
+  getUserProfile, upsertUserProfile,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -104,16 +112,48 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
-      return user;
+      const profile = await getUserProfile(ctx.user.id);
+      return { ...user, profile: profile || null };
     }),
     update: protectedProcedure
       .input(z.object({
         name: z.string().optional(),
         avatar: z.string().optional(),
+        company: z.string().optional(),
+        country: z.string().optional(),
+        bio: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // TODO: implement user profile update
+        const { name, avatar, ...profileData } = input;
+        // 更新 users 表
+        if (name || avatar) {
+          const updateData: Record<string, string> = {};
+          if (name) updateData.name = name;
+          if (avatar) updateData.avatar = avatar;
+          // Direct update via db
+          const { db } = await import("./db");
+          const schema = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          if (db) {
+            await (db as any).update(schema.users)
+              .set(updateData)
+              .where(eq(schema.users.id, ctx.user.id));
+          }
+        }
+        // 更新 user_profiles 表
+        if (Object.keys(profileData).length > 0) {
+          await upsertUserProfile(ctx.user.id, profileData);
+        }
         return { success: true };
+      }),
+  }),
+
+  // ── Search ────────────────────────────────────────────────────────────────────
+  search: router({
+    all: publicProcedure
+      .input(z.object({ query: z.string().min(1) }))
+      .query(async ({ input }) => {
+        return await searchAll(input.query);
       }),
   }),
 
@@ -236,6 +276,29 @@ export const appRouter = router({
         await createFactoryReview({ ...input, userId: ctx.user.id });
         return { success: true };
       }),
+
+    // ── 关注功能（提示词优先级3要求）──────────────────────────────────────────
+    follow: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await followFactory(input.factoryId, ctx.user.id);
+      }),
+
+    unfollow: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await unfollowFactory(input.factoryId, ctx.user.id);
+      }),
+
+    checkFollow: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return await checkFactoryFollow(input.factoryId, ctx.user.id);
+      }),
+
+    myFollowed: protectedProcedure.query(async ({ ctx }) => {
+      return await getFollowedFactories(ctx.user.id);
+    }),
   }),
 
   // ── Products ──────────────────────────────────────────────────────────────────
@@ -426,6 +489,38 @@ export const appRouter = router({
           quotedPrice: input.quotedPrice?.toString(),
         });
         return { success: true };
+      }),
+
+    // ── 消息子路由（提示词优先级1第3条要求）──────────────────────────────────
+    messages: protectedProcedure
+      .input(z.object({ inquiryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        // 权限检查：只有询价相关方才能查看消息
+        const inquiry = await getInquiryById(input.inquiryId);
+        if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
+        if (inquiry.buyerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权查看此询价消息" });
+        }
+        return await getInquiryMessages(input.inquiryId);
+      }),
+
+    sendMessage: protectedProcedure
+      .input(z.object({
+        inquiryId: z.number(),
+        content: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 权限检查：只有询价相关方才能发送消息
+        const inquiry = await getInquiryById(input.inquiryId);
+        if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
+        if (inquiry.buyerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权发送此询价消息" });
+        }
+        return await createInquiryMessage({
+          inquiryId: input.inquiryId,
+          senderId: ctx.user.id,
+          content: input.content,
+        });
       }),
   }),
 
