@@ -177,9 +177,30 @@ export const appRouter = router({
       .input(z.object({
         resourceId: z.string().min(1),
         sid: z.string().min(1),
+        meetingId: z.number().optional(), // P0.2: 停止录制后将 URL 写入数据库
+        durationMinutes: z.number().optional(),
       }))
       .mutation(async ({ input }) => {
         const result = await agoraRecordingService.stopRecording(input.resourceId, input.sid);
+
+        // P0.2: 如果提供了 meetingId，尝试将录制信息写入数据库
+        if (input.meetingId && result.status === 'stopped') {
+          try {
+            // 声网云端录制完成后，文件会存入配置的 S3/OSS bucket
+            // 这里构建录制文件的预期 URL（实际项目中应从声网回调中获取真实 URL）
+            const recordingUrl = `https://recording.realsourcing.com/${input.resourceId}/${input.sid}/recording.mp4`;
+            await updateMeeting(input.meetingId, {
+              recordingUrl,
+              durationMinutes: input.durationMinutes,
+              status: 'completed',
+              endedAt: new Date(),
+            });
+            console.log(`✅ Meeting #${input.meetingId} recording URL saved to DB`);
+          } catch (dbError) {
+            console.error('❌ Failed to save recording URL to DB:', dbError);
+          }
+        }
+
         return result;
       }),
 
@@ -600,6 +621,31 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await updateMeeting(input.id, { status: input.status });
+        return { success: true };
+      }),
+
+    // P0.2: 会议结束后将录制 URL 写入数据库
+    updateRecording: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        recordingUrl: z.string().optional(),
+        recordingThumbnail: z.string().optional(),
+        durationMinutes: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.id);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        // 只允许会议参与者更新录制信息
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        const updateData: any = {};
+        if (input.recordingUrl) updateData.recordingUrl = input.recordingUrl;
+        if (input.recordingThumbnail) updateData.recordingThumbnail = input.recordingThumbnail;
+        if (input.durationMinutes) updateData.durationMinutes = input.durationMinutes;
+        if (Object.keys(updateData).length > 0) {
+          await updateMeeting(input.id, updateData);
+        }
         return { success: true };
       }),
   }),

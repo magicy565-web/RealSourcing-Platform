@@ -133,6 +133,7 @@ export default function WebinarLiveRoom() {
             {/* 实时转录 */}
             <AgoraTranscription
               channelName={`webinar-${webinarId}`}
+              userId={userId}
               isActive={isTranscribing}
               onToggle={setIsTranscribing}
             />
