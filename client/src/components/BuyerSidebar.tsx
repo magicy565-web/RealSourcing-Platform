@@ -16,6 +16,8 @@ import {
   LogOut,
   ChevronRight,
   Zap,
+  Calendar,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,8 @@ const MENU_GROUPS = [
       { icon: Video, label: "Webinars", href: "/webinars" },
       { icon: Building2, label: "Factories", href: "/factories" },
       { icon: MessageSquare, label: "Inquiries", href: "/inquiries" },
+      { icon: Calendar, label: "Meetings", href: "/meetings" },
+      { icon: Package, label: "Sample Orders", href: "/sample-orders" },
     ],
   },
   {

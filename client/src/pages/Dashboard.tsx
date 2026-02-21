@@ -18,6 +18,11 @@ import {
   Smile,
   Clock,
   Users,
+  Package,
+  ArrowRight,
+  Sparkles,
+  Video,
+  CheckCircle,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -36,11 +41,14 @@ export default function Dashboard() {
   const { data: meetings = [], isLoading: meetingsLoading } = trpc.meetings.myMeetings.useQuery();
   const { data: inquiries = [], isLoading: inquiriesLoading } = trpc.inquiries.myInquiries.useQuery();
   const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery();
+  const { data: sampleOrders = [] } = trpc.sampleOrders.mySampleOrders.useQuery();
 
   // ── Derived Stats ─────────────────────────────────────────────────────────
   const liveWebinars = webinars.filter((w) => w.status === "live");
   const upcomingWebinars = webinars.filter((w) => w.status === "scheduled" || w.status === "upcoming");
   const pendingInquiries = inquiries.filter((i) => i.status === "pending");
+  const pendingSamples = sampleOrders.filter((o: any) => o.status === "pending").length;
+  const shippedSamples = sampleOrders.filter((o: any) => o.status === "shipped").length;
 
   const getWebinarStatusBadge = (status: string) => {
     if (status === "live") return <span className="badge-live">LIVE</span>;
@@ -160,12 +168,17 @@ export default function Dashboard() {
             </Card>
 
             {/* Card 4 - Inquiries */}
-            <Card className="glass-card hover:glow-purple transition-all">
+            <Card className="glass-card hover:glow-purple transition-all cursor-pointer" onClick={() => setLocation("/inquiries")}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
                     <FileText className="w-6 h-6 text-green-400" />
                   </div>
+                  {pendingInquiries.length > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                      {pendingInquiries.length} 待处理
+                    </span>
+                  )}
                 </div>
                 <div className="text-4xl font-bold mb-1">
                   {inquiriesLoading ? (
@@ -374,6 +387,35 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Quick Actions Row */}
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { icon: Video, label: "预约会议", desc: "与工厂面对面谈判", href: "/factories", color: "text-blue-400", bg: "bg-blue-500/10" },
+              { icon: Package, label: "样品订单", desc: `${sampleOrders.length} 条订单`, href: "/sample-orders", color: "text-amber-400", bg: "bg-amber-500/10", badge: shippedSamples > 0 ? `${shippedSamples} 运输中` : undefined },
+              { icon: Sparkles, label: "AI 采购助理", desc: "智能工厂匹配", href: "/ai-assistant", color: "text-purple-400", bg: "bg-purple-500/10" },
+              { icon: FileText, label: "询价记录", desc: `${pendingInquiries.length} 条待回复`, href: "/inquiries", color: "text-green-400", bg: "bg-green-500/10" },
+            ].map((action, i) => {
+              const Icon = action.icon;
+              return (
+                <Card key={i} className="glass-card hover:glow-purple transition-all cursor-pointer group" onClick={() => setLocation(action.href)}>
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${action.bg}`}>
+                        <Icon className={`w-5 h-5 ${action.color}`} />
+                      </div>
+                      {action.badge && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">{action.badge}</span>
+                      )}
+                      <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                    </div>
+                    <p className="text-white font-semibold text-sm mb-0.5">{action.label}</p>
+                    <p className="text-gray-500 text-xs">{action.desc}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {/* Recent Meetings */}

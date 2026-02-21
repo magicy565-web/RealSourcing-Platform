@@ -33,6 +33,7 @@ import Settings from "./pages/Settings";
 import AIAssistant from "./pages/AIAssistant";
 import BookMeeting from "./pages/BookMeeting";
 import SampleOrder from "./pages/SampleOrder";
+import SampleOrderTracker from "./pages/SampleOrderTracker";
 
 function Router() {
   return (
@@ -169,6 +170,11 @@ function Router() {
       <Route path="/sample-order/:productId">
         <ProtectedRoute>
           <SampleOrder />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/sample-orders">
+        <ProtectedRoute>
+          <SampleOrderTracker />
         </ProtectedRoute>
       </Route>
 

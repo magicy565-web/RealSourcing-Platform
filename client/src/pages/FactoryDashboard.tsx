@@ -5,12 +5,284 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   Users, Video, TrendingUp, Package, Calendar, Settings,
   Plus, Edit, Trash2, CheckCircle, Clock, AlertCircle,
   Award, Globe, Phone, Mail, Building2, Star, Eye,
-  BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload
+  BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload,
+  Play, Sparkles, ChevronRight, Save, RefreshCw
 } from "lucide-react";
+
+// ── MeetingsTab Component ─────────────────────────────────────────────────────
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+interface AvailabilitySlot {
+  dayOfWeek?: number;
+  startTime: string;
+  endTime: string;
+  timezone?: string;
+}
+
+interface MeetingsTabProps {
+  meetings: any[];
+  availability: AvailabilitySlot[];
+  onNavigate: (path: string) => void;
+  onSaveAvailability: (slots: AvailabilitySlot[]) => void;
+  isSavingAvailability: boolean;
+}
+
+function MeetingsTab({ meetings, availability, onNavigate, onSaveAvailability, isSavingAvailability }: MeetingsTabProps) {
+  const [meetingView, setMeetingView] = useState<'list' | 'availability'>('list');
+  const [slots, setSlots] = useState<AvailabilitySlot[]>(
+    availability.length > 0 ? availability : [
+      { dayOfWeek: 1, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' },
+      { dayOfWeek: 2, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' },
+      { dayOfWeek: 3, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' },
+      { dayOfWeek: 4, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' },
+      { dayOfWeek: 5, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' },
+    ]
+  );
+  const [meetingFilter, setMeetingFilter] = useState<'all' | 'scheduled' | 'completed'>('all');
+
+  const filteredMeetings = meetings.filter(m => {
+    if (meetingFilter === 'all') return true;
+    if (meetingFilter === 'scheduled') return m.status === 'scheduled' || m.status === 'in_progress';
+    if (meetingFilter === 'completed') return m.status === 'completed';
+    return true;
+  });
+
+  const addSlot = () => {
+    setSlots(prev => [...prev, { dayOfWeek: 1, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Shanghai' }]);
+  };
+
+  const removeSlot = (index: number) => {
+    setSlots(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateSlot = (index: number, field: keyof AvailabilitySlot, value: string | number) => {
+    setSlots(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+
+  const stats = {
+    total: meetings.length,
+    upcoming: meetings.filter(m => m.status === 'scheduled').length,
+    inProgress: meetings.filter(m => m.status === 'in_progress').length,
+    completed: meetings.filter(m => m.status === 'completed').length,
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">会议管理</h1>
+          <p className="text-gray-400 text-sm mt-1">管理买家预约的选品会议</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMeetingView('list')}
+            className={cn('px-4 py-2 rounded-lg text-sm transition-all', meetingView === 'list' ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10')}
+          >
+            <Calendar className="w-4 h-4 inline mr-1.5" />会议列表
+          </button>
+          <button
+            onClick={() => setMeetingView('availability')}
+            className={cn('px-4 py-2 rounded-lg text-sm transition-all', meetingView === 'availability' ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10')}
+          >
+            <Clock className="w-4 h-4 inline mr-1.5" />可用时间
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { label: '总会议数', value: stats.total, color: 'text-white' },
+          { label: '即将开始', value: stats.upcoming, color: 'text-green-400' },
+          { label: '进行中', value: stats.inProgress, color: 'text-blue-400' },
+          { label: '已完成', value: stats.completed, color: 'text-purple-400' },
+        ].map(s => (
+          <div key={s.label} className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
+            <p className="text-gray-500 text-xs mb-1">{s.label}</p>
+            <p className={cn('text-2xl font-bold', s.color)}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Meeting List View */}
+      {meetingView === 'list' && (
+        <div>
+          {/* Filter Tabs */}
+          <div className="flex gap-2 mb-4">
+            {(['all', 'scheduled', 'completed'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setMeetingFilter(f)}
+                className={cn('px-3 py-1.5 rounded-lg text-xs transition-all',
+                  meetingFilter === f ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                )}
+              >
+                {f === 'all' ? '全部' : f === 'scheduled' ? '即将开始' : '已完成'}
+                <span className="ml-1.5 text-[10px]">
+                  {f === 'all' ? stats.total : f === 'scheduled' ? stats.upcoming + stats.inProgress : stats.completed}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {filteredMeetings.length > 0 ? filteredMeetings.map((m: any) => (
+              <div
+                key={m.id}
+                className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer group"
+                onClick={() => onNavigate(`/meeting-detail/${m.id}`)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center',
+                      m.status === 'scheduled' ? 'bg-green-500/20' :
+                      m.status === 'in_progress' ? 'bg-blue-500/20' :
+                      m.status === 'completed' ? 'bg-purple-500/20' : 'bg-gray-500/20'
+                    )}>
+                      <Calendar className={cn('w-5 h-5',
+                        m.status === 'scheduled' ? 'text-green-400' :
+                        m.status === 'in_progress' ? 'text-blue-400' :
+                        m.status === 'completed' ? 'text-purple-400' : 'text-gray-400'
+                      )} />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-medium">{m.title}</h3>
+                      <p className="text-gray-400 text-sm">
+                        {m.scheduledAt ? new Date(m.scheduledAt).toLocaleString('zh-CN') : 'TBD'}
+                        {m.durationMinutes ? ` · ${m.durationMinutes}分钟` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={cn('text-xs px-3 py-1 rounded-full border',
+                      m.status === 'scheduled' ? 'bg-green-500/20 border-green-500/30 text-green-400' :
+                      m.status === 'in_progress' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' :
+                      m.status === 'completed' ? 'bg-purple-500/20 border-purple-500/30 text-purple-400' :
+                      'bg-gray-500/20 border-gray-500/30 text-gray-400'
+                    )}>
+                      {m.status === 'scheduled' ? '已确认' : m.status === 'in_progress' ? '进行中' : m.status === 'completed' ? '已完成' : '已取消'}
+                    </span>
+                    {m.status === 'scheduled' && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); onNavigate(`/meeting/${m.id}`); }}
+                        className="bg-purple-600 hover:bg-purple-500 text-xs h-7 px-3"
+                      >
+                        <Play className="w-3 h-3 mr-1" />进入会议
+                      </Button>
+                    )}
+                    {m.status === 'completed' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => { e.stopPropagation(); onNavigate(`/meeting-reel-generator/${m.id}`); }}
+                        className="border-purple-500/40 text-purple-300 text-xs h-7 px-3"
+                      >
+                        <Sparkles className="w-3 h-3 mr-1" />AI Reel
+                      </Button>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="text-center py-12">
+                <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-400">{meetingFilter === 'all' ? '暂无会议安排' : '暂无符合条件的会议'}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Availability Settings View */}
+      {meetingView === 'availability' && (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-white font-semibold">可用时间设置</h3>
+              <p className="text-gray-400 text-sm mt-1">设定每周可接受买家预约的时间段</p>
+            </div>
+            <Button onClick={addSlot} variant="outline" className="border-white/20 text-gray-300 gap-1.5">
+              <Plus className="w-4 h-4" />添加时间段
+            </Button>
+          </div>
+
+          <div className="space-y-3 mb-6">
+            {slots.map((slot, index) => (
+              <div key={index} className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10">
+                <select
+                  value={slot.dayOfWeek ?? 1}
+                  onChange={e => updateSlot(index, 'dayOfWeek', parseInt(e.target.value))}
+                  className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 w-24"
+                >
+                  {DAY_NAMES.map((day, i) => (
+                    <option key={i} value={i}>{DAY_NAMES_CN[i]}</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2 flex-1">
+                  <input
+                    type="time"
+                    value={slot.startTime}
+                    onChange={e => updateSlot(index, 'startTime', e.target.value)}
+                    className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                  <span className="text-gray-500">-</span>
+                  <input
+                    type="time"
+                    value={slot.endTime}
+                    onChange={e => updateSlot(index, 'endTime', e.target.value)}
+                    className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <select
+                  value={slot.timezone || 'Asia/Shanghai'}
+                  onChange={e => updateSlot(index, 'timezone', e.target.value)}
+                  className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="Asia/Shanghai">UTC+8 上海</option>
+                  <option value="America/New_York">UTC-5 纽约</option>
+                  <option value="Europe/London">UTC+0 伦敦</option>
+                  <option value="Europe/Berlin">UTC+1 柏林</option>
+                  <option value="Asia/Tokyo">UTC+9 东京</option>
+                </select>
+                <button
+                  onClick={() => removeSlot(index)}
+                  className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => onSaveAvailability(slots)}
+              disabled={isSavingAvailability}
+              className="bg-purple-600 hover:bg-purple-500 gap-2"
+            >
+              {isSavingAvailability ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              保存设置
+            </Button>
+            <p className="text-gray-500 text-sm">买家预约时可看到这些时间段</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────────
 
 type Tab = "overview" | "products" | "webinars" | "meetings" | "inquiries" | "certifications" | "profile" | "orders";
 
@@ -51,6 +323,10 @@ export default function FactoryDashboard() {
   });
   const updateOrderStatus = trpc.sampleOrders.updateStatus.useMutation({
     onSuccess: () => refetchOrders(),
+  });
+  const setAvailabilityMutation = trpc.factoryDashboard.setAvailability.useMutation({
+    onSuccess: () => { refetch(); toast.success('可用时间已保存'); },
+    onError: () => toast.error('保存失败，请重试'),
   });
 
   // ── Form States ───────────────────────────────────────────────────────────────
@@ -486,37 +762,15 @@ export default function FactoryDashboard() {
 
         {/* ── 会议管理 Tab ── */}
         {activeTab === "meetings" && (
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-6">会议管理</h1>
-            <div className="space-y-4">
-              {factoryData.meetings && factoryData.meetings.length > 0 ? factoryData.meetings.map((m: any) => (
-                <div key={m.id} className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/30 transition-all cursor-pointer" onClick={() => setLocation(`/meeting-detail/${m.id}`)}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${m.status === 'scheduled' ? 'bg-green-400' : m.status === 'in_progress' ? 'bg-blue-400 animate-pulse' : 'bg-gray-400'}`} />
-                      <div>
-                        <h3 className="text-white font-medium">{m.title}</h3>
-                        <p className="text-gray-400 text-sm">{new Date(m.scheduledAt).toLocaleString('zh-CN')}</p>
-                      </div>
-                    </div>
-                    <span className={`text-xs px-3 py-1 rounded-full ${
-                      m.status === 'scheduled' ? 'bg-green-500/20 text-green-400' :
-                      m.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
-                      m.status === 'completed' ? 'bg-purple-500/20 text-purple-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {m.status === 'scheduled' ? '已确认' : m.status === 'in_progress' ? '进行中' : m.status === 'completed' ? '已完成' : '已取消'}
-                    </span>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center py-12">
-                  <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">暂无会议安排</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <MeetingsTab
+            meetings={factoryData.meetings || []}
+            availability={(factoryData.availability || []).map((s: any) => ({ ...s, dayOfWeek: s.dayOfWeek ?? undefined, timezone: s.timezone ?? undefined }))}
+            onNavigate={setLocation}
+            onSaveAvailability={(slots) => {
+              setAvailabilityMutation.mutate({ slots });
+            }}
+            isSavingAvailability={setAvailabilityMutation.isPending}
+          />
         )}
 
         {/* ── 询价管理 Tab ── */}
