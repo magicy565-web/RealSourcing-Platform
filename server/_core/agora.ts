@@ -35,7 +35,7 @@ export class AgoraTokenService {
     this.appCertificate = ENV.agoraAppCertificate;
 
     if (!this.appId || !this.appCertificate) {
-      throw new Error('Missing Agora App ID or App Certificate in environment variables');
+      console.warn('[Agora] ⚠️  AGORA_APP_ID / AGORA_APP_CERTIFICATE not configured. Agora token features will return errors when called.');
     }
   }
 
