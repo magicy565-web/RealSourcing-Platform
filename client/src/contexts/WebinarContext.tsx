@@ -254,7 +254,7 @@ export function WebinarProvider({
     }
   }, [messages.length, userId]);
 
-  const pushProduct = useCallback((product: WebinarProduct) => {
+  const pushProduct = useCallback(async (product: WebinarProduct) => {
     setCurrentProduct(product);
 
     // Add system message
@@ -271,7 +271,32 @@ export function WebinarProvider({
     };
 
     setMessages((prev) => [...prev, systemMsg]);
-  }, [messages.length]);
+
+    // Send RTM message to all subscribers for real-time product push
+    try {
+      const agoraManager = agoraManagerRef.current;
+      if (agoraManager && (agoraManager as any).rtmClient) {
+        const rtmMessage = {
+          type: 'product_push',
+          product: {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            moq: product.moq,
+            image: product.image,
+            category: product.category,
+          },
+          timestamp: new Date().toISOString(),
+        };
+        
+        await (agoraManager as any).rtmClient.publish(channelName, JSON.stringify(rtmMessage));
+        toast.success(`${product.name} pushed to all viewers!`);
+      }
+    } catch (error) {
+      console.error('[WebinarContext] RTM product push error:', error);
+      toast.error('Failed to push product to viewers');
+    }
+  }, [messages.length, channelName]);
 
   const clearCurrentProduct = useCallback(() => {
     setCurrentProduct(null);
@@ -342,14 +367,22 @@ export function WebinarProvider({
       setFactoryCountry(webinarData.factory?.country || 'China');
       setViewerCount(webinarData.participantCount || 0);
       if (webinarData.products) {
-        setProducts(webinarData.products.map(p => ({
-          id: p.id,
-          name: p.name,
-          price: '$0',
-          moq: '100 pcs',
-          image: '📦',
-          category: p.category || undefined
-        })));
+        setProducts(webinarData.products.map(p => {
+          // Map DB product fields to WebinarProduct interface
+          // Handle missing fields gracefully with sensible defaults
+          const price = (p as any).price || (p as any).unitPrice || '$0';
+          const moq = (p as any).moq || (p as any).minimumOrderQuantity || '100 pcs';
+          const image = (p as any).image || (p as any).images?.[0] || '📦';
+          
+          return {
+            id: p.id,
+            name: p.name,
+            price: typeof price === 'number' ? `$${price}` : price,
+            moq: typeof moq === 'number' ? `${moq} pcs` : moq,
+            image: typeof image === 'string' ? image : '📦',
+            category: p.category || undefined
+          };
+        }));
       }
     }
   }, [webinarData]);
