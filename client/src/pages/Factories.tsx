@@ -12,22 +12,28 @@ import { FactoryGrid } from "@/components/factories/FactoryGrid";
 import { FactoryLoading } from "@/components/factories/FactoryLoading";
 
 /**
- * Factories 页面（重构版）
+ * Factories 页面（GTM 3.1 版本）
  * 
  * 架构设计：
- * - 使用 useFactories Hook 管理所有业务逻辑
+ * - 使用 useFactories Hook 管理所有业务逻辑（包括 AI 匹配、在线状态）
  * - 将 UI 拆分为独立的模块化组件
  * - 页面只负责组合组件和处理路由
  * - 所有数据流向清晰，易于维护和扩展
  * 
+ * GTM 3.1 核心功能：
+ * - AI 匹配度可视化
+ * - 实时在线状态感知
+ * - 一键视频连线、预约会议、申请样品
+ * - 动态信任背书
+ * 
  * 组件结构：
  * ├── Sidebar（侧边栏）
- * ├── TopBar（顶部栏）
+ * ├── TopBar（顶部栏 + 黑紫霓虹动态光效）
  * └── MainContent
  *     ├── FactoryStats（统计数据）
  *     ├── FactoryFilters（搜索和筛选）
  *     └── FactoryGrid 或 FactoryLoading
- *         ├── FactoryCard（工厂卡片）
+ *         ├── FactoryCard（工厂卡片 + AI 匹配度 + 快速操作）
  *         └── EmptyState（空状态）
  */
 export default function Factories() {
@@ -36,7 +42,7 @@ export default function Factories() {
 
   // ── 使用 useFactories Hook 获取所有数据和方法 ──────────────────────────
   const {
-    factories,
+    enrichedFactories,
     filteredFactories,
     categories,
     isLoading,
@@ -48,6 +54,12 @@ export default function Factories() {
     setCategoryFilter,
     handleToggleFavorite,
     isFavoritePending,
+    // 【新增】GTM 3.1 方法
+    handleStartVideoCall,
+    handleScheduleMeeting,
+    handleRequestSample,
+    calculateMatchScore,
+    getFactoryOnlineStatus,
   } = useFactories();
 
   // ── 事件处理 ──────────────────────────────────────────────────────────
@@ -60,6 +72,13 @@ export default function Factories() {
     console.log("AI 推荐功能待实现");
   };
 
+  // 【新增】为 enrichedFactories 添加必要的数据
+  const enrichedFactoriesWithData = enrichedFactories.map(factory => ({
+    ...factory,
+    matchScore: calculateMatchScore(factory.id),
+    onlineStatus: getFactoryOnlineStatus(factory.id),
+  }));
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* ── 侧边栏 ────────────────────────────────────────────────────────── */}
@@ -67,13 +86,23 @@ export default function Factories() {
 
       {/* ── 主内容区 ──────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
-        {/* ── 顶部栏 ────────────────────────────────────────────────────── */}
-        <div className="h-16 bg-gradient-to-r from-slate-900/80 to-slate-950/80 backdrop-blur-md border-b border-violet-500/20 flex items-center justify-between px-8">
-          <div>
-            <h1 className="text-xl font-bold text-foreground">工厂大厅</h1>
-            <p className="text-xs text-muted-foreground">发现并联系全球认证优质工厂</p>
+        {/* ── 顶部栏（GTM 3.1 黑紫霓虹动态光效）──────────────────────────── */}
+        <div className="relative h-16 bg-gradient-to-r from-slate-900/80 to-slate-950/80 backdrop-blur-md border-b border-violet-500/20 flex items-center justify-between px-8 overflow-hidden">
+          {/* 【新增】背景动态光晕 */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -top-1/2 -left-1/2 w-full h-full rounded-full bg-gradient-to-br from-violet-600/10 to-purple-600/10 blur-3xl animate-pulse" />
+            <div className="absolute -bottom-1/2 -right-1/2 w-full h-full rounded-full bg-gradient-to-tl from-blue-600/10 to-indigo-600/10 blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* 内容 */}
+          <div className="relative z-10">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-violet-300 to-purple-300 bg-clip-text text-transparent">
+              工厂大厅
+            </h1>
+            <p className="text-xs text-muted-foreground">AI 驱动的全球工厂精准匹配平台</p>
+          </div>
+
+          <div className="relative z-10 flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -98,9 +127,9 @@ export default function Factories() {
         <div className="p-8 max-w-7xl mx-auto">
           {/* 统计数据行 */}
           <FactoryStats
-            totalFactories={factories.length}
+            totalFactories={enrichedFactoriesWithData.length}
             totalCategories={categories.length}
-            filteredCount={filteredFactories.length}
+            filteredCount={enrichedFactoriesWithData.length}
             avgScore={avgScore}
             isLoading={isLoading}
           />
@@ -120,10 +149,15 @@ export default function Factories() {
             <FactoryLoading />
           ) : (
             <FactoryGrid
-              factories={filteredFactories}
+              factories={enrichedFactoriesWithData}
               onViewDetails={handleViewDetails}
               onToggleFavorite={handleToggleFavorite}
               isFavoritePending={isFavoritePending}
+              // 【新增】GTM 3.1 回调
+              onVideoCall={handleStartVideoCall}
+              onScheduleMeeting={handleScheduleMeeting}
+              onRequestSample={handleRequestSample}
+              favoritedFactoryIds={[]} // TODO: 从用户状态获取
             />
           )}
         </div>

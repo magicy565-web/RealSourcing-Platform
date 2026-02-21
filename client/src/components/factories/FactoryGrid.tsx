@@ -10,6 +10,8 @@ interface Factory {
   logo?: string;
   status?: string;
   overallScore?: number;
+  matchScore?: { score: number; reason: string; tags: string[] };
+  onlineStatus?: { isOnline: boolean; availableForCall: boolean };
 }
 
 interface FactoryGridProps {
@@ -17,21 +19,32 @@ interface FactoryGridProps {
   onViewDetails: (factoryId: string) => void;
   onToggleFavorite: (factoryId: string) => void;
   isFavoritePending?: boolean;
+  // 【新增】GTM 3.1 回调
+  onVideoCall?: (factoryId: string) => void;
+  onScheduleMeeting?: (factoryId: string) => void;
+  onRequestSample?: (factoryId: string) => void;
+  favoritedFactoryIds?: string[];
 }
 
 /**
- * FactoryGrid 组件
+ * FactoryGrid 组件 (GTM 3.1 版本)
  * 
  * 职责：
  * - 展示工厂卡片网格
  * - 处理空状态
  * - 应用响应式布局
+ * - 【新增】支持 AI 匹配度和在线状态
+ * - 【新增】支持高转化操作回调
  */
 export function FactoryGrid({
   factories,
   onViewDetails,
   onToggleFavorite,
   isFavoritePending = false,
+  onVideoCall,
+  onScheduleMeeting,
+  onRequestSample,
+  favoritedFactoryIds = [],
 }: FactoryGridProps) {
   if (factories.length === 0) {
     return (
@@ -54,6 +67,13 @@ export function FactoryGrid({
           onViewDetails={onViewDetails}
           onToggleFavorite={onToggleFavorite}
           isFavoritePending={isFavoritePending}
+          // 【新增】GTM 3.1 数据和回调
+          matchScore={factory.matchScore}
+          onlineStatus={factory.onlineStatus}
+          onVideoCall={() => onVideoCall?.(factory.id)}
+          onScheduleMeeting={() => onScheduleMeeting?.(factory.id)}
+          onRequestSample={() => onRequestSample?.(factory.id)}
+          isFavorited={favoritedFactoryIds.includes(factory.id)}
         />
       ))}
     </div>
