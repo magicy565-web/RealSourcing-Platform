@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { generateFactoryRecommendation } from "./ai";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import {
@@ -345,6 +346,70 @@ export const appRouter = router({
       .input(z.object({ factoryId: z.number() }))
       .query(async ({ input }) => {
         return await getFactoryAvailabilities(input.factoryId);
+      }),
+
+    // AI 推荐理由生成端点
+    getAIRecommendation: publicProcedure
+      .input(z.object({ 
+        factoryId: z.number(),
+        buyerPreferences: z.object({
+          preferredCategories: z.array(z.string()).optional(),
+          preferredCountries: z.array(z.string()).optional(),
+          minQualityScore: z.number().optional(),
+        }).optional(),
+      }))
+      .query(async ({ input }) => {
+        try {
+          // 获取工厂完整数据
+          const factory = await getFactoryById(input.factoryId);
+          if (!factory) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+          }
+
+          // 获取工厂的 GTM 3.1 数据
+          const verification = await getFactoryVerification(input.factoryId);
+          const metrics = await getFactoryMetrics(input.factoryId);
+          const reels = await getFactoryReels(input.factoryId);
+
+          // 构建 AI 分析用的数据
+          const factoryDataForAI = {
+            id: factory.id.toString(),
+            name: factory.name,
+            category: factory.category,
+            country: factory.country,
+            city: factory.city,
+            overallScore: factory.overallScore,
+            certificationStatus: factory.certificationStatus,
+            responseRate: factory.responseRate,
+            viewCount: factory.viewCount,
+            favoriteCount: factory.favoriteCount,
+            aiVerificationScore: verification?.aiVerificationScore,
+            totalOrders: metrics?.totalOrders,
+            sampleConversionRate: metrics?.sampleConversionRate,
+            disputeRate: metrics?.disputeRate,
+            reelCount: reels?.length || 0,
+            languagesSpoken: factory.languagesSpoken ? JSON.parse(factory.languagesSpoken) : [],
+            establishedYear: factory.establishedYear,
+            employeeCount: factory.employeeCount,
+          };
+
+          // 调用 AI 服务生成推荐理由
+          const recommendation = await generateFactoryRecommendation(
+            factoryDataForAI,
+            input.buyerPreferences
+          );
+
+          return {
+            success: true,
+            data: recommendation,
+          };
+        } catch (error) {
+          console.error("❌ AI 推荐理由生成失败:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "生成推荐理由失败，请稍后重试",
+          });
+        }
       }),
   }),
 
