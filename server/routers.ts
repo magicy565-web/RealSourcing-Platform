@@ -47,6 +47,16 @@ import {
   saveUserOnboardingPreferences, completeUserOnboarding,
   // Factory Start Meeting
   startMeetingWithFactory,
+  // Sample Orders
+  createSampleOrder, getSampleOrderById, getSampleOrdersByBuyer, getSampleOrdersByFactory, updateSampleOrder,
+  // Factory Certifications
+  getFactoryCertifications, createFactoryCertification, deleteFactoryCertification,
+  // Meeting Availability
+  getMeetingAvailability, upsertMeetingAvailability,
+  // Factory Profile Update
+  updateFactoryProfile, upsertFactoryDetails,
+  // Product CRUD
+  deleteProduct, upsertProductDetails,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -731,7 +741,7 @@ export const appRouter = router({
       return { success: true };
     }),
 
-    create: protectedProcedure
+     create: protectedProcedure
       .input(z.object({
         userId: z.number(),
         type: z.string(),
@@ -744,6 +754,292 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
-});
 
+  // ── Sample Orders ─────────────────────────────────────────────────────────────
+  sampleOrders: router({
+    mySampleOrders: protectedProcedure.query(async ({ ctx }) => {
+      const orders = await getSampleOrdersByBuyer(ctx.user.id);
+      const enriched = await Promise.all(orders.map(async (o) => {
+        const factory = await getFactoryById(o.factoryId);
+        const product = await getProductById(o.productId);
+        return { ...o, factory: factory ? { id: factory.id, name: factory.name, logo: factory.logo } : null, product: product ? { id: product.id, name: product.name, images: product.images } : null };
+      }));
+      return enriched;
+    }),
+    factorySampleOrders: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+      const orders = await getSampleOrdersByFactory(factory.id);
+      const enriched = await Promise.all(orders.map(async (o) => {
+        const buyer = await getUserById(o.buyerId);
+        const product = await getProductById(o.productId);
+        return { ...o, buyer: buyer ? { id: buyer.id, name: buyer.name, avatar: buyer.avatar } : null, product: product ? { id: product.id, name: product.name, images: product.images } : null };
+      }));
+      return enriched;
+    }),
+    byId: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const order = await getSampleOrderById(input.id);
+        if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+        if (order.buyerId !== ctx.user.id) {
+          const factory = await getFactoryByUserId(ctx.user.id);
+          if (!factory || factory.id !== order.factoryId) throw new TRPCError({ code: "FORBIDDEN", message: "无权访问" });
+        }
+        const factory = await getFactoryById(order.factoryId);
+        const product = await getProductById(order.productId);
+        const buyer = await getUserById(order.buyerId);
+        return { ...order, factory, product, buyer };
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        productId: z.number(),
+        quantity: z.number().min(1),
+        unitPrice: z.string().optional(),
+        currency: z.string().optional(),
+        shippingName: z.string().optional(),
+        shippingAddress: z.string().optional(),
+        shippingCountry: z.string().optional(),
+        shippingPhone: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const unitPrice = input.unitPrice ? parseFloat(input.unitPrice) : undefined;
+        const totalAmount = unitPrice ? unitPrice * input.quantity : undefined;
+        await createSampleOrder({
+          ...input,
+          buyerId: ctx.user.id,
+          unitPrice: unitPrice?.toString(),
+          totalAmount: totalAmount?.toString(),
+        });
+        return { success: true };
+      }),
+    updateStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["pending", "confirmed", "shipped", "delivered", "completed", "cancelled"]),
+        trackingNumber: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await updateSampleOrder(input.id, { status: input.status, trackingNumber: input.trackingNumber });
+        return { success: true };
+      }),
+  }),
+
+  // ── Factory Dashboard (工厂管理) ───────────────────────────────────────────────
+  factoryDashboard: router({
+    myFactory: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) return null;
+      const details = await getFactoryDetails(factory.id);
+      const products = await getProductsByFactoryId(factory.id);
+      const certifications = await getFactoryCertifications(factory.id);
+      const availability = await getMeetingAvailability(factory.id);
+      const meetings = await getMeetingsByFactoryId(factory.id);
+      const inquiries = await getInquiriesByFactoryId(factory.id);
+      const webinars = await getWebinarsByHostId(ctx.user.id);
+      return { ...factory, details, products, certifications, availability, meetings, inquiries, webinars };
+    }),
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        description: z.string().optional(),
+        logo: z.string().optional(),
+        category: z.string().optional(),
+        city: z.string().optional(),
+        country: z.string().optional(),
+        // details
+        established: z.number().optional(),
+        employeeCount: z.string().optional(),
+        annualRevenue: z.string().optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        website: z.string().optional(),
+        coverImage: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { established, employeeCount, annualRevenue, phone, email, website, coverImage, ...factoryData } = input;
+        if (Object.keys(factoryData).length > 0) await updateFactoryProfile(factory.id, factoryData);
+        const detailsData = { established, employeeCount, annualRevenue, phone, email, website, coverImage };
+        const hasDetails = Object.values(detailsData).some(v => v !== undefined);
+        if (hasDetails) await upsertFactoryDetails(factory.id, detailsData);
+        return { success: true };
+      }),
+    addCertification: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        issuer: z.string().optional(),
+        issuedAt: z.string().optional(),
+        expiresAt: z.string().optional(),
+        fileUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await createFactoryCertification({ ...input, factoryId: factory.id });
+        return { success: true };
+      }),
+    deleteCertification: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await deleteFactoryCertification(input.id, factory.id);
+        return { success: true };
+      }),
+    setAvailability: protectedProcedure
+      .input(z.object({
+        slots: z.array(z.object({
+          dayOfWeek: z.number().min(0).max(6).optional(),
+          startTime: z.string(),
+          endTime: z.string(),
+          timezone: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await upsertMeetingAvailability(factory.id, input.slots);
+        return { success: true };
+      }),
+    createProduct: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        category: z.string().optional(),
+        description: z.string().optional(),
+        images: z.array(z.string()).optional(),
+        priceMin: z.string().optional(),
+        priceMax: z.string().optional(),
+        moq: z.number().optional(),
+        currency: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { priceMin, priceMax, moq, currency, ...productData } = input;
+        const result = await createProduct({ ...productData, factoryId: factory.id, images: input.images ? JSON.stringify(input.images) : null, status: "active" });
+        const insertResult = result as unknown as { insertId?: number };
+        if (insertResult.insertId && (priceMin || priceMax || moq)) {
+          await upsertProductDetails(insertResult.insertId, { priceMin, priceMax, moq, currency });
+        }
+        return { success: true };
+      }),
+    updateProduct: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        category: z.string().optional(),
+        description: z.string().optional(),
+        images: z.array(z.string()).optional(),
+        priceMin: z.string().optional(),
+        priceMax: z.string().optional(),
+        moq: z.number().optional(),
+        currency: z.string().optional(),
+        status: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { id, priceMin, priceMax, moq, currency, ...productData } = input;
+        if (Object.keys(productData).length > 0) {
+          const updateData: Record<string, unknown> = { ...productData };
+          if (productData.images) updateData.images = JSON.stringify(productData.images);
+          await updateProduct(id, factory.id, updateData);
+        }
+        if (priceMin !== undefined || priceMax !== undefined || moq !== undefined) {
+          await upsertProductDetails(id, { priceMin, priceMax, moq, currency });
+        }
+        return { success: true };
+      }),
+    deleteProduct: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await deleteProduct(input.id, factory.id);
+        return { success: true };
+      }),
+    createWebinar: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        coverImage: z.string().optional(),
+        scheduledAt: z.string(),
+        duration: z.number().min(15).default(60),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await createWebinar({
+          ...input,
+          hostId: ctx.user.id,
+          scheduledAt: new Date(input.scheduledAt),
+          status: "scheduled",
+        });
+        return { success: true };
+      }),
+    myWebinars: protectedProcedure.query(async ({ ctx }) => {
+      return await getWebinarsByHostId(ctx.user.id);
+    }),
+    stats: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) return { inquiries: 0, meetings: 0, products: 0, webinars: 0, sampleOrders: 0 };
+      const [inquiries, meetings, products, webinars, sampleOrders] = await Promise.all([
+        getInquiriesByFactoryId(factory.id),
+        getMeetingsByFactoryId(factory.id),
+        getProductsByFactoryId(factory.id),
+        getWebinarsByHostId(ctx.user.id),
+        getSampleOrdersByFactory(factory.id),
+      ]);
+      return {
+        inquiries: inquiries.length,
+        meetings: meetings.length,
+        products: products.length,
+        webinars: webinars.length,
+        sampleOrders: sampleOrders.length,
+        pendingInquiries: inquiries.filter(i => i.status === 'pending').length,
+        upcomingMeetings: meetings.filter(m => m.status === 'scheduled').length,
+      };
+    }),
+  }),
+
+  // ── Meeting Booking (买家自助预约) ─────────────────────────────────────────────
+  meetingBooking: router({
+    factoryAvailability: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getMeetingAvailability(input.factoryId);
+      }),
+    book: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        title: z.string().min(1),
+        scheduledAt: z.string(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryById(input.factoryId);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await createMeeting({
+          title: input.title,
+          buyerId: ctx.user.id,
+          factoryId: input.factoryId,
+          factoryUserId: factory.userId,
+          scheduledAt: new Date(input.scheduledAt),
+          status: "scheduled",
+          notes: input.notes,
+        });
+        // 发送通知给工厂
+        await createNotification({
+          userId: factory.userId,
+          type: "meeting_request",
+          title: "新的会议预约请求",
+          content: `买家 ${ctx.user.name || ctx.user.email} 请求预约选品会议：${input.title}`,
+          link: `/factory-dashboard`,
+        });
+        return { success: true };
+      }),
+  }),
+});
 export type AppRouter = typeof appRouter;

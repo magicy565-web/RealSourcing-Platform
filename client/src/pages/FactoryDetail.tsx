@@ -199,9 +199,9 @@ export default function FactoryDetail() {
           <div className="flex flex-col gap-3 pb-2">
             <Button
               className="bg-purple-600 hover:bg-purple-500 text-white px-8 rounded-full font-semibold shadow-lg shadow-purple-500/30 h-11"
-              onClick={() => setLocation(`/meeting/new?factoryId=${factory.id}`)}
+              onClick={() => setLocation(`/book-meeting/${factory.id}`)}
             >
-              Start 1:1 Meeting
+              📅 预约 1:1 选品会
             </Button>
             <Button
               variant="outline"
@@ -260,10 +260,10 @@ export default function FactoryDetail() {
           <div className="space-y-2.5">
             <Button
               className="w-full bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold h-11"
-              onClick={() => setLocation(`/meeting/new?factoryId=${factory.id}`)}
+              onClick={() => setLocation(`/book-meeting/${factory.id}`)}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
-              Start Meeting
+              预约选品会
             </Button>
             <Button
               className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold h-11"

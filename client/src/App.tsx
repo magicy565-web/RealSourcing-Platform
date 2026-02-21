@@ -31,6 +31,8 @@ import Reports from "./pages/Reports";
 import Subscription from "./pages/Subscription";
 import Settings from "./pages/Settings";
 import AIAssistant from "./pages/AIAssistant";
+import BookMeeting from "./pages/BookMeeting";
+import SampleOrder from "./pages/SampleOrder";
 
 function Router() {
   return (
@@ -157,6 +159,16 @@ function Router() {
       <Route path="/ai-assistant">
         <ProtectedRoute>
           <AIAssistant />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/book-meeting/:factoryId">
+        <ProtectedRoute>
+          <BookMeeting />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/sample-order/:productId">
+        <ProtectedRoute>
+          <SampleOrder />
         </ProtectedRoute>
       </Route>
 

@@ -191,9 +191,11 @@ export async function createProduct(data: typeof schema.products.$inferInsert) {
   return await database.insert(schema.products).values(data);
 }
 
-export async function updateProduct(id: number, data: Partial<typeof schema.products.$inferInsert>) {
+export async function updateProduct(id: number, factoryId: number, data: Partial<typeof schema.products.$inferInsert>) {
   const database = await dbPromise;
-  return await database.update(schema.products).set(data).where(eq(schema.products.id, id));
+  return await database.update(schema.products).set(data).where(
+    and(eq(schema.products.id, id), eq(schema.products.factoryId, factoryId))
+  );
 }
 
 // ─── Factory Review Operations ────────────────────────────────────────────────
@@ -683,4 +685,89 @@ export async function startMeetingWithFactory(buyerId: number, factoryId: number
   });
   const id = (result as any)[0]?.insertId ?? 0;
   return { meetingId: id };
+}
+
+// ─── Sample Orders ─────────────────────────────────────────────────────────────
+export async function createSampleOrder(data: typeof schema.sampleOrders.$inferInsert) {
+  const [result] = await db.insert(schema.sampleOrders).values(data);
+  return result;
+}
+
+export async function getSampleOrderById(id: number) {
+  return db.select().from(schema.sampleOrders).where(eq(schema.sampleOrders.id, id)).then(r => r[0]);
+}
+
+export async function getSampleOrdersByBuyer(buyerId: number) {
+  return db.select().from(schema.sampleOrders).where(eq(schema.sampleOrders.buyerId, buyerId)).orderBy(desc(schema.sampleOrders.createdAt));
+}
+
+export async function getSampleOrdersByFactory(factoryId: number) {
+  return db.select().from(schema.sampleOrders).where(eq(schema.sampleOrders.factoryId, factoryId)).orderBy(desc(schema.sampleOrders.createdAt));
+}
+
+export async function updateSampleOrder(id: number, data: Partial<typeof schema.sampleOrders.$inferInsert>) {
+  await db.update(schema.sampleOrders).set({ ...data, updatedAt: new Date() }).where(eq(schema.sampleOrders.id, id));
+}
+
+// ─── Factory Certifications ────────────────────────────────────────────────────
+export async function getFactoryCertifications(factoryId: number) {
+  return db.select().from(schema.factoryCertifications).where(eq(schema.factoryCertifications.factoryId, factoryId));
+}
+
+export async function createFactoryCertification(data: typeof schema.factoryCertifications.$inferInsert) {
+  const [result] = await db.insert(schema.factoryCertifications).values(data);
+  return result;
+}
+
+export async function deleteFactoryCertification(id: number, factoryId: number) {
+  await db.delete(schema.factoryCertifications).where(
+    and(eq(schema.factoryCertifications.id, id), eq(schema.factoryCertifications.factoryId, factoryId))
+  );
+}
+
+// ─── Meeting Availability ──────────────────────────────────────────────────────
+export async function getMeetingAvailability(factoryId: number) {
+  return db.select().from(schema.meetingAvailability)
+    .where(and(eq(schema.meetingAvailability.factoryId, factoryId), eq(schema.meetingAvailability.isActive, 1)));
+}
+
+export async function upsertMeetingAvailability(factoryId: number, slots: Array<{ dayOfWeek?: number; startTime: string; endTime: string; timezone?: string }>) {
+  // 先删除该工厂的所有时间段，再重新插入
+  await db.delete(schema.meetingAvailability).where(eq(schema.meetingAvailability.factoryId, factoryId));
+  if (slots.length > 0) {
+    await db.insert(schema.meetingAvailability).values(
+      slots.map(s => ({ factoryId, dayOfWeek: s.dayOfWeek ?? null, startTime: s.startTime, endTime: s.endTime, timezone: s.timezone ?? 'Asia/Shanghai', isActive: 1 }))
+    );
+  }
+}
+
+// ─── Factory Profile Update ────────────────────────────────────────────────────
+export async function updateFactoryProfile(factoryId: number, data: Partial<typeof schema.factories.$inferInsert>) {
+  await db.update(schema.factories).set({ ...data, updatedAt: new Date() }).where(eq(schema.factories.id, factoryId));
+}
+
+export async function upsertFactoryDetails(factoryId: number, data: Partial<typeof schema.factoryDetails.$inferInsert>) {
+  const existing = await db.select().from(schema.factoryDetails).where(eq(schema.factoryDetails.factoryId, factoryId)).then(r => r[0]);
+  if (existing) {
+    await db.update(schema.factoryDetails).set({ ...data, updatedAt: new Date() }).where(eq(schema.factoryDetails.factoryId, factoryId));
+  } else {
+    await db.insert(schema.factoryDetails).values({ factoryId, ...data });
+  }
+}
+
+// ─── Products CRUD (for factory dashboard) ────────────────────────────────────
+export async function deleteProduct(id: number, factoryId: number) {
+  const database = await dbPromise;
+  await database.delete(schema.products).where(
+    and(eq(schema.products.id, id), eq(schema.products.factoryId, factoryId))
+  );
+}
+export async function upsertProductDetails(productId: number, data: Partial<typeof schema.productDetails.$inferInsert>) {
+  const database = await dbPromise;
+  const existing = await database.select().from(schema.productDetails).where(eq(schema.productDetails.productId, productId)).then(r => r[0]);
+  if (existing) {
+    await database.update(schema.productDetails).set({ ...data, updatedAt: new Date() }).where(eq(schema.productDetails.productId, productId));
+  } else {
+    await database.insert(schema.productDetails).values({ productId, ...data });
+  }
 }
