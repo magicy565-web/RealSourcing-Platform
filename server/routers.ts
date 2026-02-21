@@ -2,6 +2,10 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { agoraTokenService } from "./_core/agora";
+import { agoraTranslationService } from "./_core/agoraTranslation";
+import { agoraRecordingService } from "./_core/agoraRecording";
+import { aiService } from "./_core/aiService";
 import { z } from "zod";
 import { generateFactoryRecommendation } from "./ai";
 import bcrypt from "bcryptjs";
@@ -53,6 +57,16 @@ import {
   getFactoryMetrics, upsertFactoryMetrics,
   getFactoryReels, createFactoryReel, deleteFactoryReel,
   getFactoryAvailabilities, upsertFactoryAvailability,
+  // Sample Orders
+  createSampleOrder, getSampleOrderById, getSampleOrdersByBuyer, getSampleOrdersByFactory, updateSampleOrder,
+  // Factory Certifications
+  getFactoryCertifications, createFactoryCertification, deleteFactoryCertification,
+  // Meeting Availability
+  getMeetingAvailability, upsertMeetingAvailability,
+  // Factory Profile Update
+  updateFactoryProfile, upsertFactoryDetails,
+  // Product CRUD
+  deleteProduct, upsertProductDetails,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -60,6 +74,247 @@ import { ENV } from "./_core/env";
 
 export const appRouter = router({
   system: systemRouter,
+
+  // ── Agora RTC/RTM Token Generation ──────────────────────────────────────────
+  agora: router({
+    getDualTokens: publicProcedure
+      .input(z.object({
+        channel: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        role: z.enum(['publisher', 'subscriber']).default('publisher'),
+      }))
+      .query(({ input }) => {
+        try {
+          const tokens = agoraTokenService.generateDualTokens({
+            channel: input.channel,
+            uid: input.uid,
+            role: input.role,
+          });
+          return tokens;
+        } catch (error) {
+          console.error('Failed to generate Agora tokens:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate Agora tokens',
+          });
+        }
+      }),
+
+    getRtcToken: publicProcedure
+      .input(z.object({
+        channel: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        role: z.enum(['publisher', 'subscriber']).default('publisher'),
+      }))
+      .query(({ input }) => {
+        try {
+          const token = agoraTokenService.generateRtcToken({
+            channel: input.channel,
+            uid: input.uid,
+            role: input.role,
+          });
+          return { rtcToken: token, appId: agoraTokenService.getAppId() };
+        } catch (error) {
+          console.error('Failed to generate RTC token:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate RTC token',
+          });
+        }
+      }),
+
+    startTranslation: publicProcedure
+      .input(z.object({
+        channelName: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        subscribeUid: z.union([z.string(), z.number()]).optional(),
+        language: z.string().default('en'),
+        translateLanguage: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraTranslationService.startSTT({
+          channelName: input.channelName,
+          uid: input.uid,
+          subscribeUid: input.subscribeUid,
+          language: input.language,
+          translateLanguage: input.translateLanguage,
+        });
+        if (result.status === 'failed') {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.message || 'Failed to start translation',
+          });
+        }
+        return result;
+      }),
+
+    stopTranslation: publicProcedure
+      .input(z.object({
+        taskId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraTranslationService.stopSTT(input.taskId);
+        return result;
+      }),
+
+    startRecording: publicProcedure
+      .input(z.object({
+        channelName: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        recordingMode: z.enum(['composite', 'individual']).default('composite'),
+        videoProfile: z.enum(['HD', 'SD', 'FHD', '4K']).default('HD'),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraRecordingService.startRecording({
+          channelName: input.channelName,
+          uid: input.uid,
+          recordingMode: input.recordingMode,
+          videoProfile: input.videoProfile,
+        });
+        if (result.status === 'failed') {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.message || 'Failed to start recording',
+          });
+        }
+        return result;
+      }),
+
+    stopRecording: publicProcedure
+      .input(z.object({
+        resourceId: z.string().min(1),
+        sid: z.string().min(1),
+        meetingId: z.number().optional(), // P0.2: 停止录制后将 URL 写入数据库
+        durationMinutes: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await agoraRecordingService.stopRecording(input.resourceId, input.sid);
+
+        // P0.2 + Webhook 增强：停止录制后立即更新会议状态
+        // 真实 recordingUrl 将由 Agora Webhook 回调（/api/webhooks/agora-recording）在文件上传完成后写入
+        // 此处仅更新会议状态和时长，recordingUrl 留空等待 Webhook 填充
+        if (input.meetingId && result.status === 'stopped') {
+          try {
+            await updateMeeting(input.meetingId, {
+              durationMinutes: input.durationMinutes,
+              status: 'completed',
+              endedAt: new Date(),
+              // recordingUrl 由 Agora Webhook 在 S3 上传完成后自动写入
+              // Webhook 端点：POST /api/webhooks/agora-recording
+            });
+            console.log(`✅ Meeting #${input.meetingId} status updated to completed, awaiting Webhook for recordingUrl`);
+          } catch (dbError) {
+            console.error('❌ Failed to update meeting status:', dbError);
+          }
+        }
+
+        return result;
+      }),
+
+    getRecordingStatus: publicProcedure
+      .input(z.object({
+        resourceId: z.string().min(1),
+        sid: z.string().min(1),
+      }))
+      .query(async ({ input }) => {
+        const result = await agoraRecordingService.getRecordingStatus(input.resourceId, input.sid);
+        return result;
+      }),
+
+    getActiveRecordings: publicProcedure
+      .query(() => {
+        return agoraRecordingService.getActiveRecordings();
+      }),
+
+    getActiveTasks: publicProcedure
+      .query(() => {
+        return agoraTranslationService.getActiveTasks();
+      }),
+  }),
+
+  // ── AI Services (P1) ──────────────────────────────────────────────────────────
+  ai: router({
+    // P1.1: 会议结束后生成 AI 摘要
+    generateMeetingSummary: protectedProcedure
+      .input(z.object({ meetingId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        const factory = await getFactoryById(meeting.factoryId);
+        const buyer = await getUserById(meeting.buyerId);
+
+        const summary = await aiService.generateMeetingSummary(
+          transcripts.map(t => ({ speakerName: t.speakerName, content: t.content, timestamp: t.timestamp })),
+          {
+            factoryName: factory?.name || 'Factory',
+            buyerName: buyer?.name || 'Buyer',
+            meetingTitle: meeting.title,
+            durationMinutes: meeting.durationMinutes,
+          }
+        );
+
+        // 将摘要写入数据库
+        await updateMeeting(input.meetingId, {
+          aiSummary: summary.keyPoints as any,
+          followUpActions: summary.followUpActions as any,
+        });
+
+        return { success: true, summary };
+      }),
+
+    // P1.2: AI 采购助理多转对话
+    procurementChat: protectedProcedure
+      .input(z.object({
+        messages: z.array(z.object({
+          role: z.enum(['user', 'assistant']),
+          content: z.string(),
+        })),
+        context: z.object({
+          currentPage: z.string().optional(),
+          recentMeetings: z.array(z.string()).optional(),
+          interestedCategories: z.array(z.string()).optional(),
+        }).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const response = await aiService.chatWithProcurementAssistant(
+          input.messages as any,
+          {
+            userRole: ctx.user.role || 'buyer',
+            currentPage: input.context?.currentPage,
+            recentMeetings: input.context?.recentMeetings,
+            interestedCategories: input.context?.interestedCategories,
+          }
+        );
+        return response;
+      }),
+
+    // P1.3: 识别 Meeting Reel 关键时刻
+    identifyReelHighlights: protectedProcedure
+      .input(z.object({
+        meetingId: z.number(),
+        targetDurationSeconds: z.number().optional().default(45),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        const highlights = await aiService.identifyReelHighlights(
+          transcripts.map(t => ({ speakerName: t.speakerName, content: t.content, timestamp: t.timestamp })),
+          input.targetDurationSeconds
+        );
+
+        return { highlights };
+      }),
+  }),
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   auth: router({
@@ -558,6 +813,31 @@ export const appRouter = router({
         await updateMeeting(input.id, { status: input.status });
         return { success: true };
       }),
+
+    // P0.2: 会议结束后将录制 URL 写入数据库
+    updateRecording: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        recordingUrl: z.string().optional(),
+        recordingThumbnail: z.string().optional(),
+        durationMinutes: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.id);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        // 只允许会议参与者更新录制信息
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        const updateData: any = {};
+        if (input.recordingUrl) updateData.recordingUrl = input.recordingUrl;
+        if (input.recordingThumbnail) updateData.recordingThumbnail = input.recordingThumbnail;
+        if (input.durationMinutes) updateData.durationMinutes = input.durationMinutes;
+        if (Object.keys(updateData).length > 0) {
+          await updateMeeting(input.id, updateData);
+        }
+        return { success: true };
+      }),
   }),
 
   // ── Inquiries ─────────────────────────────────────────────────────────────────
@@ -836,7 +1116,7 @@ export const appRouter = router({
       return { success: true };
     }),
 
-    create: protectedProcedure
+     create: protectedProcedure
       .input(z.object({
         userId: z.number(),
         type: z.string(),
@@ -849,6 +1129,338 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
-});
 
+  // ── Sample Orders ─────────────────────────────────────────────────────────────
+  sampleOrders: router({
+    mySampleOrders: protectedProcedure.query(async ({ ctx }) => {
+      const orders = await getSampleOrdersByBuyer(ctx.user.id);
+      const enriched = await Promise.all(orders.map(async (o) => {
+        const factory = await getFactoryById(o.factoryId);
+        const product = await getProductById(o.productId);
+        return { ...o, factory: factory ? { id: factory.id, name: factory.name, logo: factory.logo } : null, product: product ? { id: product.id, name: product.name, images: product.images } : null };
+      }));
+      return enriched;
+    }),
+    factorySampleOrders: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+      const orders = await getSampleOrdersByFactory(factory.id);
+      const enriched = await Promise.all(orders.map(async (o) => {
+        const buyer = await getUserById(o.buyerId);
+        const product = await getProductById(o.productId);
+        return { ...o, buyer: buyer ? { id: buyer.id, name: buyer.name, avatar: buyer.avatar } : null, product: product ? { id: product.id, name: product.name, images: product.images } : null };
+      }));
+      return enriched;
+    }),
+    byId: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const order = await getSampleOrderById(input.id);
+        if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+        if (order.buyerId !== ctx.user.id) {
+          const factory = await getFactoryByUserId(ctx.user.id);
+          if (!factory || factory.id !== order.factoryId) throw new TRPCError({ code: "FORBIDDEN", message: "无权访问" });
+        }
+        const factory = await getFactoryById(order.factoryId);
+        const product = await getProductById(order.productId);
+        const buyer = await getUserById(order.buyerId);
+        return { ...order, factory, product, buyer };
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        productId: z.number(),
+        quantity: z.number().min(1),
+        unitPrice: z.string().optional(),
+        currency: z.string().optional(),
+        shippingName: z.string().optional(),
+        shippingAddress: z.string().optional(),
+        shippingCountry: z.string().optional(),
+        shippingPhone: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const unitPrice = input.unitPrice ? parseFloat(input.unitPrice) : undefined;
+        const totalAmount = unitPrice ? unitPrice * input.quantity : undefined;
+        await createSampleOrder({
+          ...input,
+          buyerId: ctx.user.id,
+          unitPrice: unitPrice?.toString(),
+          totalAmount: totalAmount?.toString(),
+        });
+        return { success: true };
+      }),
+    updateStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["pending", "confirmed", "shipped", "delivered", "completed", "cancelled"]),
+        trackingNumber: z.string().optional(),
+        carrier: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 更新订单状态
+        await updateSampleOrder(input.id, {
+          status: input.status,
+          trackingNumber: input.trackingNumber,
+        });
+
+        // 获取订单信息，发送通知给买家
+        try {
+          const order = await getSampleOrderById(input.id);
+          if (order) {
+            const notifMap: Record<string, { title: string; content: string }> = {
+              confirmed: {
+                title: '样品订单已确认',
+                content: `工厂已确认您的样品订单 #${input.id}，正在准备发货`,
+              },
+              shipped: {
+                title: '样品已发货',
+                content: input.trackingNumber
+                  ? `您的样品已发货！运单号: ${input.trackingNumber}`
+                  : `您的样品订单 #${input.id} 已发货`,
+              },
+              delivered: {
+                title: '样品已完成',
+                content: `样品订单 #${input.id} 已标记完成，感谢您的支持`,
+              },
+              cancelled: {
+                title: '样品订单已取消',
+                content: `样品订单 #${input.id} 已被取消`,
+              },
+            };
+            const notif = notifMap[input.status];
+            if (notif) {
+              await createNotification({
+                userId: order.buyerId,
+                type: 'sample_order',
+                title: notif.title,
+                content: notif.content,
+                link: `/sample-orders`,
+              });
+            }
+          }
+        } catch (notifError) {
+          // 通知失败不影响主流程
+          console.warn('⚠️ Failed to send sample order notification:', notifError);
+        }
+
+        return { success: true };
+      }),
+  }),
+
+  // ── Factory Dashboard (工厂管理) ───────────────────────────────────────────────
+  factoryDashboard: router({
+    myFactory: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) return null;
+      const details = await getFactoryDetails(factory.id);
+      const products = await getProductsByFactoryId(factory.id);
+      const certifications = await getFactoryCertifications(factory.id);
+      const availability = await getMeetingAvailability(factory.id);
+      const meetings = await getMeetingsByFactoryId(factory.id);
+      const inquiries = await getInquiriesByFactoryId(factory.id);
+      const webinars = await getWebinarsByHostId(ctx.user.id);
+      return { ...factory, details, products, certifications, availability, meetings, inquiries, webinars };
+    }),
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        description: z.string().optional(),
+        logo: z.string().optional(),
+        category: z.string().optional(),
+        city: z.string().optional(),
+        country: z.string().optional(),
+        // details
+        established: z.number().optional(),
+        employeeCount: z.string().optional(),
+        annualRevenue: z.string().optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        website: z.string().optional(),
+        coverImage: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { established, employeeCount, annualRevenue, phone, email, website, coverImage, ...factoryData } = input;
+        if (Object.keys(factoryData).length > 0) await updateFactoryProfile(factory.id, factoryData);
+        const detailsData = { established, employeeCount, annualRevenue, phone, email, website, coverImage };
+        const hasDetails = Object.values(detailsData).some(v => v !== undefined);
+        if (hasDetails) await upsertFactoryDetails(factory.id, detailsData);
+        return { success: true };
+      }),
+    addCertification: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        issuer: z.string().optional(),
+        issuedAt: z.string().optional(),
+        expiresAt: z.string().optional(),
+        fileUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await createFactoryCertification({ ...input, factoryId: factory.id });
+        return { success: true };
+      }),
+    deleteCertification: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await deleteFactoryCertification(input.id, factory.id);
+        return { success: true };
+      }),
+    setAvailability: protectedProcedure
+      .input(z.object({
+        slots: z.array(z.object({
+          dayOfWeek: z.number().min(0).max(6).optional(),
+          startTime: z.string(),
+          endTime: z.string(),
+          timezone: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await upsertMeetingAvailability(factory.id, input.slots);
+        return { success: true };
+      }),
+    createProduct: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        category: z.string().optional(),
+        description: z.string().optional(),
+        images: z.array(z.string()).optional(),
+        priceMin: z.string().optional(),
+        priceMax: z.string().optional(),
+        moq: z.number().optional(),
+        currency: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { priceMin, priceMax, moq, currency, ...productData } = input;
+        const result = await createProduct({ ...productData, factoryId: factory.id, images: input.images ? JSON.stringify(input.images) : null, status: "active" });
+        const insertResult = result as unknown as { insertId?: number };
+        if (insertResult.insertId && (priceMin || priceMax || moq)) {
+          await upsertProductDetails(insertResult.insertId, { priceMin, priceMax, moq, currency });
+        }
+        return { success: true };
+      }),
+    updateProduct: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        category: z.string().optional(),
+        description: z.string().optional(),
+        images: z.array(z.string()).optional(),
+        priceMin: z.string().optional(),
+        priceMax: z.string().optional(),
+        moq: z.number().optional(),
+        currency: z.string().optional(),
+        status: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        const { id, priceMin, priceMax, moq, currency, ...productData } = input;
+        if (Object.keys(productData).length > 0) {
+          const updateData: Record<string, unknown> = { ...productData };
+          if (productData.images) updateData.images = JSON.stringify(productData.images);
+          await updateProduct(id, factory.id, updateData);
+        }
+        if (priceMin !== undefined || priceMax !== undefined || moq !== undefined) {
+          await upsertProductDetails(id, { priceMin, priceMax, moq, currency });
+        }
+        return { success: true };
+      }),
+    deleteProduct: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await deleteProduct(input.id, factory.id);
+        return { success: true };
+      }),
+    createWebinar: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        coverImage: z.string().optional(),
+        scheduledAt: z.string(),
+        duration: z.number().min(15).default(60),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await createWebinar({
+          ...input,
+          hostId: ctx.user.id,
+          scheduledAt: new Date(input.scheduledAt),
+          status: "scheduled",
+        });
+        return { success: true };
+      }),
+    myWebinars: protectedProcedure.query(async ({ ctx }) => {
+      return await getWebinarsByHostId(ctx.user.id);
+    }),
+    stats: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) return { inquiries: 0, meetings: 0, products: 0, webinars: 0, sampleOrders: 0 };
+      const [inquiries, meetings, products, webinars, sampleOrders] = await Promise.all([
+        getInquiriesByFactoryId(factory.id),
+        getMeetingsByFactoryId(factory.id),
+        getProductsByFactoryId(factory.id),
+        getWebinarsByHostId(ctx.user.id),
+        getSampleOrdersByFactory(factory.id),
+      ]);
+      return {
+        inquiries: inquiries.length,
+        meetings: meetings.length,
+        products: products.length,
+        webinars: webinars.length,
+        sampleOrders: sampleOrders.length,
+        pendingInquiries: inquiries.filter(i => i.status === 'pending').length,
+        upcomingMeetings: meetings.filter(m => m.status === 'scheduled').length,
+      };
+    }),
+  }),
+
+  // ── Meeting Booking (买家自助预约) ─────────────────────────────────────────────
+  meetingBooking: router({
+    factoryAvailability: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getMeetingAvailability(input.factoryId);
+      }),
+    book: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        title: z.string().min(1),
+        scheduledAt: z.string(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryById(input.factoryId);
+        if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+        await createMeeting({
+          title: input.title,
+          buyerId: ctx.user.id,
+          factoryId: input.factoryId,
+          factoryUserId: factory.userId,
+          scheduledAt: new Date(input.scheduledAt),
+          status: "scheduled",
+          notes: input.notes,
+        });
+        // 发送通知给工厂
+        await createNotification({
+          userId: factory.userId,
+          type: "meeting_request",
+          title: "新的会议预约请求",
+          content: `买家 ${ctx.user.name || ctx.user.email} 请求预约选品会议：${input.title}`,
+          link: `/factory-dashboard`,
+        });
+        return { success: true };
+      }),
+  }),
+});
 export type AppRouter = typeof appRouter;

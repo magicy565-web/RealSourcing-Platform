@@ -7,8 +7,21 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  // OpenAI configuration
+  // Agora Configuration
+  agoraAppId: process.env.AGORA_APP_ID ?? "",
+  agoraAppCertificate: process.env.AGORA_APP_CERTIFICATE ?? "",
+  agoraCustomerId: process.env.AGORA_CUSTOMER_ID ?? "",
+  agoraCustomerSecret: process.env.AGORA_CUSTOMER_SECRET ?? "",
+  // Agora Whiteboard
+  whiteboardAk: process.env.WHITEBOARD_AK ?? "",
+  whiteboardSk: process.env.WHITEBOARD_SK ?? "",
+  // AI Configuration
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
-  openaiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
-  openaiModel: process.env.OPENAI_MODEL ?? "gpt-4-mini",
+  openaiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://once.novai.su/v1",
+  openaiModel: process.env.OPENAI_MODEL ?? "gpt-5.1",
+  // 备用 AI：阿里云百炼（通义千问）
+  dashscopeApiKey: process.env.DASHSCOPE_API_KEY ?? "",
+  dashscopeModel: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
+  // 备用 AI：Google Gemini
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };

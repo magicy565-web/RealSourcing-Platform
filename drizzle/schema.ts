@@ -448,3 +448,57 @@ export const factoryFollows = mysqlTable("factory_follows", {
   createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
 export type FactoryFollow = typeof factoryFollows.$inferSelect;
+
+// ─── Sample Orders (样品订单) ──────────────────────────────────────────────────
+export const sampleOrders = mysqlTable("sample_orders", {
+  id:              int("id").primaryKey().autoincrement(),
+  buyerId:         int("buyerId").notNull(),
+  factoryId:       int("factoryId").notNull(),
+  productId:       int("productId").notNull(),
+  quantity:        int("quantity").notNull().default(1),
+  unitPrice:       decimal("unitPrice", { precision: 10, scale: 2 }),
+  totalAmount:     decimal("totalAmount", { precision: 10, scale: 2 }),
+  currency:        varchar("currency", { length: 10 }).default("USD"),
+  status:          varchar("status", { length: 30 }).notNull().default("pending"),
+  shippingName:    varchar("shippingName", { length: 100 }),
+  shippingAddress: text("shippingAddress"),
+  shippingCountry: varchar("shippingCountry", { length: 100 }),
+  shippingPhone:   varchar("shippingPhone", { length: 30 }),
+  trackingNumber:  varchar("trackingNumber", { length: 100 }),
+  notes:           text("notes"),
+  paymentStatus:   varchar("paymentStatus", { length: 20 }).default("unpaid"),
+  paymentRef:      varchar("paymentRef", { length: 255 }),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type SampleOrder = typeof sampleOrders.$inferSelect;
+export type InsertSampleOrder = typeof sampleOrders.$inferInsert;
+
+// ─── Factory Certifications (工厂认证) ────────────────────────────────────────
+export const factoryCertifications = mysqlTable("factory_certifications", {
+  id:          int("id").primaryKey().autoincrement(),
+  factoryId:   int("factoryId").notNull(),
+  name:        varchar("name", { length: 100 }).notNull(),
+  issuer:      varchar("issuer", { length: 200 }),
+  issuedAt:    varchar("issuedAt", { length: 20 }),
+  expiresAt:   varchar("expiresAt", { length: 20 }),
+  fileUrl:     varchar("fileUrl", { length: 500 }),
+  verified:    tinyint("verified").default(0),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryCertification = typeof factoryCertifications.$inferSelect;
+export type InsertFactoryCertification = typeof factoryCertifications.$inferInsert;
+
+// ─── Meeting Availability (会议可预约时间段) ────────────────────────────────────
+export const meetingAvailability = mysqlTable("meeting_availability", {
+  id:           int("id").primaryKey().autoincrement(),
+  factoryId:    int("factoryId").notNull(),
+  dayOfWeek:    int("dayOfWeek"),
+  specificDate: varchar("specificDate", { length: 20 }),
+  startTime:    varchar("startTime", { length: 8 }).notNull(),
+  endTime:      varchar("endTime", { length: 8 }).notNull(),
+  timezone:     varchar("timezone", { length: 50 }).default("Asia/Shanghai"),
+  isActive:     tinyint("isActive").default(1),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type MeetingAvailability = typeof meetingAvailability.$inferSelect;

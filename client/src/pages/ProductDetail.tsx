@@ -295,7 +295,7 @@ export default function ProductDetail() {
             )}
 
             {/* CTA Buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <Button
                 className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl h-12"
                 onClick={() => {
@@ -304,6 +304,13 @@ export default function ProductDetail() {
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 立即询价
+              </Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-xl h-12"
+                onClick={() => setLocation(`/sample-order/${product.id}`)}
+              >
+                <Package className="w-4 h-4 mr-2" />
+                申请样品
               </Button>
               <Button
                 variant="outline"
