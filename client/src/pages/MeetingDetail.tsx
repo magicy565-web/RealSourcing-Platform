@@ -22,15 +22,12 @@ export default function MeetingDetail() {
   const params = useParams<{ id: string }>();
   const meetingId = parseInt(params.id || "1", 10);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [reelGenerating, setReelGenerating] = useState(false);
-  const [reelGenerated, setReelGenerated] = useState(false);
   const [minutesSent, setMinutesSent] = useState(false);
 
   const { data: meeting, isLoading, error } = trpc.meetings.byId.useQuery({ id: meetingId });
 
   const handleGenerateReel = () => {
-    setReelGenerating(true);
-    setTimeout(() => { setReelGenerating(false); setReelGenerated(true); }, 2500);
+    setLocation(`/meeting-reel-generator/${meetingId}`);
   };
 
   const handleSendMinutes = () => {
@@ -88,10 +85,9 @@ export default function MeetingDetail() {
             variant="outline"
             className="border-purple-500/50 text-purple-300 hover:bg-purple-600/20 gap-1.5 h-8"
             onClick={handleGenerateReel}
-            disabled={reelGenerating}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            {reelGenerating ? "Generating..." : "Generate Reel"}
+            Generate Reel
           </Button>
           <Button size="sm" variant="outline" className="border-white/20 text-gray-300 hover:bg-white/10 gap-1.5 h-8">
             <Download className="w-3.5 h-3.5" />
@@ -306,7 +302,7 @@ export default function MeetingDetail() {
                 AI
               </Badge>
             </div>
-            {(reelGenerated || (meeting as any).aiReelUrl) ? (
+            {(meeting as any).aiReelUrl ? (
               <Button className="w-full bg-purple-600 hover:bg-purple-500 text-white rounded-xl">
                 <Play className="w-4 h-4 mr-2" />
                 播放精彩片段
@@ -315,19 +311,9 @@ export default function MeetingDetail() {
               <Button
                 className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-xl"
                 onClick={handleGenerateReel}
-                disabled={reelGenerating}
               >
-                {reelGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    生成中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    生成 AI 精彩片段
-                  </>
-                )}
+                <Sparkles className="w-4 h-4 mr-2" />
+                生成 AI 精彩片段
               </Button>
             )}
           </div>
