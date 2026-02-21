@@ -294,6 +294,13 @@ export default function FactoryDashboard() {
   const [showCreateWebinar, setShowCreateWebinar] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAddCert, setShowAddCert] = useState(false);
+  // 样品订单操作状态
+  const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'confirmed' | 'shipped' | 'delivered'>('all');
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [showShipModal, setShowShipModal] = useState(false);
+  const [shippingOrderId, setShippingOrderId] = useState<number | null>(null);
+  const [trackingInput, setTrackingInput] = useState("");
+  const [trackingCarrier, setTrackingCarrier] = useState("");
 
   // ── tRPC Queries ──────────────────────────────────────────────────────────────
   const { data: factoryData, isLoading, refetch } = trpc.factoryDashboard.myFactory.useQuery(undefined, {
@@ -322,7 +329,21 @@ export default function FactoryDashboard() {
     onSuccess: () => refetch(),
   });
   const updateOrderStatus = trpc.sampleOrders.updateStatus.useMutation({
-    onSuccess: () => refetchOrders(),
+    onSuccess: (_, vars) => {
+      refetchOrders();
+      setShowShipModal(false);
+      setTrackingInput("");
+      setTrackingCarrier("");
+      setShippingOrderId(null);
+      const statusLabels: Record<string, string> = {
+        confirmed: '订单已确认！',
+        shipped: '已标记发货，运单号已发送给买家',
+        delivered: '订单已标记完成',
+        cancelled: '订单已取消',
+      };
+      toast.success(statusLabels[vars.status] || '状态已更新');
+    },
+    onError: () => toast.error('操作失败，请重试'),
   });
   const setAvailabilityMutation = trpc.factoryDashboard.setAvailability.useMutation({
     onSuccess: () => { refetch(); toast.success('可用时间已保存'); },
@@ -813,51 +834,261 @@ export default function FactoryDashboard() {
         {/* ── 样品订单 Tab ── */}
         {activeTab === "orders" && (
           <div>
-            <h1 className="text-2xl font-bold text-white mb-6">样品订单</h1>
-            <div className="space-y-4">
-              {sampleOrders && sampleOrders.length > 0 ? sampleOrders.map((order: any) => (
-                <div key={order.id} className="p-5 rounded-xl bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
-                        <ShoppingBag className="w-5 h-5 text-orange-400" />
+            {/* 标题行 */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-white">样品订单管理</h1>
+                <p className="text-gray-400 text-sm mt-1">管理所有买家的样品申请，确认、发货、填写运单号</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchOrders()} className="border-white/20 text-gray-400 hover:text-white">
+                <RefreshCw className="w-4 h-4 mr-1.5" />刷新
+              </Button>
+            </div>
+
+            {/* 统计卡片 */}
+            {sampleOrders && (
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: '全部订单', value: sampleOrders.length, color: 'text-white', bg: 'bg-white/5', filter: 'all' as const },
+                  { label: '待确认', value: sampleOrders.filter((o: any) => o.status === 'pending').length, color: 'text-yellow-400', bg: 'bg-yellow-500/10', filter: 'pending' as const },
+                  { label: '已发货', value: sampleOrders.filter((o: any) => o.status === 'shipped').length, color: 'text-purple-400', bg: 'bg-purple-500/10', filter: 'shipped' as const },
+                  { label: '已完成', value: sampleOrders.filter((o: any) => o.status === 'delivered' || o.status === 'completed').length, color: 'text-green-400', bg: 'bg-green-500/10', filter: 'delivered' as const },
+                ].map((stat) => (
+                  <button key={stat.filter} onClick={() => setOrderFilter(stat.filter)}
+                    className={cn('p-4 rounded-xl border text-left transition-all', stat.bg,
+                      orderFilter === stat.filter ? 'border-purple-500/50 ring-1 ring-purple-500/30' : 'border-white/10 hover:border-white/20'
+                    )}>
+                    <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{stat.label}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* 订单列表 */}
+            <div className="space-y-3">
+              {(() => {
+                const filtered = (sampleOrders || []).filter((o: any) => {
+                  if (orderFilter === 'all') return true;
+                  if (orderFilter === 'delivered') return o.status === 'delivered' || o.status === 'completed';
+                  return o.status === orderFilter;
+                });
+
+                if (filtered.length === 0) return (
+                  <div className="text-center py-16">
+                    <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">暂无{orderFilter === 'all' ? '' : { pending: '待确认', confirmed: '已确认', shipped: '已发货', delivered: '已完成' }[orderFilter]}订单</p>
+                  </div>
+                );
+
+                return filtered.map((order: any) => (
+                  <div key={order.id}
+                    className={cn(
+                      'p-5 rounded-xl border transition-all cursor-pointer',
+                      selectedOrder?.id === order.id
+                        ? 'bg-purple-600/10 border-purple-500/40'
+                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                    )}
+                    onClick={() => setSelectedOrder(selectedOrder?.id === order.id ? null : order)}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      {/* 左侧信息 */}
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center flex-shrink-0">
+                          <ShoppingBag className="w-6 h-6 text-orange-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-white font-semibold">{order.product?.name || '产品'}</h3>
+                            <span className="text-gray-500 text-xs">订单 #{order.id}</span>
+                          </div>
+                          <p className="text-gray-400 text-sm mt-0.5">
+                            买家: <span className="text-gray-300">{order.buyer?.name || '未知'}</span>
+                            <span className="mx-2 text-gray-600">·</span>
+                            数量: <span className="text-gray-300">{order.quantity} 件</span>
+                            {order.unitPrice && <><span className="mx-2 text-gray-600">·</span>单价: <span className="text-gray-300">${order.unitPrice}</span></>}
+                          </p>
+                          {order.shippingAddress && (
+                            <p className="text-gray-500 text-xs mt-1 truncate">
+                              收货: {order.shippingName} · {order.shippingAddress}
+                            </p>
+                          )}
+                          {order.trackingNumber && (
+                            <p className="text-purple-400 text-xs mt-1">
+                              运单号: {order.trackingNumber}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-white font-medium">{order.product?.name || "产品"}</h3>
-                        <p className="text-gray-400 text-sm">买家: {order.buyer?.name} · 数量: {order.quantity}</p>
-                        {order.unitPrice && <p className="text-gray-500 text-xs">单价: ${order.unitPrice} · 总计: ${order.totalAmount}</p>}
+
+                      {/* 右侧状态 + 操作按钮 */}
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        <span className={cn('text-xs px-3 py-1 rounded-full font-medium',
+                          order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                          order.status === 'confirmed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                          order.status === 'shipped' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                          order.status === 'delivered' || order.status === 'completed' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                          'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                        )}>
+                          {order.status === 'pending' ? '待确认' : order.status === 'confirmed' ? '已确认' : order.status === 'shipped' ? '已发货' : order.status === 'delivered' || order.status === 'completed' ? '已完成' : order.status}
+                        </span>
+                        <p className="text-gray-600 text-xs">{new Date(order.createdAt).toLocaleDateString('zh-CN')}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs px-3 py-1 rounded-full ${
-                        order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                        order.status === 'confirmed' ? 'bg-blue-500/20 text-blue-400' :
-                        order.status === 'shipped' ? 'bg-purple-500/20 text-purple-400' :
-                        order.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {order.status === 'pending' ? '待确认' : order.status === 'confirmed' ? '已确认' : order.status === 'shipped' ? '已发货' : order.status === 'delivered' ? '已签收' : order.status}
-                      </span>
-                      {order.status === 'pending' && (
-                        <Button size="sm" onClick={() => updateOrderStatus.mutate({ id: order.id, status: 'confirmed' })} className="bg-blue-600 hover:bg-blue-700 text-xs">
-                          确认订单
-                        </Button>
-                      )}
-                      {order.status === 'confirmed' && (
-                        <Button size="sm" onClick={() => updateOrderStatus.mutate({ id: order.id, status: 'shipped' })} className="bg-purple-600 hover:bg-purple-700 text-xs">
-                          标记发货
-                        </Button>
-                      )}
+
+                    {/* 展开操作区 */}
+                    {selectedOrder?.id === order.id && (
+                      <div className="mt-4 pt-4 border-t border-white/10">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {/* 确认订单 */}
+                          {order.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); updateOrderStatus.mutate({ id: order.id, status: 'confirmed' }); }}
+                              disabled={updateOrderStatus.isPending}
+                              className="bg-blue-600 hover:bg-blue-500 text-white"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1.5" />
+                              确认接单
+                            </Button>
+                          )}
+
+                          {/* 填写运单号并发货 */}
+                          {order.status === 'confirmed' && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShippingOrderId(order.id);
+                                setTrackingInput(order.trackingNumber || '');
+                                setShowShipModal(true);
+                              }}
+                              className="bg-purple-600 hover:bg-purple-500 text-white"
+                            >
+                              <Package className="w-4 h-4 mr-1.5" />
+                              填写运单号并发货
+                            </Button>
+                          )}
+
+                          {/* 确认签收 */}
+                          {order.status === 'shipped' && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); updateOrderStatus.mutate({ id: order.id, status: 'delivered' }); }}
+                              disabled={updateOrderStatus.isPending}
+                              className="bg-green-600 hover:bg-green-500 text-white"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1.5" />
+                              标记已签收
+                            </Button>
+                          )}
+
+                          {/* 取消订单 */}
+                          {(order.status === 'pending' || order.status === 'confirmed') && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => { e.stopPropagation(); if (confirm('确认取消该订单？')) updateOrderStatus.mutate({ id: order.id, status: 'cancelled' }); }}
+                              disabled={updateOrderStatus.isPending}
+                              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                            >
+                              <X className="w-4 h-4 mr-1.5" />
+                              取消订单
+                            </Button>
+                          )}
+
+                          {/* 订单详情 */}
+                          <div className="ml-auto text-xs text-gray-500 space-y-0.5">
+                            {order.notes && <p>备注: {order.notes}</p>}
+                            {order.totalAmount && <p>订单金额: <span className="text-amber-400 font-medium">${order.totalAmount} {order.currency || 'USD'}</span></p>}
+                            {order.shippingPhone && <p>联系电话: {order.shippingPhone}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* 发货弹窗 - 填写运单号 */}
+            {showShipModal && (
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowShipModal(false)}>
+                <div className="bg-[#1a1a2e] border border-purple-500/30 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <h3 className="text-white font-bold text-lg">填写发货信息</h3>
+                      <p className="text-gray-400 text-sm mt-0.5">运单号将自动通知买家</p>
+                    </div>
+                    <button onClick={() => setShowShipModal(false)} className="text-gray-500 hover:text-white transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-1.5 block">
+                        运单号 <span className="text-red-400">*</span>
+                      </label>
+                      <Input
+                        value={trackingInput}
+                        onChange={e => setTrackingInput(e.target.value)}
+                        placeholder="输入运单号，如 SF1234567890"
+                        className="bg-white/5 border-white/20 text-white placeholder:text-gray-600 focus:border-purple-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-1.5 block">快递公司（可选）</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['顺丰速运', 'DHL', 'FedEx', 'UPS', 'EMS', '其他'].map(carrier => (
+                          <button
+                            key={carrier}
+                            onClick={() => setTrackingCarrier(carrier)}
+                            className={cn(
+                              'py-2 px-3 rounded-lg text-sm border transition-all',
+                              trackingCarrier === carrier
+                                ? 'bg-purple-600/30 border-purple-500/50 text-purple-300'
+                                : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
+                            )}
+                          >
+                            {carrier}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-white/20 text-gray-400"
+                      onClick={() => setShowShipModal(false)}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      className="flex-1 bg-purple-600 hover:bg-purple-500 text-white"
+                      disabled={!trackingInput.trim() || updateOrderStatus.isPending}
+                      onClick={() => {
+                        if (!shippingOrderId || !trackingInput.trim()) return;
+                        const fullTracking = trackingCarrier ? `[${trackingCarrier}] ${trackingInput.trim()}` : trackingInput.trim();
+                        updateOrderStatus.mutate({
+                          id: shippingOrderId,
+                          status: 'shipped',
+                          trackingNumber: fullTracking,
+                        });
+                      }}
+                    >
+                      {updateOrderStatus.isPending ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" />提交中...</>
+                      ) : (
+                        <><Package className="w-4 h-4 mr-2" />确认发货</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              )) : (
-                <div className="text-center py-12">
-                  <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">暂无样品订单</p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 

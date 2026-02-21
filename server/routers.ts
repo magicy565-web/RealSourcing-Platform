@@ -184,21 +184,21 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const result = await agoraRecordingService.stopRecording(input.resourceId, input.sid);
 
-        // P0.2: 如果提供了 meetingId，尝试将录制信息写入数据库
+        // P0.2 + Webhook 增强：停止录制后立即更新会议状态
+        // 真实 recordingUrl 将由 Agora Webhook 回调（/api/webhooks/agora-recording）在文件上传完成后写入
+        // 此处仅更新会议状态和时长，recordingUrl 留空等待 Webhook 填充
         if (input.meetingId && result.status === 'stopped') {
           try {
-            // 声网云端录制完成后，文件会存入配置的 S3/OSS bucket
-            // 这里构建录制文件的预期 URL（实际项目中应从声网回调中获取真实 URL）
-            const recordingUrl = `https://recording.realsourcing.com/${input.resourceId}/${input.sid}/recording.mp4`;
             await updateMeeting(input.meetingId, {
-              recordingUrl,
               durationMinutes: input.durationMinutes,
               status: 'completed',
               endedAt: new Date(),
+              // recordingUrl 由 Agora Webhook 在 S3 上传完成后自动写入
+              // Webhook 端点：POST /api/webhooks/agora-recording
             });
-            console.log(`✅ Meeting #${input.meetingId} recording URL saved to DB`);
+            console.log(`✅ Meeting #${input.meetingId} status updated to completed, awaiting Webhook for recordingUrl`);
           } catch (dbError) {
-            console.error('❌ Failed to save recording URL to DB:', dbError);
+            console.error('❌ Failed to update meeting status:', dbError);
           }
         }
 
@@ -1090,9 +1090,55 @@ export const appRouter = router({
         id: z.number(),
         status: z.enum(["pending", "confirmed", "shipped", "delivered", "completed", "cancelled"]),
         trackingNumber: z.string().optional(),
+        carrier: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        await updateSampleOrder(input.id, { status: input.status, trackingNumber: input.trackingNumber });
+      .mutation(async ({ input, ctx }) => {
+        // 更新订单状态
+        await updateSampleOrder(input.id, {
+          status: input.status,
+          trackingNumber: input.trackingNumber,
+        });
+
+        // 获取订单信息，发送通知给买家
+        try {
+          const order = await getSampleOrderById(input.id);
+          if (order) {
+            const notifMap: Record<string, { title: string; content: string }> = {
+              confirmed: {
+                title: '样品订单已确认',
+                content: `工厂已确认您的样品订单 #${input.id}，正在准备发货`,
+              },
+              shipped: {
+                title: '样品已发货',
+                content: input.trackingNumber
+                  ? `您的样品已发货！运单号: ${input.trackingNumber}`
+                  : `您的样品订单 #${input.id} 已发货`,
+              },
+              delivered: {
+                title: '样品已完成',
+                content: `样品订单 #${input.id} 已标记完成，感谢您的支持`,
+              },
+              cancelled: {
+                title: '样品订单已取消',
+                content: `样品订单 #${input.id} 已被取消`,
+              },
+            };
+            const notif = notifMap[input.status];
+            if (notif) {
+              await createNotification({
+                userId: order.buyerId,
+                type: 'sample_order',
+                title: notif.title,
+                content: notif.content,
+                link: `/sample-orders`,
+              });
+            }
+          }
+        } catch (notifError) {
+          // 通知失败不影响主流程
+          console.warn('⚠️ Failed to send sample order notification:', notifError);
+        }
+
         return { success: true };
       }),
   }),

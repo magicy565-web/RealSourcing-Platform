@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerAgoraWebhookRoute } from "./agoraWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -35,6 +36,11 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // Agora Cloud Recording Webhook
+  // 声网录制完成后回调，提取真实 S3 URL 写入数据库
+  const { updateMeeting } = await import("../db");
+  registerAgoraWebhookRoute(app, updateMeeting);
 
   // ── Dev-only: instant login endpoint (bypasses DB) ──────────────────────────
   // This sets a valid JWT cookie so protected routes work without a live DB.
