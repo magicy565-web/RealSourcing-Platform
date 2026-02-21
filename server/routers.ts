@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { agoraTokenService } from "./_core/agora";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
@@ -64,6 +65,55 @@ import { ENV } from "./_core/env";
 
 export const appRouter = router({
   system: systemRouter,
+
+  // ── Agora RTC/RTM Token Generation ──────────────────────────────────────────
+  agora: router({
+    getDualTokens: publicProcedure
+      .input(z.object({
+        channel: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        role: z.enum(['publisher', 'subscriber']).default('publisher'),
+      }))
+      .query(({ input }) => {
+        try {
+          const tokens = agoraTokenService.generateDualTokens({
+            channel: input.channel,
+            uid: input.uid,
+            role: input.role,
+          });
+          return tokens;
+        } catch (error) {
+          console.error('Failed to generate Agora tokens:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate Agora tokens',
+          });
+        }
+      }),
+
+    getRtcToken: publicProcedure
+      .input(z.object({
+        channel: z.string().min(1),
+        uid: z.union([z.string(), z.number()]),
+        role: z.enum(['publisher', 'subscriber']).default('publisher'),
+      }))
+      .query(({ input }) => {
+        try {
+          const token = agoraTokenService.generateRtcToken({
+            channel: input.channel,
+            uid: input.uid,
+            role: input.role,
+          });
+          return { rtcToken: token, appId: agoraTokenService.getAppId() };
+        } catch (error) {
+          console.error('Failed to generate RTC token:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate RTC token',
+          });
+        }
+      }),
+  }),
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   auth: router({

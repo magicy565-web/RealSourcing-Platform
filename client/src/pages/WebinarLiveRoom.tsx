@@ -1,13 +1,18 @@
-import { ArrowLeft, Users, Bell, MoreVertical, Heart, Bookmark, Gift, Share2, Send } from "lucide-react";
+import { ArrowLeft, Users, Bell, MoreVertical, Heart, Bookmark, Gift, Share2, Send, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { AgoraVideoCall } from "@/components/AgoraVideoCall";
+import { AgoraTranscription } from "@/components/AgoraTranscription";
 
 export default function WebinarLiveRoom() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"chat" | "products" | "factory">("chat");
   const [message, setMessage] = useState("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const webinarId = 1; // 从路由参数获取
+  const userId = 1; // 从认证上下文获取
 
   const chatMessages = [
     { id: 1, user: "Alice Wang", avatar: "A", message: "这个产品看起来很不错！", time: "14:32", color: "bg-purple-500" },
@@ -63,17 +68,12 @@ export default function WebinarLiveRoom() {
         <div className="flex-1 p-6">
           <div className="h-full flex flex-col gap-4">
             {/* 视频播放器 */}
-            <div className="flex-1 bg-black/50 rounded-xl overflow-hidden relative border border-purple-500/20">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                    <span className="text-white text-4xl font-bold">🎥</span>
-                  </div>
-                  <p className="text-white text-lg font-semibold mb-2">直播进行中...</p>
-                  <p className="text-gray-400 text-sm">工厂 CEO 正在展示最新产品</p>
-                </div>
-              </div>
-            </div>
+            {/* 使用 Agora 真实直播视频 */}
+            <AgoraVideoCall
+              channelName={`webinar-${webinarId}`}
+              userId={userId}
+              role="subscriber"
+            />
 
             {/* 工厂信息卡片 */}
             <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-purple-500/20 flex items-center justify-between">
@@ -130,6 +130,12 @@ export default function WebinarLiveRoom() {
               </button>
             </div>
           </div>
+            {/* 实时转录 */}
+            <AgoraTranscription
+              channelName={`webinar-${webinarId}`}
+              isActive={isTranscribing}
+              onToggle={setIsTranscribing}
+            />
         </div>
 
         {/* 右侧：聊天和产品展示 */}

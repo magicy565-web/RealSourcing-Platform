@@ -7,4 +7,12 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // Agora Configuration
+  agoraAppId: process.env.AGORA_APP_ID ?? "",
+  agoraAppCertificate: process.env.AGORA_APP_CERTIFICATE ?? "",
+  agoraCustomerId: process.env.AGORA_CUSTOMER_ID ?? "",
+  agoraCustomerSecret: process.env.AGORA_CUSTOMER_SECRET ?? "",
+  // Agora Whiteboard
+  whiteboardAk: process.env.WHITEBOARD_AK ?? "",
+  whiteboardSk: process.env.WHITEBOARD_SK ?? "",
 };

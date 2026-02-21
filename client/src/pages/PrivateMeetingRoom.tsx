@@ -9,6 +9,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import { AgoraVideoCall } from "@/components/AgoraVideoCall";
+import { AgoraWhiteboard } from "@/components/AgoraWhiteboard";
+import { AgoraTranscription } from "@/components/AgoraTranscription";
 
 interface ChatMessage {
   id: number;
@@ -32,6 +35,8 @@ export default function PrivateMeetingRoom() {
     { id: 1, userId: 0, userName: "System", message: "Meeting started. Products on the right panel.", timestamp: new Date() }
   ]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // tRPC queries
@@ -190,72 +195,31 @@ export default function PrivateMeetingRoom() {
       <div className="pt-16 flex h-screen">
         {/* 左侧：视频区域 + 聊天 */}
         <div className="flex-1 p-6 flex flex-col gap-4">
-          {/* 视频区 */}
-          <div className="flex-1 flex gap-4">
-            {/* 主视频（工厂） */}
-            <div className="flex-1 bg-black/50 rounded-xl overflow-hidden relative border border-purple-500/20">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center">
-                    <span className="text-white text-4xl font-bold">{factoryInitials}</span>
-                  </div>
-                  <p className="text-white text-lg font-semibold mb-2">{factoryName}</p>
-                  <p className="text-gray-400 text-sm">
-                    {meeting?.factory?.city ?? "Shenzhen"}, {meeting?.factory?.country ?? "China"}
-                  </p>
-                </div>
-              </div>
-              {/* 小窗口（买家视频） */}
-              <div className="absolute top-4 right-4 w-48 h-36 bg-black/70 rounded-lg border border-purple-500/30 overflow-hidden">
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-2 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                      <span className="text-white text-xl font-bold">{buyerInitials}</span>
-                    </div>
-                    <p className="text-white text-sm font-semibold">{buyerName}</p>
-                  </div>
-                </div>
-              </div>
-              {/* 会议状态标签 */}
-              <div className="absolute top-4 left-4">
-                <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse mr-1.5" />
-                  Live
-                </Badge>
-              </div>
-            </div>
+          {/* 视频区 - 使用 Agora 真实视频通话 */}
+          <div className="flex-1">
+            <AgoraVideoCall
+              channelName={`meeting-${meetingId}`}
+              userId={user?.id || 0}
+              role="publisher"
+              onCallEnd={() => handleEndMeeting()}
+            />
           </div>
 
-          {/* AI 实时转录 */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-purple-500/20">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                <h3 className="text-white font-semibold text-sm">AI Live Transcript</h3>
-              </div>
-              <span className="text-purple-400 text-xs">Key moments</span>
-            </div>
-            <div className="flex gap-3">
-              {aiHighlights.length > 0 ? aiHighlights.map((item: any, index: number) => (
-                <div
-                  key={item.id ?? index}
-                  className="flex-1 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-lg p-3 border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">🎯</span>
-                    <span className="text-purple-400 text-xs font-mono">
-                      {item.createdAt ? new Date(item.createdAt).toLocaleTimeString() : formatTime(elapsedSeconds)}
-                    </span>
-                  </div>
-                  <p className="text-white text-sm font-medium">{item.content ?? "Meeting in progress..."}</p>
-                </div>
-              )) : (
-                <div className="flex-1 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-lg p-3 border border-purple-500/20 text-center">
-                  <p className="text-white/60 text-sm">AI transcript will appear here during the meeting</p>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* 实时转录组件 */}
+          <AgoraTranscription
+            channelName={`meeting-${meetingId}`}
+            isActive={isTranscribing}
+            onToggle={setIsTranscribing}
+          />
+
+          {/* 互动白板 */}
+          {showWhiteboard && (
+            <AgoraWhiteboard
+              whiteboardId={`whiteboard-${meetingId}`}
+              title="Product Showcase Whiteboard"
+              onClose={() => setShowWhiteboard(false)}
+            />
+          )}
 
           {/* 底部操作按钮 */}
           <div className="flex gap-3">
