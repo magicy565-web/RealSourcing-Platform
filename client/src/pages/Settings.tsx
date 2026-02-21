@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { trpc } from "@/lib/trpc";
 import {
   User, Bell, Shield, Globe, Palette, Link2, Trash2, Save,
   Camera, Check, ChevronRight, Mail, Phone, MapPin, Building2,
-  Eye, EyeOff, Smartphone, Monitor, Moon, Sun
+  Eye, EyeOff, Smartphone, Monitor, Moon, Sun, Loader2
 } from "lucide-react";
 
 type SettingsTab = "profile" | "notifications" | "security" | "preferences" | "integrations";
@@ -39,7 +40,6 @@ const INTEGRATIONS = [
 export default function Settings() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-  const [isSaving, setIsSaving] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [notifications, setNotifications] = useState(
@@ -49,22 +49,43 @@ export default function Settings() {
     }), {} as Record<string, { email: boolean; push: boolean; sms: boolean }>)
   );
 
+  // ── tRPC Queries ──────────────────────────────────────────────────────────
+  const { data: profileData, isLoading: profileLoading } = trpc.profile.get.useQuery();
+  const updateProfileMutation = trpc.profile.update.useMutation({
+    onSuccess: () => {
+      toast.success("Profile saved successfully!");
+    },
+    onError: (err) => {
+      toast.error(`Failed to save: ${err.message}`);
+    },
+  });
+
   const [profile, setProfile] = useState({
-    name: user?.name || "Magic Yang",
-    email: user?.email || "magic@example.com",
-    phone: "+1 (555) 123-4567",
-    company: "TechBuy Inc.",
-    location: "San Francisco, CA",
-    bio: "Sourcing professional with 5+ years of experience in consumer electronics.",
+    name: user?.name || "",
+    email: user?.email || "",
+    phone: "",
+    company: "",
+    location: "",
+    bio: "",
     language: "English",
     timezone: "America/Los_Angeles",
   });
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsSaving(false);
-    toast.success("Settings saved successfully!");
+  // Sync profile when data loads
+  useEffect(() => {
+    if (profileData) {
+      setProfile((prev) => ({
+        ...prev,
+        name: profileData.name || prev.name,
+        email: profileData.email || prev.email,
+      }));
+    }
+  }, [profileData]);
+
+  const handleSave = () => {
+    updateProfileMutation.mutate({
+      name: profile.name,
+    });
   };
 
   const toggleNotification = (id: string, channel: "email" | "push" | "sms") => {
@@ -127,102 +148,115 @@ export default function Settings() {
               <div className="space-y-6">
                 <h2 className="font-bold text-lg">Profile Information</h2>
 
-                {/* 头像 */}
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-400 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">
-                      {profile.name.slice(0, 2).toUpperCase()}
+                {profileLoading ? (
+                  <div className="flex items-center justify-center h-40">
+                    <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* 头像 */}
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-400 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">
+                          {(profile.name || "U").slice(0, 2).toUpperCase()}
+                        </div>
+                        <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-purple-600 hover:bg-purple-500 rounded-full flex items-center justify-center transition-all shadow-lg">
+                          <Camera className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      </div>
+                      <div>
+                        <p className="font-semibold">{profile.name}</p>
+                        <p className="text-sm text-muted-foreground">{profile.email}</p>
+                        <button className="text-xs text-purple-400 hover:text-purple-300 mt-1 transition-colors">
+                          Change avatar
+                        </button>
+                      </div>
                     </div>
-                    <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-purple-600 hover:bg-purple-500 rounded-full flex items-center justify-center transition-all shadow-lg">
-                      <Camera className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </div>
-                  <div>
-                    <p className="font-semibold">{profile.name}</p>
-                    <p className="text-sm text-muted-foreground">{profile.email}</p>
-                    <button className="text-xs text-purple-400 hover:text-purple-300 mt-1 transition-colors">
-                      Change avatar
-                    </button>
-                  </div>
-                </div>
 
-                {/* 表单 */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Full Name</label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        value={profile.name}
-                        onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                        className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
+                    {/* 表单 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Full Name</label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            value={profile.name}
+                            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Email</label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            value={profile.email}
+                            onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
+                            disabled
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Phone</label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            value={profile.phone}
+                            onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Company</label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            value={profile.company}
+                            onChange={(e) => setProfile({ ...profile, company: e.target.value })}
+                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Location</label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            value={profile.location}
+                            onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Bio</label>
+                        <textarea
+                          value={profile.bio}
+                          onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                          rows={3}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white resize-none focus:outline-none focus:border-purple-500 placeholder:text-muted-foreground"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Email</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        value={profile.email}
-                        onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                        className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Phone</label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        value={profile.phone}
-                        onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                        className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Company</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        value={profile.company}
-                        onChange={(e) => setProfile({ ...profile, company: e.target.value })}
-                        className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Location</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        value={profile.location}
-                        onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                        className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Bio</label>
-                    <textarea
-                      value={profile.bio}
-                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                      rows={3}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white resize-none focus:outline-none focus:border-purple-500 placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
 
-                <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving} className="bg-purple-600 hover:bg-purple-500 gap-2">
-                    {isSaving ? (
-                      <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
-                    ) : (
-                      <><Save className="w-4 h-4" />Save Changes</>
-                    )}
-                  </Button>
-                </div>
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleSave}
+                        disabled={updateProfileMutation.isPending}
+                        className="bg-purple-600 hover:bg-purple-500 gap-2"
+                      >
+                        {updateProfileMutation.isPending ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Saving...</>
+                        ) : (
+                          <><Save className="w-4 h-4" />Save Changes</>
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -274,7 +308,10 @@ export default function Settings() {
                   </table>
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving} className="bg-purple-600 hover:bg-purple-500 gap-2">
+                  <Button
+                    onClick={() => toast.success("Notification preferences saved!")}
+                    className="bg-purple-600 hover:bg-purple-500 gap-2"
+                  >
                     <Save className="w-4 h-4" />Save Preferences
                   </Button>
                 </div>
@@ -360,7 +397,11 @@ export default function Settings() {
                       <p className="font-medium">Language</p>
                       <p className="text-sm text-muted-foreground">Interface language</p>
                     </div>
-                    <select className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500">
+                    <select
+                      value={profile.language}
+                      onChange={(e) => setProfile({ ...profile, language: e.target.value })}
+                      className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                    >
                       <option>English</option>
                       <option>中文</option>
                       <option>日本語</option>
@@ -372,11 +413,15 @@ export default function Settings() {
                       <p className="font-medium">Timezone</p>
                       <p className="text-sm text-muted-foreground">Used for webinar times and meeting scheduling</p>
                     </div>
-                    <select className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500">
-                      <option>America/Los_Angeles (UTC-8)</option>
-                      <option>America/New_York (UTC-5)</option>
-                      <option>Europe/London (UTC+0)</option>
-                      <option>Asia/Shanghai (UTC+8)</option>
+                    <select
+                      value={profile.timezone}
+                      onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
+                      className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="America/Los_Angeles">America/Los_Angeles (UTC-8)</option>
+                      <option value="America/New_York">America/New_York (UTC-5)</option>
+                      <option value="Europe/London">Europe/London (UTC+0)</option>
+                      <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
                     </select>
                   </div>
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
@@ -391,6 +436,14 @@ export default function Settings() {
                       <option>CNY (¥)</option>
                     </select>
                   </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => toast.success("Preferences saved!")}
+                    className="bg-purple-600 hover:bg-purple-500 gap-2"
+                  >
+                    <Save className="w-4 h-4" />Save Preferences
+                  </Button>
                 </div>
               </div>
             )}

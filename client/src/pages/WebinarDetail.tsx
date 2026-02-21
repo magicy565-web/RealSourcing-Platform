@@ -2,90 +2,22 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Share2, Star, Users, Clock, Globe, Target, Link2, Play,
-  Calendar, Award, ChevronRight, Facebook, Linkedin, Copy, Check, Bookmark, X
+  Calendar, Award, ChevronRight, Facebook, Linkedin, Copy, Check, Bookmark, X,
+  Loader2, Radio
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_WEBINAR = {
-  id: 1,
-  title: "2025 TikTok爆款蓝牙耳机新品发布会",
-  status: "live" as "live" | "upcoming" | "ended",
-  coverImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1400&h=600&fit=crop",
-  scheduledAt: new Date(Date.now() + 2 * 3600000 + 45 * 60000),
-  scheduledDisplay: "2025-02-20 14:00",
-  duration: 90,
-  registeredCount: 1234,
-  onlineCount: 1234,
-  targetAudience: "采购商、贸易商",
-  language: "中文 + 英文翻译",
-  shareLink: "https://realsourcing.com/webinar/1",
-  description:
-    "本场 Webinar 将展示深圳科技工厂最新的 2025 年 TikTok 爆款蓝牙耳机系列，深度解析产品核心竞争力、市场趋势及选品策略，助力买家抓住下一波流量红利。",
-  factory: {
-    id: 1,
-    name: "深圳科技工厂",
-    logo: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=80&h=80&fit=crop",
-    rating: 4.9,
-    industry: "消费电子",
-    certifications: ["CE", "ISO9001"],
-    description: "进款企业产品，拣究新作进厂，遴证、产业红利。",
-  },
-  host: {
-    name: "张伟",
-    title: "CEO",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop",
-  },
-  products: [
-    {
-      id: 1,
-      name: "ANC 3.0 降噪耳机",
-      price: "$45",
-      image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop",
-    },
-    {
-      id: 2,
-      name: "运动蓝牙耳机",
-      price: "$38",
-      image: "https://images.unsplash.com/photo-1484704849700-f032a568e944?w=300&h=300&fit=crop",
-    },
-    {
-      id: 3,
-      name: "入耳式耳机",
-      price: "$28",
-      image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=300&h=300&fit=crop",
-    },
-  ],
-  relatedWebinars: [
-    {
-      id: 2,
-      title: "AI 驱动的未来趋势",
-      scheduledAt: "2025-02-20 14:00",
-      image: "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=80&h=80&fit=crop",
-    },
-    {
-      id: 3,
-      title: "数据安全与隐私保护",
-      scheduledAt: "2025-02-20 14:00",
-      image: "https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=80&h=80&fit=crop",
-    },
-    {
-      id: 4,
-      title: "构建高效团队工作流",
-      scheduledAt: "2025-02-20 14:00",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop",
-    },
-  ],
-};
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 // ─── Countdown Hook ───────────────────────────────────────────────────────────
-function useCountdown(target: Date) {
+function useCountdown(target: Date | null) {
   const [remaining, setRemaining] = useState({ hours: 0, minutes: 0, seconds: 0 });
   useEffect(() => {
+    if (!target) return;
     const tick = () => {
-      const diff = target.getTime() - Date.now();
+      const diff = new Date(target).getTime() - Date.now();
       if (diff <= 0) { setRemaining({ hours: 0, minutes: 0, seconds: 0 }); return; }
       setRemaining({
         hours: Math.floor(diff / 3600000),
@@ -104,23 +36,84 @@ function useCountdown(target: Date) {
 export default function WebinarDetail() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
-  const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
+  const webinarId = parseInt(params.id || "1", 10);
   const [copied, setCopied] = useState(false);
-  const countdown = useCountdown(MOCK_WEBINAR.scheduledAt);
-  const webinar = MOCK_WEBINAR;
+
+  // ── tRPC Queries ──────────────────────────────────────────────────────────
+  const { data: webinar, isLoading, error } = trpc.webinars.byId.useQuery({ id: webinarId });
+  const { data: allWebinars = [] } = trpc.webinars.list.useQuery();
+
+  const registerMutation = trpc.webinars.register.useMutation({
+    onSuccess: () => {
+      toast.success("注册成功！");
+    },
+    onError: (err) => {
+      toast.error(`注册失败: ${err.message}`);
+    },
+  });
+
+  const favoriteMutation = trpc.favorites.toggle.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.favorited ? "已收藏" : "已取消收藏");
+    },
+    onError: () => {
+      toast.error("操作失败，请重试");
+    },
+  });
+
+  const countdown = useCountdown(webinar?.scheduledAt || null);
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(webinar.shareLink).catch(() => {});
+    const link = `${window.location.origin}/webinar/${webinarId}`;
+    navigator.clipboard.writeText(link).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const statusConfig = {
-    live: { label: "LIVE", className: "bg-red-500 text-white" },
-    upcoming: { label: "即将开始", className: "bg-amber-500 text-white" },
-    ended: { label: "已结束", className: "bg-gray-600 text-white" },
-  }[webinar.status];
+  // ── Loading / Error States ────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading webinar...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !webinar) {
+    return (
+      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <Radio className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Webinar Not Found</h2>
+          <p className="text-gray-400 mb-4">{error?.message || "The webinar you're looking for doesn't exist."}</p>
+          <Button onClick={() => setLocation("/webinars")} className="bg-purple-600 hover:bg-purple-500">
+            Browse Webinars
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Derived Data ──────────────────────────────────────────────────────────
+  const status = webinar.status as "live" | "scheduled" | "upcoming" | "completed" | "past";
+  const isLive = status === "live";
+  const isUpcoming = status === "scheduled" || status === "upcoming";
+  const isEnded = status === "completed" || status === "past";
+
+  const statusConfig = isLive
+    ? { label: "LIVE", className: "bg-red-500 text-white" }
+    : isUpcoming
+    ? { label: "即将开始", className: "bg-amber-500 text-white" }
+    : { label: "已结束", className: "bg-gray-600 text-white" };
+
+  const relatedWebinars = allWebinars
+    .filter((w) => w.id !== webinarId)
+    .slice(0, 3);
+
+  const shareLink = `${window.location.origin}/webinar/${webinarId}`;
 
   return (
     <div className="min-h-screen bg-[#0D0F1A] text-white">
@@ -139,18 +132,22 @@ export default function WebinarDetail() {
         </h1>
 
         <div className="flex items-center gap-4">
-          <button className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm">
-            <Share2 className="w-4 h-4" />
-            <span>分享</span>
+          <button
+            onClick={handleCopyLink}
+            className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+          >
+            {copied ? <Check className="w-4 h-4 text-green-400" /> : <Share2 className="w-4 h-4" />}
+            <span>{copied ? "已复制" : "分享"}</span>
           </button>
           <button
-            onClick={() => setIsBookmarked(!isBookmarked)}
+            onClick={() => favoriteMutation.mutate({ targetType: "webinar", targetId: webinar.id })}
+            disabled={favoriteMutation.isPending}
             className={cn(
               "flex items-center gap-1.5 transition-colors text-sm",
-              isBookmarked ? "text-amber-400" : "text-gray-400 hover:text-white"
+              "text-gray-400 hover:text-amber-400"
             )}
           >
-            <Bookmark className={cn("w-4 h-4", isBookmarked && "fill-amber-400")} />
+            <Bookmark className="w-4 h-4" />
             <span>收藏</span>
           </button>
         </div>
@@ -159,25 +156,32 @@ export default function WebinarDetail() {
       {/* ── Hero Image ── */}
       <div className="relative h-[460px] overflow-hidden">
         <img
-          src={webinar.coverImage}
+          src={
+            webinar.coverImage ||
+            "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1400&h=600&fit=crop"
+          }
           alt={webinar.title}
           className="w-full h-full object-cover"
         />
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0D0F1A] via-[#0D0F1A]/50 to-transparent" />
 
-        {/* Bottom-left: Factory + Title + Status */}
+        {/* Bottom-left: Host + Title + Status */}
         <div className="absolute bottom-8 left-8 max-w-[55%]">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-9 h-9 rounded-full overflow-hidden border border-white/30 bg-purple-900/50 flex items-center justify-center">
-              <img
-                src={webinar.factory.logo}
-                alt={webinar.factory.name}
-                className="w-full h-full object-cover"
-              />
+          {webinar.host && (
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-9 h-9 rounded-full overflow-hidden border border-white/30 bg-purple-900/50 flex items-center justify-center">
+                {webinar.host.avatar ? (
+                  <img src={webinar.host.avatar} alt={webinar.host.name || ""} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-sm font-bold text-purple-300">
+                    {(webinar.host.name || "H").slice(0, 1)}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm text-gray-200 font-medium">{webinar.host.name}</span>
             </div>
-            <span className="text-sm text-gray-200 font-medium">{webinar.factory.name}</span>
-          </div>
+          )}
           <div className="flex items-start gap-3">
             <h2 className="text-3xl font-bold leading-tight text-white">
               {webinar.title}
@@ -186,7 +190,7 @@ export default function WebinarDetail() {
               className={cn(
                 "shrink-0 mt-1 text-xs px-2 py-0.5 rounded font-bold uppercase",
                 statusConfig.className,
-                webinar.status === "live" && "animate-pulse"
+                isLive && "animate-pulse"
               )}
             >
               {statusConfig.label}
@@ -195,19 +199,51 @@ export default function WebinarDetail() {
         </div>
 
         {/* Bottom-right: CTA */}
-        {webinar.status === "live" && (
+        {isLive && (
           <div className="absolute bottom-8 right-8 flex flex-col items-center gap-2">
             <Button
-              onClick={() => setLocation(`/webinar-live/${webinar.id}`)}
               className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 h-auto rounded-full text-base font-semibold shadow-2xl shadow-purple-500/40 transition-all hover:scale-105"
             >
               <Play className="w-4 h-4 mr-2 fill-white" />
-              [立即进入直播间]
+              立即进入直播间
             </Button>
             <p className="text-sm text-gray-300 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />
-              {webinar.onlineCount.toLocaleString()} 人在线
+              {webinar.participantCount} 人在线
             </p>
+          </div>
+        )}
+
+        {isUpcoming && (
+          <div className="absolute bottom-8 right-8 flex flex-col items-end gap-3">
+            {/* Countdown */}
+            <div className="flex gap-2">
+              {[
+                { val: countdown.hours, label: "时" },
+                { val: countdown.minutes, label: "分" },
+                { val: countdown.seconds, label: "秒" },
+              ].map(({ val, label }) => (
+                <div key={label} className="flex flex-col items-center bg-black/50 backdrop-blur-sm rounded-xl px-3 py-2 min-w-[56px]">
+                  <span className="text-2xl font-bold text-white tabular-nums">
+                    {String(val).padStart(2, "0")}
+                  </span>
+                  <span className="text-xs text-gray-400 mt-0.5">{label}</span>
+                </div>
+              ))}
+            </div>
+            <Button
+              onClick={() => registerMutation.mutate({ webinarId: webinar.id })}
+              disabled={registerMutation.isPending || webinar.isRegistered}
+              className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 h-auto rounded-full text-base font-semibold"
+            >
+              {webinar.isRegistered ? (
+                <><Check className="w-4 h-4 mr-2" />已报名</>
+              ) : registerMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />报名中...</>
+              ) : (
+                "立即报名"
+              )}
+            </Button>
           </div>
         )}
       </div>
@@ -224,263 +260,160 @@ export default function WebinarDetail() {
             <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div className="flex items-center gap-2 text-gray-300">
                 <Calendar className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>2025-02-20 14:00 - 15:30</span>
+                <span>
+                  {webinar.scheduledAt
+                    ? new Date(webinar.scheduledAt).toLocaleString("zh-CN", {
+                        year: "numeric", month: "2-digit", day: "2-digit",
+                        hour: "2-digit", minute: "2-digit"
+                      })
+                    : "TBD"}
+                  {webinar.duration ? ` (${webinar.duration} 分钟)` : ""}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-green-400 font-medium">
                 <Users className="w-4 h-4 shrink-0" />
-                <span>已报名：<strong>{webinar.registeredCount.toLocaleString()}</strong> 人</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-300">
-                <Target className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>适合人群：{webinar.targetAudience}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-300">
-                <Globe className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>语言：{webinar.language}</span>
+                <span>已报名：<strong>{webinar.participantCount}</strong> 人</span>
               </div>
               <div className="flex items-center gap-2 text-purple-400 col-span-2">
                 <Link2 className="w-4 h-4 shrink-0" />
-                <a href={webinar.shareLink} className="hover:underline truncate text-purple-400">
-                  {webinar.shareLink}
-                </a>
+                <span className="truncate text-purple-400">{shareLink}</span>
+                <button onClick={handleCopyLink} className="ml-1 text-gray-400 hover:text-white">
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Two-column: Webinar Intro + Factory Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Webinar Description */}
+          {/* Webinar Description */}
+          {webinar.description && (
             <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-3 text-white">Webinar 介绍</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{webinar.description}</p>
             </div>
+          )}
 
-            {/* Factory Info */}
+          {/* Host Info */}
+          {webinar.host && (
             <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
-              <h3 className="text-base font-semibold mb-4 text-white">工厂介绍</h3>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-purple-900/30 border border-purple-500/30">
-                  <img
-                    src={webinar.factory.logo}
-                    alt={webinar.factory.name}
-                    className="w-full h-full object-cover"
-                  />
+              <h3 className="text-base font-semibold mb-4 text-white">主持人</h3>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-purple-900/30 border border-purple-500/30 flex items-center justify-center">
+                  {webinar.host.avatar ? (
+                    <img src={webinar.host.avatar} alt={webinar.host.name || ""} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xl font-bold text-purple-300">
+                      {(webinar.host.name || "H").slice(0, 1)}
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <p className="font-semibold text-white">{webinar.factory.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                    <span className="text-sm text-amber-400 font-medium">{webinar.factory.rating}</span>
-                    <span className="text-gray-600">|</span>
-                    <span className="text-xs text-gray-400">{webinar.factory.industry}</span>
-                  </div>
+                  <p className="font-semibold text-white">{webinar.host.name}</p>
+                  <p className="text-sm text-gray-400 mt-0.5">Webinar Host</p>
                 </div>
               </div>
-              <div className="flex gap-2 mb-3">
-                {webinar.factory.certifications.map((c) => (
-                  <Badge
-                    key={c}
-                    variant="outline"
-                    className="border-purple-500/50 text-purple-300 text-xs px-2"
-                  >
-                    {c}
-                  </Badge>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 mb-4">{webinar.factory.description}</p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLocation(`/factory/${webinar.factory.id}`)}
-                  className="border-white/20 text-gray-300 hover:bg-white/10 text-xs"
-                >
-                  进入工厂主页
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs"
-                  onClick={() => setLocation(`/meeting/new?factoryId=${webinar.factory.id}`)}
-                >
-                  发起 1:1 选品会议
-                </Button>
-              </div>
             </div>
-          </div>
-
-          {/* Products Showcase */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
-            <h3 className="text-base font-semibold mb-5 text-white">本场展示产品</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {webinar.products.map((product) => (
-                <div
-                  key={product.id}
-                  className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-purple-500/50 transition-all group"
-                >
-                  <div className="aspect-square overflow-hidden">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm font-medium text-white truncate">{product.name}</p>
-                    <p className="text-purple-400 text-sm font-semibold mt-0.5">{product.price}</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full mt-2 border-purple-500/40 text-purple-300 hover:bg-purple-600/20 text-xs h-8"
-                      onClick={() => setLocation(`/product/${product.id}`)}
-                    >
-                      询价
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* ── Right Column (1/3) ── */}
         <div className="space-y-5">
-
-          {/* Webinar Info / Register Card */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
-            <h3 className="text-base font-semibold mb-4 text-white">Webinar 信息</h3>
-
-            {/* Big Date */}
-            <div className="text-2xl font-bold text-white mb-2">
-              2025-02-20 14:00
-            </div>
-
-            {/* Countdown (upcoming only) */}
-            {webinar.status === "upcoming" && (
-              <div className="flex items-center gap-1.5 text-amber-400 font-medium text-sm mb-3">
-                <Clock className="w-4 h-4" />
-                <span>
-                  距开始 <strong>{countdown.hours}</strong> 小时{" "}
-                  <strong>{countdown.minutes}</strong> 分
-                </span>
-              </div>
-            )}
-
-            {/* Registered count */}
-            <div className="flex items-center gap-2 text-green-400 text-sm mb-5">
-              <Users className="w-4 h-4" />
-              <span>已报名 {webinar.registeredCount.toLocaleString()} 人</span>
-            </div>
-
-            {/* Host */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-purple-500/40">
-                <img
-                  src={webinar.host.avatar}
-                  alt={webinar.host.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">{webinar.host.name}</p>
-                <p className="text-xs text-gray-400">{webinar.host.title}</p>
-              </div>
-            </div>
-
-            {/* CTA Button */}
-            {webinar.status === "live" ? (
-              <Button
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl h-12 text-base shadow-lg shadow-purple-500/30"
-                onClick={() => setLocation(`/webinar-live/${webinar.id}`)}
-              >
-                <Play className="w-4 h-4 mr-2 fill-white" />
-                立即进入直播间
-              </Button>
-            ) : webinar.status === "upcoming" ? (
-              <>
+          {/* Registration CTA */}
+          <div className="bg-[#141628] border border-purple-500/40 rounded-2xl p-6">
+            <h3 className="text-base font-semibold mb-4 text-white">
+              {isLive ? "正在直播" : isUpcoming ? "立即报名" : "回放"}
+            </h3>
+            <div className="space-y-3">
+              {isLive && (
+                <Button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl h-12">
+                  <Play className="w-4 h-4 mr-2 fill-white" />
+                  进入直播间
+                </Button>
+              )}
+              {isUpcoming && (
                 <Button
-                  className={cn(
-                    "w-full font-semibold rounded-xl h-12 text-base transition-all",
-                    isRegistered
-                      ? "bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30"
-                      : "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/30"
-                  )}
-                  onClick={() => setIsRegistered(!isRegistered)}
+                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl h-12"
+                  onClick={() => registerMutation.mutate({ webinarId: webinar.id })}
+                  disabled={registerMutation.isPending || webinar.isRegistered}
                 >
-                  {isRegistered ? (
-                    <><Check className="w-4 h-4 mr-2" />已注册</>
+                  {webinar.isRegistered ? (
+                    <><Check className="w-4 h-4 mr-2" />已报名</>
+                  ) : registerMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />报名中...</>
                   ) : (
-                    "[立即注册]"
+                    "立即报名"
                   )}
                 </Button>
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  注册后将收到 Webinar 链接和提醒
-                </p>
-              </>
-            ) : (
-              <Button
-                className="w-full bg-gray-700/50 text-gray-500 cursor-not-allowed rounded-xl h-12"
-                disabled
-              >
-                已结束
-              </Button>
-            )}
-          </div>
-
-          {/* Share Card */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
-            <h3 className="text-base font-semibold mb-4 text-white">分享此 Webinar</h3>
-            <div className="flex items-center gap-3">
-              <button className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center hover:bg-blue-600/40 transition-colors">
-                <Facebook className="w-5 h-5 text-blue-400" />
-              </button>
-              <button className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
-                <X className="w-5 h-5 text-white" />
-              </button>
-              <button className="w-10 h-10 rounded-xl bg-blue-700/20 border border-blue-600/30 flex items-center justify-center hover:bg-blue-700/40 transition-colors">
-                <Linkedin className="w-5 h-5 text-blue-400" />
-              </button>
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm text-gray-400 hover:text-white"
-              >
-                {copied ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-                <span>{copied ? "已复制" : "复制链接"}</span>
-              </button>
+              )}
+              {isEnded && (
+                <Button className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl h-12">
+                  <Play className="w-4 h-4 mr-2" />
+                  观看回放
+                </Button>
+              )}
+              <p className="text-xs text-gray-500 text-center">
+                {webinar.participantCount} 人已报名
+              </p>
             </div>
           </div>
 
-          {/* Related Webinars */}
+          {/* Share */}
           <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
-            <h3 className="text-base font-semibold mb-4 text-white">相关 Webinar</h3>
-            <div className="space-y-3">
-              {webinar.relatedWebinars.map((r) => (
+            <h3 className="text-base font-semibold mb-4 text-white">分享</h3>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { bg: "bg-green-600/20 border-green-500/30", icon: "🟢", label: "WeChat" },
+                { bg: "bg-blue-700/20 border-blue-600/30", icon: "💼", label: "LinkedIn" },
+                { bg: "bg-blue-600/20 border-blue-500/30", icon: "📘", label: "Facebook" },
+                { bg: "bg-sky-600/20 border-sky-500/30", icon: "🐦", label: "Twitter" },
+              ].map((s) => (
                 <button
-                  key={r.id}
-                  onClick={() => setLocation(`/webinar/${r.id}`)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-purple-500/30 transition-all group text-left"
+                  key={s.label}
+                  className={cn(
+                    "aspect-square rounded-xl border flex items-center justify-center text-xl hover:scale-105 transition-transform",
+                    s.bg
+                  )}
+                  title={s.label}
                 >
-                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-gray-800">
-                    <img
-                      src={r.image}
-                      alt={r.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate group-hover:text-purple-300 transition-colors">
-                      {r.title}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{r.scheduledAt}</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-purple-400 shrink-0 transition-colors" />
+                  {s.icon}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Related Webinars */}
+          {relatedWebinars.length > 0 && (
+            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+              <h3 className="text-base font-semibold mb-4 text-white">相关 Webinar</h3>
+              <div className="space-y-3">
+                {relatedWebinars.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center gap-3 cursor-pointer hover:bg-white/5 rounded-xl p-2 -mx-2 transition-all"
+                    onClick={() => setLocation(`/webinar/${w.id}`)}
+                  >
+                    <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-purple-900/30">
+                      {w.coverImage ? (
+                        <img src={w.coverImage} alt={w.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Radio className="w-6 h-6 text-purple-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white line-clamp-2">{w.title}</p>
+                      {w.scheduledAt && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(w.scheduledAt).toLocaleDateString("zh-CN")}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
