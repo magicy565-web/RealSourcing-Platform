@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { agoraTokenService } from "./_core/agora";
 import { agoraTranslationService } from "./_core/agoraTranslation";
 import { agoraRecordingService } from "./_core/agoraRecording";
+import { aiService } from "./_core/aiService";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
@@ -222,6 +223,90 @@ export const appRouter = router({
     getActiveTasks: publicProcedure
       .query(() => {
         return agoraTranslationService.getActiveTasks();
+      }),
+  }),
+
+  // ── AI Services (P1) ──────────────────────────────────────────────────────────
+  ai: router({
+    // P1.1: 会议结束后生成 AI 摘要
+    generateMeetingSummary: protectedProcedure
+      .input(z.object({ meetingId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        const factory = await getFactoryById(meeting.factoryId);
+        const buyer = await getUserById(meeting.buyerId);
+
+        const summary = await aiService.generateMeetingSummary(
+          transcripts.map(t => ({ speakerName: t.speakerName, content: t.content, timestamp: t.timestamp })),
+          {
+            factoryName: factory?.name || 'Factory',
+            buyerName: buyer?.name || 'Buyer',
+            meetingTitle: meeting.title,
+            durationMinutes: meeting.durationMinutes,
+          }
+        );
+
+        // 将摘要写入数据库
+        await updateMeeting(input.meetingId, {
+          aiSummary: summary.keyPoints as any,
+          followUpActions: summary.followUpActions as any,
+        });
+
+        return { success: true, summary };
+      }),
+
+    // P1.2: AI 采购助理多转对话
+    procurementChat: protectedProcedure
+      .input(z.object({
+        messages: z.array(z.object({
+          role: z.enum(['user', 'assistant']),
+          content: z.string(),
+        })),
+        context: z.object({
+          currentPage: z.string().optional(),
+          recentMeetings: z.array(z.string()).optional(),
+          interestedCategories: z.array(z.string()).optional(),
+        }).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const response = await aiService.chatWithProcurementAssistant(
+          input.messages as any,
+          {
+            userRole: ctx.user.role || 'buyer',
+            currentPage: input.context?.currentPage,
+            recentMeetings: input.context?.recentMeetings,
+            interestedCategories: input.context?.interestedCategories,
+          }
+        );
+        return response;
+      }),
+
+    // P1.3: 识别 Meeting Reel 关键时刻
+    identifyReelHighlights: protectedProcedure
+      .input(z.object({
+        meetingId: z.number(),
+        targetDurationSeconds: z.number().optional().default(45),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        const highlights = await aiService.identifyReelHighlights(
+          transcripts.map(t => ({ speakerName: t.speakerName, content: t.content, timestamp: t.timestamp })),
+          input.targetDurationSeconds
+        );
+
+        return { highlights };
       }),
   }),
 

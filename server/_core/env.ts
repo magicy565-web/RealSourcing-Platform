@@ -15,4 +15,14 @@ export const ENV = {
   // Agora Whiteboard
   whiteboardAk: process.env.WHITEBOARD_AK ?? "",
   whiteboardSk: process.env.WHITEBOARD_SK ?? "",
+  // AI Configuration (P1)
+  // 主要 AI：逆次代理（OpenAI 兼容）
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openaiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://once.novai.su/v1",
+  openaiModel: process.env.OPENAI_MODEL ?? "[\u6b21]gpt-5.1",
+  // 备用 AI：阿里云百炼（通义千问）
+  dashscopeApiKey: process.env.DASHSCOPE_API_KEY ?? "",
+  dashscopeModel: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
+  // 备用 AI：Google Gemini
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };
