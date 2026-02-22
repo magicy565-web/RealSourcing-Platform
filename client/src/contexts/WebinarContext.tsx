@@ -185,6 +185,7 @@ export function WebinarProvider({
   const unlikeMutation = trpc.webinarLive.unlike.useMutation();
   const raiseHandMutation = trpc.webinarLive.raiseHand.useMutation();
   const favoriteMutation = trpc.favorites.toggle.useMutation();
+  const claimSlotMutation = trpc.webinarLive.claimSlot.useMutation();
 
   // ─────────────────────────────────────────────────────────────
   // 精进点2：FOMO Engine 实现
@@ -268,13 +269,12 @@ export function WebinarProvider({
   const claimSlot = useCallback(
     async (productId: number, productName: string, quantity: string) => {
       try {
-        // 存入数据库（当 claimSlot tRPC 路由实现后取消注释）
-        // await trpc.webinarLive.claimSlot.mutateAsync({
-        //   webinarId,
-        //   productId,
-        //   quantity,
-        //   userId,
-        // });
+        // 真实 tRPC 调用：将意向线索持久化到 webinar_leads 数据库表
+        await claimSlotMutation.mutateAsync({
+          webinarId,
+          productId,
+          quantity,
+        });
 
         // 在聊天流中广播抢单成功消息（剧场效应）
         const claimMsg: ChatMessage = {
@@ -283,19 +283,20 @@ export function WebinarProvider({
           userId,
           userName: 'You',
           avatar: 'YO',
-          message: `🎉 Locked ${quantity} of ${productName}! Supply chain manager will WhatsApp you shortly.`,
+          message: `🎉 已锁定 ${quantity} 件 ${productName}！供应链管家将通过 WhatsApp 联系您。`,
           timestamp: new Date(),
           type: 'claim',
         };
         setMessages((prev) => [...prev, claimMsg]);
 
-        console.log('[claimSlot] Lead captured:', { webinarId, productId, productName, quantity, userId });
+        console.log('[claimSlot] Lead saved to DB:', { webinarId, productId, productName, quantity, userId });
       } catch (error) {
         console.error('[WebinarContext] claimSlot error:', error);
         toast.error('锁单失败，请重试');
+        throw error;
       }
     },
-    [webinarId, userId]
+    [webinarId, userId, claimSlotMutation]
   );
 
   // ─────────────────────────────────────────────────────────────

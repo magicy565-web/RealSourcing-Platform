@@ -502,3 +502,27 @@ export const meetingAvailability = mysqlTable("meeting_availability", {
   createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
 export type MeetingAvailability = typeof meetingAvailability.$inferSelect;
+
+// ─── Webinar Leads (意向线索) ─────────────────────────────────────────────────
+// 直播间抢单产生的高意向线索，供应链管家通过 WhatsApp 跟进
+export const webinarLeads = mysqlTable("webinar_leads", {
+  id:          int("id").primaryKey().autoincrement(),
+  webinarId:   int("webinarId").notNull(),
+  userId:      int("userId"),
+  productId:   int("productId"),
+  productName: varchar("productName", { length: 255 }),
+  quantity:    varchar("quantity", { length: 50 }),
+  // 买家联系信息（从 user 表冗余，方便管家直接查看）
+  buyerName:   varchar("buyerName", { length: 100 }),
+  buyerEmail:  varchar("buyerEmail", { length: 320 }),
+  // 线索状态: new → contacted → qualified → converted → lost
+  status:      varchar("status", { length: 30 }).notNull().default("new"),
+  // 管家备注
+  notes:       text("notes"),
+  // 来源渠道
+  source:      varchar("source", { length: 50 }).default("webinar_live"),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:   datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type WebinarLead = typeof webinarLeads.$inferSelect;
+export type InsertWebinarLead = typeof webinarLeads.$inferInsert;

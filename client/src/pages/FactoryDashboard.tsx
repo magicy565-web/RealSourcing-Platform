@@ -755,16 +755,20 @@ export default function FactoryDashboard() {
                       }`}>
                         {w.status === 'live' ? '🔴 直播中' : w.status === 'scheduled' ? '已安排' : '已结束'}
                       </span>
-                      {w.status === 'live' && (
-                        <Button size="sm" onClick={() => setLocation(`/webinar-live/${w.id}`)} className="bg-red-600 hover:bg-red-700 text-xs">
-                          进入直播
-                        </Button>
-                      )}
-                      {w.status === 'scheduled' && (
-                        <Button size="sm" variant="outline" onClick={() => setLocation(`/webinar/${w.id}`)} className="border-white/20 text-gray-400 text-xs">
-                          查看详情
-                        </Button>
-                      )}
+                      {/* 主播控制台入口（所有状态均可进入） */}
+                      <Button
+                        size="sm"
+                        onClick={() => setLocation(`/webinar-live/host/${w.id}`)}
+                        className={w.status === 'live'
+                          ? 'bg-red-600 hover:bg-red-700 text-xs'
+                          : 'bg-purple-600 hover:bg-purple-700 text-xs'
+                        }
+                      >
+                        {w.status === 'live' ? '🔴 进入直播' : '🎙️ 主播控制台'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setLocation(`/webinar/${w.id}`)} className="border-white/20 text-gray-400 text-xs">
+                        详情
+                      </Button>
                     </div>
                   </div>
                 </div>

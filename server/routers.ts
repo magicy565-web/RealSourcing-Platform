@@ -67,6 +67,9 @@ import {
   updateFactoryProfile, upsertFactoryDetails,
   // Product CRUD
   deleteProduct, upsertProductDetails,
+  // Webinar Leads
+  createWebinarLead, getWebinarLeadsByWebinarId, getWebinarLeadsByHostId,
+  updateWebinarLeadStatus, getWebinarLeadCountByWebinarId,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -488,9 +491,29 @@ export const appRouter = router({
         });
         return { success: true };
       }),
+    // 开始/结束直播：更新 webinar 状态
+    updateStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["draft", "scheduled", "live", "ended"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const webinar = await getWebinarById(input.id);
+        if (!webinar) throw new TRPCError({ code: "NOT_FOUND", message: "Webinar 不存在" });
+        if (webinar.hostId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "只有主播可以更改直播状态" });
+        }
+        await updateWebinar(input.id, { status: input.status });
+        return { success: true };
+      }),
+    // 获取某个 webinar 的线索数量
+    leadCount: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .query(async ({ input }) => {
+        return await getWebinarLeadCountByWebinarId(input.webinarId);
+      }),
   }),
-
-  // ── Factories ─────────────────────────────────────────────────────────────────
+  // ── Factoriess ─────────────────────────────────────────────────────────────────
   factories: router({
     list: publicProcedure.query(async () => {
       return await getAllFactories();
@@ -1092,9 +1115,56 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         return await startMeetingWithFactory(ctx.user.id, input.factoryId);
       }),
+    // 精进点3：零摩擦意向锁单——将抢单意向存入数据库
+    claimSlot: protectedProcedure
+      .input(z.object({
+        webinarId: z.number(),
+        productId: z.number().optional(),
+        productName: z.string(),
+        quantity: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserById(ctx.user.id);
+        const lead = await createWebinarLead({
+          webinarId: input.webinarId,
+          userId: ctx.user.id,
+          productId: input.productId,
+          productName: input.productName,
+          quantity: input.quantity,
+          buyerName: user?.name || undefined,
+          buyerEmail: user?.email || undefined,
+          status: "new",
+          source: "webinar_live",
+        });
+        return { success: true, leadId: lead.id };
+      }),
+    // 获取某个 webinar 的所有线索（主播专用）
+    getLeads: protectedProcedure
+      .input(z.object({ webinarId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const webinar = await getWebinarById(input.webinarId);
+        if (!webinar) throw new TRPCError({ code: "NOT_FOUND", message: "Webinar 不存在" });
+        if (webinar.hostId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "只有主播可以查看线索" });
+        }
+        return await getWebinarLeadsByWebinarId(input.webinarId);
+      }),
+    // 获取主播所有 webinar 的线索（工厂仪表盘专用）
+    myLeads: protectedProcedure.query(async ({ ctx }) => {
+      return await getWebinarLeadsByHostId(ctx.user.id);
+    }),
+    // 更新线索状态（管家操作）
+    updateLeadStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["new", "contacted", "qualified", "converted", "lost"]),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await updateWebinarLeadStatus(input.id, input.status, input.notes);
+      }),
   }),
-
-  // ── Notifications ─────────────────────────────────────────────────────────────
+  // ── Notificationss ─────────────────────────────────────────────────────────────
   notifications: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return await getUserNotifications(ctx.user.id);

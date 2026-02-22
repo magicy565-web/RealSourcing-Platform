@@ -845,3 +845,48 @@ export async function upsertProductDetails(productId: number, data: Partial<type
     await database.insert(schema.productDetails).values({ productId, ...data });
   }
 }
+
+// ─── Webinar Leads CRUD ───────────────────────────────────────────────────────
+export async function createWebinarLead(data: typeof schema.webinarLeads.$inferInsert) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.webinarLeads).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getWebinarLeadsByWebinarId(webinarId: number) {
+  const database = await dbPromise;
+  return await database.select().from(schema.webinarLeads)
+    .where(eq(schema.webinarLeads.webinarId, webinarId))
+    .orderBy(schema.webinarLeads.createdAt);
+}
+
+export async function getWebinarLeadsByHostId(hostId: number) {
+  const database = await dbPromise;
+  // 通过 webinars 表关联，获取该主播所有 webinar 的线索
+  const rows = await database
+    .select({
+      lead: schema.webinarLeads,
+      webinarTitle: schema.webinars.title,
+    })
+    .from(schema.webinarLeads)
+    .innerJoin(schema.webinars, eq(schema.webinarLeads.webinarId, schema.webinars.id))
+    .where(eq(schema.webinars.hostId, hostId))
+    .orderBy(schema.webinarLeads.createdAt);
+  return rows.map(r => ({ ...r.lead, webinarTitle: r.webinarTitle }));
+}
+
+export async function updateWebinarLeadStatus(id: number, status: string, notes?: string) {
+  const database = await dbPromise;
+  await database.update(schema.webinarLeads)
+    .set({ status, notes, updatedAt: new Date() } as any)
+    .where(eq(schema.webinarLeads.id, id));
+  return { success: true };
+}
+
+export async function getWebinarLeadCountByWebinarId(webinarId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.webinarLeads)
+    .where(eq(schema.webinarLeads.webinarId, webinarId));
+  return { count: rows.length };
+}
