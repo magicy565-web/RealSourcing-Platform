@@ -90,7 +90,8 @@ const FACTORY_AMR_PROFILES: Record<string, {
  * 优先使用工厂专属差异化配置，确保雷达图形状各具特色。
  */
 function mapToAMRData(factory: Factory): FactoryAMRData {
-  const base = typeof factory.overallScore === "number" ? factory.overallScore : 3.5;
+  // overallScore 从数据库返回可能是字符串（Decimal 类型），需要强制转换为数字
+  const base = factory.overallScore != null ? Number(factory.overallScore) : 3.5;
   const toAMR = (offset: number) => Math.min(100, Math.round((base / 5) * 100 * offset));
 
   // 优先使用工厂专属差异化配置
