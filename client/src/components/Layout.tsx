@@ -35,6 +35,12 @@ export default function Layout({ children }: LayoutProps) {
     { href: "/products", label: "产品", icon: Package },
   ];
 
+  const isHomePage = location === "/";
+
+  if (isHomePage) {
+    return <main className="flex-1">{children}</main>;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* 顶部导航栏 */}

@@ -774,3 +774,53 @@
   }
   .animate-particle { animation: particle-rise 1.2s ease-out forwards; }
 }
+
+/* ============================================================
+   Magic UI Animations
+   ============================================================ */
+
+/* Marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% - var(--gap))); }
+}
+@keyframes marquee-vertical {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(-100% - var(--gap))); }
+}
+.animate-marquee { animation: marquee var(--duration) linear infinite; }
+.animate-marquee-vertical { animation: marquee-vertical var(--duration) linear infinite; }
+
+/* Orbit */
+@keyframes orbit {
+  0% { transform: rotate(calc(var(--delay) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--delay) * -1deg)); }
+  100% { transform: rotate(calc(360deg + var(--delay) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(-360deg - var(--delay) * 1deg)); }
+}
+.animate-orbit { animation: orbit calc(var(--duration) * 1s) linear infinite; }
+
+/* Border Beam */
+@keyframes border-beam {
+  100% { offset-distance: 100%; }
+}
+.animate-border-beam {
+  animation: border-beam calc(var(--duration) * 1s) infinite linear;
+}
+
+/* Shimmer Button */
+@keyframes shimmer-slide {
+  to { transform: translate(calc(100cqw - 100%), 0); }
+}
+@keyframes spin-around {
+  0% { transform: translateZ(0) rotate(0); }
+  15%, 35% { transform: translateZ(0) rotate(90deg); }
+  65%, 85% { transform: translateZ(0) rotate(270deg); }
+  100% { transform: translateZ(0) rotate(360deg); }
+}
+.animate-shimmer-slide { animation: shimmer-slide var(--speed) ease-in-out infinite alternate; }
+.animate-spin-around { animation: spin-around calc(var(--speed) * 2) infinite linear; }
+
+/* Animated Gradient Text */
+@keyframes gradient {
+  to { background-position: var(--bg-size) center; }
+}
+.animate-gradient { animation: gradient 8s linear infinite; }
