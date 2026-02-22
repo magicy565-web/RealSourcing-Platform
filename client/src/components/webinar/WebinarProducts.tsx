@@ -34,8 +34,7 @@ export function WebinarProducts() {
     // 存入数据库
     await claimSlot(product.id, product.name, product.moq);
 
-    // 广播剧场效应
-    addFomoMessage(`🎉 Someone just locked ${product.moq} of ${product.name}!`);
+    // 广播剧场效应已在 WebinarContext.claimSlot 内部处理，此处不再重复广播，以防消息刷屏
 
     setClaimedIds((prev) => [...prev, product.id]);
 

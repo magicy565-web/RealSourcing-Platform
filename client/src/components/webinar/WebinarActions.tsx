@@ -81,10 +81,7 @@ export function WebinarActions({
       // claimSlot 内部已处理错误，这里静默处理
     }
 
-    // 3. 在聊天流广播（剧场效应）
-    addFomoMessage(`🎉 You just locked ${moq} of ${productName}! Our team will WhatsApp you in 2h.`);
-
-    // 4. 显示成功 Toast（绿字，不跳转）
+    // 3. 显示成功 Toast（绿字，不跳转）
     toast.success(
       `🎉 ${moq} 名额已为您锁定！\n供应链管家将在 2小时内 WhatsApp 联系您。`,
       {
@@ -100,7 +97,7 @@ export function WebinarActions({
     setHasClaimed(true);
     setIsClaiming(false);
     onClaimSuccess?.();
-  }, [isClaiming, hasClaimed, claimSlot, addFomoMessage, productId, productName, moq, onClaimSuccess]);
+  }, [isClaiming, hasClaimed, claimSlot, productId, productName, moq, onClaimSuccess]);
 
   const handleLike = async () => {
     setIsLiking(true);
