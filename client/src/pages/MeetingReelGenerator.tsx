@@ -133,7 +133,9 @@ function VideoThumbnail({
   className,
 }: VideoThumbnailProps) {
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
-  const [frameError, setFrameError] = useState(false);
+  // corsError: canvas 截帧失败（跨域），此时改为直接展示 video 预览
+  const [corsError, setCorsError] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasCaptured = useRef(false);
 
@@ -153,7 +155,8 @@ function VideoThumbnail({
       setFrameDataUrl(dataUrl);
       onFrameCaptured?.(dataUrl);
     } catch {
-      setFrameError(true);
+      // CORS 限制导致 canvas 截帧失败，改为直接展示 video 预览
+      setCorsError(true);
     }
   }, [onFrameCaptured]);
 
@@ -188,32 +191,69 @@ function VideoThumbnail({
     );
   }
 
-  // 无封面但有视频 URL：用隐藏 <video> 提取第一帧
-  if (videoUrl && !frameError) {
+  // 无封面但有视频 URL
+  if (videoUrl) {
+    // CORS 截帧失败：直接展示 video 元素作为可视预览
+    if (corsError) {
+      return (
+        <div className={cn("relative rounded-xl overflow-hidden bg-black", className)}>
+          <video
+            src={videoUrl}
+            className="w-full h-full object-cover"
+            preload="metadata"
+            muted
+            playsInline
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              v.currentTime = 0.1;
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="w-6 h-6 rounded-full bg-white/30 backdrop-blur flex items-center justify-center">
+              <Play className="w-3 h-3 text-white ml-0.5" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    // 正常模式：用隐藏 video 提取 canvas 第一帧
     return (
       <div className={cn("relative rounded-xl overflow-hidden bg-black", className)}>
         {/* 隐藏的 video 元素，仅用于提取帧 */}
         <video
           ref={videoRef}
           src={videoUrl}
-          className="absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{ opacity: videoReady ? 1 : 0 }}
           crossOrigin="anonymous"
           preload="metadata"
           muted
           playsInline
-          onLoadedData={captureFirstFrame}
-          onSeeked={captureFirstFrame}
           onLoadedMetadata={() => {
-            // 跳到第 0.1 秒确保有画面
             if (videoRef.current) videoRef.current.currentTime = 0.1;
           }}
-          onError={() => setFrameError(true)}
+          onSeeked={() => {
+            setVideoReady(true);
+            captureFirstFrame();
+          }}
+          onLoadedData={captureFirstFrame}
+          onError={() => setCorsError(true)}
         />
-        {/* 提取中占位 */}
-        <div className="flex flex-col items-center justify-center gap-1 w-full h-full bg-gradient-to-br from-purple-900/60 to-pink-900/60">
-          <div className="w-4 h-4 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
-          <span className="text-[9px] text-purple-400/70">加载封面</span>
-        </div>
+        {/* 视频加载中占位 */}
+        {!videoReady && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-purple-900/60 to-pink-900/60">
+            <div className="w-4 h-4 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
+            <span className="text-[9px] text-purple-400/70">加载封面</span>
+          </div>
+        )}
+        {/* 播放图标叠加 */}
+        {videoReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="w-6 h-6 rounded-full bg-white/30 backdrop-blur flex items-center justify-center">
+              <Play className="w-3 h-3 text-white ml-0.5" />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
