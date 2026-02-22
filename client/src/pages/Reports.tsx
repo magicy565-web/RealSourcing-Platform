@@ -171,7 +171,7 @@ export default function Reports() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
           <p className="text-muted-foreground">Loading analytics...</p>
@@ -181,7 +181,7 @@ export default function Reports() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-6">
+    <div className="min-h-screen bg-transparent p-6 space-y-6" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* 页面头部 */}
       <div className="flex items-center justify-between">
         <div>
@@ -223,7 +223,7 @@ export default function Reports() {
       {/* KPI 卡片 */}
       <div className="grid grid-cols-4 gap-4">
         {KPI_CARDS.map((kpi) => (
-          <div key={kpi.title} className="bg-card/50 border border-white/10 rounded-2xl p-5 hover:border-white/20 transition-all">
+          <div key={kpi.title} className="bg-transparent/50 border border-white/10 rounded-2xl p-5 hover:border-white/20 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", kpi.bg)}>
                 <kpi.icon className={cn("w-5 h-5", kpi.color)} />
@@ -245,7 +245,7 @@ export default function Reports() {
 
       <div className="grid grid-cols-3 gap-6">
         {/* 询价趋势图 */}
-        <div className="col-span-2 bg-card/50 border border-white/10 rounded-2xl p-6">
+        <div className="col-span-2 bg-transparent/50 border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-bold">Inquiry Trend</h3>
@@ -275,7 +275,7 @@ export default function Reports() {
         </div>
 
         {/* 分类分布 */}
-        <div className="bg-card/50 border border-white/10 rounded-2xl p-6">
+        <div className="bg-transparent/50 border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold">By Category</h3>
             <PieChart className="w-4 h-4 text-muted-foreground" />
@@ -334,7 +334,7 @@ export default function Reports() {
 
       <div className="grid grid-cols-2 gap-6">
         {/* 顶级工厂 */}
-        <div className="bg-card/50 border border-white/10 rounded-2xl p-6">
+        <div className="bg-transparent/50 border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold">Top Factories</h3>
             <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -378,7 +378,7 @@ export default function Reports() {
         </div>
 
         {/* AI 洞察 */}
-        <div className="bg-card/50 border border-white/10 rounded-2xl p-6">
+        <div className="bg-transparent/50 border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />

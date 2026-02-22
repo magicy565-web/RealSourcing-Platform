@@ -1,60 +1,123 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { motion } from "framer-motion";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
-  Radio,
-  Calendar,
-  Building2,
-  FileText,
-  TrendingUp,
-  Bell,
-  User,
-  Send,
-  Smile,
-  Clock,
-  Users,
-  Package,
-  ArrowRight,
-  Sparkles,
-  Video,
-  CheckCircle,
+  Radio, Calendar, Building2, FileText, TrendingUp, Bell, User,
+  Send, Clock, Package, ArrowRight, Sparkles, Video, ChevronRight,
+  Zap, Globe, BarChart3
 } from "lucide-react";
+
+const GRID_BG = `
+  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
+`;
+
+function StatCard({
+  icon: Icon, value, label, accent, onClick, badge, loading
+}: {
+  icon: any; value: number | string; label: string; accent: string;
+  onClick?: () => void; badge?: string; loading?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      onClick={onClick}
+      className="rounded-2xl p-6 relative overflow-hidden cursor-pointer"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        backdropFilter: "blur(20px)",
+        border: `1px solid ${accent}20`,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+      }}
+    >
+      <div className="absolute top-0 left-0 right-0 h-0.5"
+        style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }} />
+      <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full pointer-events-none"
+        style={{ background: `${accent}10`, filter: "blur(20px)" }} />
+
+      <div className="flex items-center justify-between mb-4">
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+          style={{ background: `${accent}15` }}>
+          <Icon className="w-5 h-5" style={{ color: accent }} />
+        </div>
+        {badge && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+            style={{ background: `${accent}15`, color: accent, border: `1px solid ${accent}30` }}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="text-3xl font-black text-white mb-1">
+        {loading ? <span className="w-8 h-7 block rounded-lg animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} /> : value}
+      </div>
+      <div className="text-sm" style={{ color: "rgba(255,255,255,0.40)" }}>{label}</div>
+    </motion.div>
+  );
+}
+
+function QuickAction({
+  icon: Icon, label, desc, accent, onClick, badge
+}: {
+  icon: any; label: string; desc: string; accent: string; onClick: () => void; badge?: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="rounded-2xl p-5 cursor-pointer relative overflow-hidden group"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: `1px solid rgba(255,255,255,0.07)`,
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: `${accent}15` }}>
+          <Icon className="w-5 h-5" style={{ color: accent }} />
+        </div>
+        <div className="flex items-center gap-2">
+          {badge && (
+            <span className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: `${accent}15`, color: accent }}>
+              {badge}
+            </span>
+          )}
+          <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1"
+            style={{ color: "rgba(255,255,255,0.20)" }} />
+        </div>
+      </div>
+      <p className="text-white font-semibold text-sm mb-0.5">{label}</p>
+      <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{desc}</p>
+    </motion.div>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [aiInput, setAiInput] = useState("");
 
-  // 如果是工厂用户，重定向到工厂 Dashboard
   if (user?.role === "factory") {
     setLocation("/factory-dashboard");
     return null;
   }
 
-  // ── tRPC Queries ──────────────────────────────────────────────────────────
   const { data: webinars = [], isLoading: webinarsLoading } = trpc.webinars.list.useQuery();
   const { data: meetings = [], isLoading: meetingsLoading } = trpc.meetings.myMeetings.useQuery();
   const { data: inquiries = [], isLoading: inquiriesLoading } = trpc.inquiries.myInquiries.useQuery();
   const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery();
   const { data: sampleOrders = [] } = trpc.sampleOrders.mySampleOrders.useQuery();
 
-  // ── Derived Stats ─────────────────────────────────────────────────────────
   const liveWebinars = webinars.filter((w) => w.status === "live");
   const upcomingWebinars = webinars.filter((w) => w.status === "scheduled" || w.status === "upcoming");
   const pendingInquiries = inquiries.filter((i) => i.status === "pending");
-  const pendingSamples = sampleOrders.filter((o: any) => o.status === "pending").length;
   const shippedSamples = sampleOrders.filter((o: any) => o.status === "shipped").length;
-
-  const getWebinarStatusBadge = (status: string) => {
-    if (status === "live") return <span className="badge-live">LIVE</span>;
-    if (status === "scheduled" || status === "upcoming") return <span className="badge-upcoming">UPCOMING</span>;
-    return <span className="badge-past">PAST</span>;
-  };
 
   const formatScheduledAt = (date: Date | null | undefined) => {
     if (!date) return "TBD";
@@ -69,42 +132,59 @@ export default function Dashboard() {
     return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
   };
 
+  const getStatusStyle = (status: string) => {
+    if (status === "live") return { bg: "rgba(239,68,68,0.15)", color: "#f87171", label: "LIVE" };
+    if (status === "scheduled" || status === "upcoming") return { bg: "rgba(59,130,246,0.15)", color: "#60a5fa", label: "即将开始" };
+    return { bg: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)", label: "已结束" };
+  };
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
+    <div className="flex min-h-screen" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
+      <div className="fixed inset-0 pointer-events-none"
+        style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+
       <BuyerSidebar userRole={user?.role || "buyer"} />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative z-10">
         {/* Top Bar */}
-        <div className="h-16 border-b border-border/50 flex items-center justify-end px-8 gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
+        <div className="h-16 flex items-center justify-end px-8 gap-3"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,3,16,0.80)", backdropFilter: "blur(20px)" }}>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
             onClick={() => setLocation("/notifications")}
           >
-            <Bell className="w-5 h-5" />
+            <Bell className="w-4 h-4" style={{ color: "rgba(255,255,255,0.60)" }} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />
             )}
-          </Button>
-          <div
-            className="w-10 h-10 rounded-full bg-purple-600/30 flex items-center justify-center cursor-pointer"
+          </motion.button>
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
+            style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
             onClick={() => setLocation("/settings")}
           >
-            <User className="w-5 h-5" />
-          </div>
+            <User className="w-4 h-4 text-white" />
+          </motion.div>
         </div>
 
-        {/* Content */}
         <div className="p-8">
           {/* Greeting */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2">
-              早上好，{user?.name || "采购商"} <span className="inline-block animate-bounce">👋</span>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <h1 className="text-4xl font-black text-white mb-2">
+              {greeting}，{user?.name || "采购商"} 👋
             </h1>
-            <p className="text-muted-foreground text-lg">
+            <p style={{ color: "rgba(255,255,255,0.40)" }}>
               {liveWebinars.length > 0
                 ? `现在有 ${liveWebinars.length} 场 Webinar 正在直播`
                 : upcomingWebinars.length > 0
@@ -112,253 +192,191 @@ export default function Dashboard() {
                 : "欢迎回来，开始您的采购之旅"}
               {pendingInquiries.length > 0 && `，${pendingInquiries.length} 条询价待处理`}
             </p>
+          </motion.div>
+
+          {/* Stats Bento Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatCard icon={Radio} value={liveWebinars.length} label="场直播中" accent="#f87171" loading={webinarsLoading}
+              badge={liveWebinars.length > 0 ? "LIVE" : undefined} onClick={() => setLocation("/webinars")} />
+            <StatCard icon={Calendar} value={upcomingWebinars.length} label="场即将开始" accent="#60a5fa" loading={webinarsLoading}
+              onClick={() => setLocation("/webinars")} />
+            <StatCard icon={Building2} value={meetings.length} label="场已安排会议" accent="#a78bfa" loading={meetingsLoading}
+              onClick={() => setLocation("/meetings")} />
+            <StatCard icon={FileText} value={inquiries.length} label="条询价记录" accent="#4ade80" loading={inquiriesLoading}
+              badge={pendingInquiries.length > 0 ? `${pendingInquiries.length} 待处理` : undefined}
+              onClick={() => setLocation("/inquiries")} />
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Card 1 - Live Webinars */}
-            <Card className="glass-card hover:glow-purple transition-all">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-red-600/20 flex items-center justify-center">
-                    <Radio className="w-6 h-6 text-red-400" />
-                  </div>
-                </div>
-                <div className="text-4xl font-bold mb-1">
-                  {webinarsLoading ? (
-                    <span className="w-8 h-8 block bg-white/10 rounded animate-pulse" />
-                  ) : liveWebinars.length}
-                </div>
-                <div className="text-muted-foreground text-sm">场直播中</div>
-              </CardContent>
-            </Card>
-
-            {/* Card 2 - Upcoming */}
-            <Card className="glass-card hover:glow-purple transition-all">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-blue-400" />
-                  </div>
-                </div>
-                <div className="text-4xl font-bold mb-1">
-                  {webinarsLoading ? (
-                    <span className="w-8 h-8 block bg-white/10 rounded animate-pulse" />
-                  ) : upcomingWebinars.length}
-                </div>
-                <div className="text-muted-foreground text-sm">场即将开始</div>
-              </CardContent>
-            </Card>
-
-            {/* Card 3 - Meetings */}
-            <Card className="glass-card hover:glow-purple transition-all">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-600/20 flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-purple-400" />
-                  </div>
-                </div>
-                <div className="text-4xl font-bold mb-1">
-                  {meetingsLoading ? (
-                    <span className="w-8 h-8 block bg-white/10 rounded animate-pulse" />
-                  ) : meetings.length}
-                </div>
-                <div className="text-muted-foreground text-sm">场已安排会议</div>
-              </CardContent>
-            </Card>
-
-            {/* Card 4 - Inquiries */}
-            <Card className="glass-card hover:glow-purple transition-all cursor-pointer" onClick={() => setLocation("/inquiries")}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
-                    <FileText className="w-6 h-6 text-green-400" />
-                  </div>
-                  {pendingInquiries.length > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                      {pendingInquiries.length} 待处理
-                    </span>
-                  )}
-                </div>
-                <div className="text-4xl font-bold mb-1">
-                  {inquiriesLoading ? (
-                    <span className="w-8 h-8 block bg-white/10 rounded animate-pulse" />
-                  ) : inquiries.length}
-                </div>
-                <div className="text-muted-foreground text-sm">条询价记录</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Webinar 列表 */}
             <div className="lg:col-span-2">
-              <Card className="glass-card">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold">✨ 推荐 Webinar</h2>
-                    <Button
-                      variant="link"
-                      className="text-purple-400"
-                      onClick={() => setLocation("/webinars")}
-                    >
-                      查看全部 →
-                    </Button>
+              <div className="rounded-2xl overflow-hidden"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                  backdropFilter: "blur(20px)",
+                }}
+              >
+                <div className="flex items-center justify-between px-6 py-5"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <h2 className="text-lg font-bold text-white">推荐 Webinar</h2>
                   </div>
+                  <button onClick={() => setLocation("/webinars")}
+                    className="text-sm font-medium flex items-center gap-1 transition-colors"
+                    style={{ color: "#a78bfa" }}>
+                    查看全部 <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
 
+                <div className="p-4 space-y-3">
                   {webinarsLoading ? (
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-24 bg-white/5 rounded-lg animate-pulse" />
-                      ))}
-                    </div>
+                    [1, 2, 3].map((i) => (
+                      <div key={i} className="h-20 rounded-xl animate-pulse"
+                        style={{ background: "rgba(255,255,255,0.04)" }} />
+                    ))
                   ) : webinars.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Radio className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                      <p>暂无 Webinar</p>
+                    <div className="text-center py-10" style={{ color: "rgba(255,255,255,0.25)" }}>
+                      <Radio className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                      <p className="text-sm">暂无 Webinar</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {webinars.slice(0, 3).map((webinar) => (
-                        <div
+                    webinars.slice(0, 3).map((webinar) => {
+                      const st = getStatusStyle(webinar.status);
+                      return (
+                        <motion.div
                           key={webinar.id}
-                          className="flex gap-4 p-4 rounded-lg bg-background/30 hover:bg-background/50 transition-all cursor-pointer"
+                          whileHover={{ x: 4 }}
+                          className="flex gap-4 p-4 rounded-xl cursor-pointer transition-all"
+                          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}
                           onClick={() => setLocation(`/webinar/${webinar.id}`)}
                         >
                           <div className="relative flex-shrink-0">
                             <img
-                              src={
-                                webinar.coverImage ||
-                                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=120&fit=crop"
-                              }
+                              src={webinar.coverImage || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=120&fit=crop"}
                               alt={webinar.title}
-                              className="w-32 h-20 rounded-lg object-cover"
+                              className="w-28 h-18 rounded-xl object-cover"
+                              style={{ width: "7rem", height: "4.5rem" }}
                             />
-                            <span className="absolute top-2 left-2">
-                              {getWebinarStatusBadge(webinar.status)}
+                            <span className="absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                              style={{ background: st.bg, color: st.color }}>
+                              {st.label}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold mb-2 truncate">{webinar.title}</h3>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5" />
-                                {formatScheduledAt(webinar.scheduledAt)}
-                              </span>
+                            <h3 className="text-white font-semibold text-sm truncate mb-1">{webinar.title}</h3>
+                            <p className="text-xs truncate mb-2" style={{ color: "rgba(255,255,255,0.35)" }}>
+                              {webinar.description || "精选工厂直播选品"}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
+                              <Clock className="w-3 h-3" />
+                              {formatScheduledAt(webinar.scheduledAt)}
                             </div>
                           </div>
-                          {webinar.status === "live" ? (
-                            <Button
-                              className="btn-gradient-purple self-center flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocation(`/webinar/${webinar.id}`);
-                              }}
-                            >
-                              立即参与
-                            </Button>
-                          ) : webinar.status === "scheduled" || webinar.status === "upcoming" ? (
-                            <Button
-                              variant="outline"
-                              className="self-center border-purple-500/50 flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocation(`/webinar/${webinar.id}`);
-                              }}
-                            >
-                              注册
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              className="self-center border-purple-500/50 flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocation(`/webinar/${webinar.id}`);
-                              }}
-                            >
-                              回放
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="self-center flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold"
+                            style={webinar.status === "live" ? {
+                              background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                              color: "white",
+                            } : {
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.10)",
+                              color: "rgba(255,255,255,0.60)",
+                            }}
+                            onClick={(e) => { e.stopPropagation(); setLocation(`/webinar/${webinar.id}`); }}
+                          >
+                            {webinar.status === "live" ? "立即参与" : webinar.status === "scheduled" ? "注册" : "回放"}
+                          </motion.button>
+                        </motion.div>
+                      );
+                    })
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
 
             {/* AI 采购助理 */}
             <div className="lg:col-span-1">
-              <Card className="glass-card h-full">
-                <CardContent className="p-6 flex flex-col h-full">
-                  <div className="flex items-center gap-2 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-purple-400" />
+              <div className="rounded-2xl h-full flex flex-col overflow-hidden"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                  backdropFilter: "blur(20px)",
+                }}
+              >
+                <div className="flex items-center gap-2.5 px-6 py-5"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ background: "rgba(167,139,250,0.15)" }}>
+                    <Zap className="w-4 h-4 text-violet-400" />
+                  </div>
+                  <h2 className="text-lg font-bold text-white">AI 采购助理</h2>
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(124,58,237,0.15)", color: "#a78bfa", border: "1px solid rgba(124,58,237,0.25)" }}>
+                    BETA
+                  </span>
+                </div>
+
+                <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                  <div className="flex gap-2.5">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                      <Sparkles className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <h2 className="text-xl font-bold">AI 采购助理</h2>
+                    <div className="flex-1 rounded-xl p-3 text-sm"
+                      style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)", color: "rgba(255,255,255,0.70)" }}>
+                      👋 您好！我是您的AI采购助理。请告诉我您的采购需求，我来帮您精准匹配优质工厂。
+                    </div>
                   </div>
 
-                  {/* Chat Messages */}
-                  <div className="flex-1 space-y-4 mb-4 overflow-y-auto">
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-600/30 flex items-center justify-center flex-shrink-0">
-                        <TrendingUp className="w-4 h-4" />
+                  {inquiries.length > 0 && (
+                    <div className="flex gap-2.5">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                        <Sparkles className="w-3.5 h-3.5 text-white" />
                       </div>
-                      <div className="flex-1 bg-background/50 rounded-lg p-3">
-                        <p className="text-sm">
-                          👋 您好！我是您的AI采购助理。请告诉我您的采购需求，我来帮您精准匹配优质工厂。
+                      <div className="flex-1 rounded-xl p-3"
+                        style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)" }}>
+                        <p className="text-sm mb-3" style={{ color: "rgba(255,255,255,0.70)" }}>
+                          📋 您有 {inquiries.length} 条询价记录，其中 {pendingInquiries.length} 条待处理。
                         </p>
+                        <div className="space-y-2">
+                          {[
+                            { label: "查看推荐工厂", href: "/factories" },
+                            { label: "浏览相关 Webinar", href: "/webinars" },
+                            { label: "查看询价记录", href: "/inquiries" },
+                          ].map((btn) => (
+                            <button key={btn.label} onClick={() => setLocation(btn.href)}
+                              className="w-full text-left text-xs px-3 py-2 rounded-lg transition-all"
+                              style={{
+                                background: "rgba(255,255,255,0.04)",
+                                border: "1px solid rgba(124,58,237,0.20)",
+                                color: "rgba(255,255,255,0.55)",
+                              }}>
+                              {btn.label} →
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
+                  )}
+                </div>
 
-                    {inquiries.length > 0 && (
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-600/30 flex items-center justify-center flex-shrink-0">
-                          <TrendingUp className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 bg-background/50 rounded-lg p-3">
-                          <p className="text-sm mb-3">
-                            📋 您有 {inquiries.length} 条询价记录，其中 {pendingInquiries.length} 条待处理。
-                          </p>
-                          <div className="space-y-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-start text-left border-purple-500/30"
-                              onClick={() => setLocation("/factories")}
-                            >
-                              查看推荐工厂
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-start text-left border-purple-500/30"
-                              onClick={() => setLocation("/webinars")}
-                            >
-                              浏览相关 Webinar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-start text-left border-purple-500/30"
-                              onClick={() => setLocation("/inquiries")}
-                            >
-                              查看询价记录
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Input */}
+                <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   <div className="relative">
-                    <Input
+                    <input
                       placeholder="输入您的采购需求..."
                       value={aiInput}
                       onChange={(e) => setAiInput(e.target.value)}
-                      className="pr-20 bg-background/50 border-purple-500/30"
+                      className="w-full pl-4 pr-12 h-10 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && aiInput.trim()) {
                           setLocation(`/ai-assistant?q=${encodeURIComponent(aiInput)}`);
@@ -366,114 +384,96 @@ export default function Dashboard() {
                         }
                       }}
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="w-8 h-8">
-                        <Smile className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        className="w-8 h-8 btn-gradient-purple"
-                        onClick={() => {
-                          if (aiInput.trim()) {
-                            setLocation(`/ai-assistant?q=${encodeURIComponent(aiInput)}`);
-                            setAiInput("");
-                          }
-                        }}
-                      >
-                        <Send className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                      onClick={() => {
+                        if (aiInput.trim()) {
+                          setLocation(`/ai-assistant?q=${encodeURIComponent(aiInput)}`);
+                          setAiInput("");
+                        }
+                      }}
+                    >
+                      <Send className="w-3.5 h-3.5 text-white" />
+                    </motion.button>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Quick Actions Row */}
-          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { icon: Video, label: "预约会议", desc: "与工厂面对面谈判", href: "/factories", color: "text-blue-400", bg: "bg-blue-500/10" },
-              { icon: Package, label: "样品订单", desc: `${sampleOrders.length} 条订单`, href: "/sample-orders", color: "text-amber-400", bg: "bg-amber-500/10", badge: shippedSamples > 0 ? `${shippedSamples} 运输中` : undefined },
-              { icon: Sparkles, label: "AI 采购助理", desc: "智能工厂匹配", href: "/ai-assistant", color: "text-purple-400", bg: "bg-purple-500/10" },
-              { icon: FileText, label: "询价记录", desc: `${pendingInquiries.length} 条待回复`, href: "/inquiries", color: "text-green-400", bg: "bg-green-500/10" },
-            ].map((action, i) => {
-              const Icon = action.icon;
-              return (
-                <Card key={i} className="glass-card hover:glow-purple transition-all cursor-pointer group" onClick={() => setLocation(action.href)}>
-                  <CardContent className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${action.bg}`}>
-                        <Icon className={`w-5 h-5 ${action.color}`} />
-                      </div>
-                      {action.badge && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">{action.badge}</span>
-                      )}
-                      <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
-                    </div>
-                    <p className="text-white font-semibold text-sm mb-0.5">{action.label}</p>
-                    <p className="text-gray-500 text-xs">{action.desc}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <QuickAction icon={Video} label="预约会议" desc="与工厂面对面谈判" accent="#60a5fa" onClick={() => setLocation("/factories")} />
+            <QuickAction icon={Package} label="样品订单" desc={`${sampleOrders.length} 条订单`} accent="#fbbf24" onClick={() => setLocation("/sample-orders")}
+              badge={shippedSamples > 0 ? `${shippedSamples} 运输中` : undefined} />
+            <QuickAction icon={Sparkles} label="AI 采购助理" desc="智能工厂匹配" accent="#a78bfa" onClick={() => setLocation("/ai-assistant")} />
+            <QuickAction icon={FileText} label="询价记录" desc={`${pendingInquiries.length} 条待回复`} accent="#4ade80" onClick={() => setLocation("/inquiries")} />
           </div>
 
           {/* Recent Meetings */}
           {meetings.length > 0 && (
-            <div className="mt-8">
-              <Card className="glass-card">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold">最近会议</h2>
-                    <Button
-                      variant="link"
-                      className="text-purple-400"
-                      onClick={() => setLocation("/meetings")}
-                    >
-                      查看全部 →
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {meetings.slice(0, 3).map((meeting) => (
-                      <div
-                        key={meeting.id}
-                        className="p-4 rounded-lg bg-background/30 hover:bg-background/50 transition-all cursor-pointer border border-white/5"
-                        onClick={() => setLocation(`/meeting/${meeting.id}`)}
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          {meeting.factory?.logo ? (
-                            <img
-                              src={meeting.factory.logo}
-                              alt={meeting.factory.name}
-                              className="w-8 h-8 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                              <Building2 className="w-4 h-4 text-purple-400" />
-                            </div>
-                          )}
-                          <span className="text-sm text-muted-foreground truncate">
-                            {meeting.factory?.name || "Unknown Factory"}
-                          </span>
+            <div className="rounded-2xl overflow-hidden"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <div className="flex items-center justify-between px-6 py-5"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-violet-400" />
+                  <h2 className="text-lg font-bold text-white">最近会议</h2>
+                </div>
+                <button onClick={() => setLocation("/meetings")}
+                  className="text-sm font-medium flex items-center gap-1"
+                  style={{ color: "#a78bfa" }}>
+                  查看全部 <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {meetings.slice(0, 3).map((meeting) => (
+                  <motion.div
+                    key={meeting.id}
+                    whileHover={{ y: -2 }}
+                    className="p-4 rounded-xl cursor-pointer"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                    onClick={() => setLocation(`/meeting/${meeting.id}`)}
+                  >
+                    <div className="flex items-center gap-2.5 mb-2">
+                      {meeting.factory?.logo ? (
+                        <img src={meeting.factory.logo} alt={meeting.factory.name} className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{ background: "rgba(124,58,237,0.15)" }}>
+                          <Building2 className="w-4 h-4 text-violet-400" />
                         </div>
-                        <h3 className="font-semibold text-sm truncate mb-1">{meeting.title}</h3>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          <span>{formatScheduledAt(meeting.scheduledAt)}</span>
-                          <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-medium ${
-                            meeting.status === "completed" ? "bg-green-500/20 text-green-400" :
-                            meeting.status === "in_progress" ? "bg-blue-500/20 text-blue-400" :
-                            meeting.status === "cancelled" ? "bg-red-500/20 text-red-400" :
-                            "bg-yellow-500/20 text-yellow-400"
-                          }`}>
-                            {meeting.status}
-                          </span>
-                        </div>
+                      )}
+                      <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.40)" }}>
+                        {meeting.factory?.name || "Unknown Factory"}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-sm text-white truncate mb-1.5">{meeting.title}</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
+                        <Clock className="w-3 h-3" />
+                        {formatScheduledAt(meeting.scheduledAt)}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={
+                          meeting.status === "completed" ? { background: "rgba(74,222,128,0.12)", color: "#4ade80" } :
+                          meeting.status === "in_progress" ? { background: "rgba(96,165,250,0.12)", color: "#60a5fa" } :
+                          meeting.status === "cancelled" ? { background: "rgba(248,113,113,0.12)", color: "#f87171" } :
+                          { background: "rgba(251,191,36,0.12)", color: "#fbbf24" }
+                        }>
+                        {meeting.status}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           )}
         </div>

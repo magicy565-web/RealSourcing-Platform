@@ -1,57 +1,29 @@
-/**
- * Meetings.tsx — 买家会议列表页
- *
- * 功能：
- * - 展示买家所有历史和即将进行的1:1选品会议
- * - 支持按状态筛选（全部/即将/已完成/已取消）
- * - 快速进入会议室 / 查看AI摘要 / 预约新会议
- */
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import {
   Calendar, Video, Building2, Clock, CheckCircle2, XCircle,
-  ArrowRight, Plus, Bell, User, Search, Filter, Play,
-  MessageSquare, FileText, Sparkles, AlertCircle, Loader2
+  Plus, Bell, User, Search, Play, FileText, Sparkles, Loader2
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 type MeetingFilter = "all" | "scheduled" | "completed" | "cancelled";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  scheduled: {
-    label: "即将进行",
-    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    icon: <Clock className="w-3 h-3" />,
-  },
-  in_progress: {
-    label: "进行中",
-    color: "bg-green-500/20 text-green-400 border-green-500/30",
-    icon: <Play className="w-3 h-3" />,
-  },
-  completed: {
-    label: "已完成",
-    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    icon: <CheckCircle2 className="w-3 h-3" />,
-  },
-  cancelled: {
-    label: "已取消",
-    color: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-    icon: <XCircle className="w-3 h-3" />,
-  },
+const GRID_BG = `
+  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
+`;
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ReactNode }> = {
+  scheduled: { label: "即将进行", bg: "rgba(96,165,250,0.12)", color: "#60a5fa", icon: <Clock className="w-3 h-3" /> },
+  in_progress: { label: "进行中", bg: "rgba(74,222,128,0.12)", color: "#4ade80", icon: <Play className="w-3 h-3" /> },
+  completed: { label: "已完成", bg: "rgba(167,139,250,0.12)", color: "#a78bfa", icon: <CheckCircle2 className="w-3 h-3" /> },
+  cancelled: { label: "已取消", bg: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.30)", icon: <XCircle className="w-3 h-3" /> },
 };
 
-function MeetingCard({ meeting, onEnter, onViewDetail }: {
-  meeting: any;
-  onEnter: (id: number) => void;
-  onViewDetail: (id: number) => void;
-}) {
+function MeetingCard({ meeting, onEnter, onViewDetail }: { meeting: any; onEnter: (id: number) => void; onViewDetail: (id: number) => void }) {
   const status = STATUS_CONFIG[meeting.status] || STATUS_CONFIG.scheduled;
   const scheduledAt = meeting.scheduledAt ? new Date(meeting.scheduledAt) : null;
   const isUpcoming = meeting.status === "scheduled" || meeting.status === "in_progress";
@@ -70,88 +42,91 @@ function MeetingCard({ meeting, onEnter, onViewDetail }: {
   };
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:border-purple-500/30 transition-all group">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      className="rounded-2xl p-5 relative overflow-hidden"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        backdropFilter: "blur(20px)",
+      }}
+    >
       <div className="flex items-start justify-between gap-4">
-        {/* 左侧：工厂信息 */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
-          {/* 工厂 Logo */}
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.25), rgba(79,70,229,0.25))", border: "1px solid rgba(124,58,237,0.25)" }}>
             {meeting.factory?.logo ? (
               <img src={meeting.factory.logo} alt="" className="w-full h-full rounded-xl object-cover" />
             ) : (
-              <Building2 className="w-6 h-6 text-purple-400" />
+              <Building2 className="w-6 h-6 text-violet-400" />
             )}
           </div>
-          {/* 会议信息 */}
           <div className="flex-1 min-w-0">
             <h3 className="text-white font-semibold truncate">{meeting.title || "选品会议"}</h3>
-            <p className="text-gray-400 text-sm truncate">
-              {meeting.factory?.name || "工厂"}
-            </p>
+            <p className="text-sm truncate" style={{ color: "rgba(255,255,255,0.40)" }}>{meeting.factory?.name || "工厂"}</p>
             <div className="flex items-center gap-3 mt-1.5">
               {scheduledAt && (
-                <div className="flex items-center gap-1 text-gray-500 text-xs">
+                <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
                   <Calendar className="w-3 h-3" />
-                  <span>{formatDate(scheduledAt)}</span>
+                  {formatDate(scheduledAt)}
                 </div>
               )}
               {meeting.durationMinutes && (
-                <div className="flex items-center gap-1 text-gray-500 text-xs">
+                <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
                   <Clock className="w-3 h-3" />
-                  <span>{meeting.durationMinutes} 分钟</span>
+                  {meeting.durationMinutes} 分钟
                 </div>
               )}
             </div>
           </div>
         </div>
-        {/* 右侧：状态 + 操作 */}
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
-          <span className={cn("flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border", status.color)}>
+          <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full"
+            style={{ background: status.bg, color: status.color }}>
             {status.icon}
             {status.label}
           </span>
           <div className="flex gap-2">
             {isUpcoming && (
-              <Button
-                size="sm"
+              <motion.button
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                className="h-8 px-3 rounded-xl text-xs font-bold text-white flex items-center gap-1.5"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
                 onClick={() => onEnter(meeting.id)}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-xs h-8"
               >
-                <Video className="w-3.5 h-3.5 mr-1" />
+                <Video className="w-3.5 h-3.5" />
                 进入会议
-              </Button>
+              </motion.button>
             )}
             {isPast && (
-              <Button
-                size="sm"
-                variant="outline"
+              <motion.button
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                className="h-8 px-3 rounded-xl text-xs font-medium flex items-center gap-1.5"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.50)" }}
                 onClick={() => onViewDetail(meeting.id)}
-                className="border-white/20 text-gray-400 hover:text-white text-xs h-8"
               >
-                <FileText className="w-3.5 h-3.5 mr-1" />
+                <FileText className="w-3.5 h-3.5" />
                 查看详情
-              </Button>
+              </motion.button>
             )}
           </div>
         </div>
       </div>
-      {/* AI 摘要预览（已完成的会议） */}
       {meeting.status === "completed" && meeting.aiSummary && (
-        <div className="mt-4 bg-purple-500/10 border border-purple-500/20 rounded-xl p-3">
+        <div className="mt-4 rounded-xl p-3"
+          style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.18)" }}>
           <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-purple-300 text-xs font-medium">AI 会议摘要</span>
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            <span className="text-xs font-medium text-violet-300">AI 会议摘要</span>
           </div>
-          <p className="text-gray-400 text-xs line-clamp-2">
-            {Array.isArray(meeting.aiSummary)
-              ? meeting.aiSummary[0]
-              : typeof meeting.aiSummary === "string"
-              ? meeting.aiSummary
-              : "摘要已生成，点击查看详情"}
+          <p className="text-xs line-clamp-2" style={{ color: "rgba(255,255,255,0.40)" }}>
+            {Array.isArray(meeting.aiSummary) ? meeting.aiSummary[0] : typeof meeting.aiSummary === "string" ? meeting.aiSummary : "摘要已生成，点击查看详情"}
           </p>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -165,21 +140,16 @@ export default function Meetings() {
   const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery();
 
   const filteredMeetings = (meetings as any[]).filter((m) => {
-    // 状态筛选
     if (filter === "scheduled" && m.status !== "scheduled" && m.status !== "in_progress") return false;
     if (filter === "completed" && m.status !== "completed") return false;
     if (filter === "cancelled" && m.status !== "cancelled") return false;
-    // 搜索筛选
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const title = (m.title || "").toLowerCase();
-      const factoryName = (m.factory?.name || "").toLowerCase();
-      if (!title.includes(q) && !factoryName.includes(q)) return false;
+      if (!(m.title || "").toLowerCase().includes(q) && !(m.factory?.name || "").toLowerCase().includes(q)) return false;
     }
     return true;
   });
 
-  // 统计数据
   const stats = {
     total: (meetings as any[]).length,
     upcoming: (meetings as any[]).filter((m) => m.status === "scheduled" || m.status === "in_progress").length,
@@ -194,127 +164,152 @@ export default function Meetings() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#0F0F23]">
+    <div className="flex min-h-screen" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
+      <div className="fixed inset-0 pointer-events-none"
+        style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+
       <BuyerSidebar userRole={user?.role || "buyer"} />
-      <div className="flex-1 overflow-auto">
-        {/* 顶部栏 */}
-        <div className="h-16 border-b border-white/8 flex items-center justify-between px-8">
+
+      <div className="flex-1 overflow-auto relative z-10">
+        {/* Top Bar */}
+        <div className="h-16 flex items-center justify-between px-8"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,3,16,0.80)", backdropFilter: "blur(20px)" }}>
           <div>
-            <h1 className="text-white font-bold text-lg">我的会议</h1>
-            <p className="text-gray-500 text-xs">管理您的所有1:1选品会议</p>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-violet-400" />
+              <h1 className="text-lg font-bold text-white">我的会议</h1>
+            </div>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>管理您的所有 1:1 选品会议</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              className="relative w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
               onClick={() => setLocation("/notifications")}
-              className="relative text-gray-400 hover:text-white"
             >
-              <Bell className="w-5 h-5" />
-              {(unreadCount as number) > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">
-                  {unreadCount as number}
-                </span>
-              )}
-            </Button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold">
-              {user?.name?.charAt(0) || <User className="w-4 h-4" />}
-            </div>
+              <Bell className="w-4 h-4" style={{ color: "rgba(255,255,255,0.60)" }} />
+              {(unreadCount as number) > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />}
+            </motion.button>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+              onClick={() => setLocation("/settings")}
+            >
+              <User className="w-4 h-4 text-white" />
+            </motion.div>
           </div>
         </div>
 
         <div className="p-8 max-w-5xl mx-auto">
-          {/* 统计卡片 */}
+          {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
-              { label: "全部会议", value: stats.total, icon: <Calendar className="w-5 h-5 text-purple-400" />, color: "from-purple-500/10 to-purple-600/5" },
-              { label: "即将进行", value: stats.upcoming, icon: <Clock className="w-5 h-5 text-blue-400" />, color: "from-blue-500/10 to-blue-600/5" },
-              { label: "已完成", value: stats.completed, icon: <CheckCircle2 className="w-5 h-5 text-green-400" />, color: "from-green-500/10 to-green-600/5" },
-            ].map(({ label, value, icon, color }) => (
-              <div key={label} className={cn("bg-gradient-to-br border border-white/10 rounded-2xl p-5", color)}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                    {icon}
-                  </div>
+              { label: "全部会议", value: stats.total, icon: Calendar, accent: "#a78bfa" },
+              { label: "即将进行", value: stats.upcoming, icon: Clock, accent: "#60a5fa" },
+              { label: "已完成", value: stats.completed, icon: CheckCircle2, accent: "#4ade80" },
+            ].map((stat, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="rounded-2xl p-5 relative overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${stat.accent}18`, backdropFilter: "blur(20px)" }}
+              >
+                <div className="absolute top-0 left-0 right-0 h-0.5"
+                  style={{ background: `linear-gradient(90deg, ${stat.accent}, transparent)` }} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                  style={{ background: `${stat.accent}15` }}>
+                  <stat.icon className="w-5 h-5" style={{ color: stat.accent }} />
                 </div>
-                <p className="text-3xl font-black text-white">{value}</p>
-                <p className="text-gray-400 text-sm mt-1">{label}</p>
-              </div>
+                <p className="text-3xl font-black text-white">{stat.value}</p>
+                <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>{stat.label}</p>
+              </motion.div>
             ))}
           </div>
 
-          {/* 搜索 + 筛选 + 预约按钮 */}
+          {/* Search + Button */}
           <div className="flex items-center gap-3 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <Input
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "rgba(255,255,255,0.25)" }} />
+              <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索会议标题或工厂名称..."
-                className="pl-10 bg-white/5 border-white/15 text-white placeholder:text-gray-600 focus:border-purple-500/50"
+                className="w-full pl-10 pr-4 h-10 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+                onFocus={(e) => e.target.style.borderColor = "rgba(124,58,237,0.55)"}
+                onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.09)"}
               />
             </div>
-            <Button
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2 flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
               onClick={() => setLocation("/factories")}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 flex-shrink-0"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4" />
               预约新会议
-            </Button>
+            </motion.button>
           </div>
 
-          {/* 筛选 Tab */}
+          {/* Filter Tabs */}
           <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
             {FILTER_TABS.map(({ key, label, count }) => (
-              <button
+              <motion.button
                 key={key}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                 onClick={() => setFilter(key)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all",
-                  filter === key
-                    ? "bg-purple-600/30 text-purple-300 border border-purple-500/40"
-                    : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-white"
-                )}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all"
+                style={{
+                  background: filter === key ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${filter === key ? "rgba(124,58,237,0.40)" : "rgba(255,255,255,0.08)"}`,
+                  color: filter === key ? "#c4b5fd" : "rgba(255,255,255,0.40)",
+                }}
               >
                 {label}
                 {count > 0 && (
-                  <span className={cn(
-                    "text-xs px-1.5 py-0.5 rounded-full font-bold",
-                    filter === key ? "bg-purple-500/40 text-purple-200" : "bg-white/10 text-gray-500"
-                  )}>
+                  <span className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                    style={{
+                      background: filter === key ? "rgba(124,58,237,0.30)" : "rgba(255,255,255,0.08)",
+                      color: filter === key ? "#ddd6fe" : "rgba(255,255,255,0.30)",
+                    }}>
                     {count}
                   </span>
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
 
-          {/* 会议列表 */}
+          {/* List */}
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+              <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
             </div>
           ) : filteredMeetings.length === 0 ? (
             <div className="text-center py-20">
-              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
-                <Calendar className="w-8 h-8 text-gray-600" />
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <Calendar className="w-8 h-8" style={{ color: "rgba(255,255,255,0.20)" }} />
               </div>
               <h3 className="text-white font-semibold mb-2">
                 {filter === "all" ? "还没有会议记录" : `没有${FILTER_TABS.find(t => t.key === filter)?.label}的会议`}
               </h3>
-              <p className="text-gray-500 text-sm mb-6">
-                {filter === "all"
-                  ? "找到感兴趣的工厂，预约一场1:1选品会议吧"
-                  : "换个筛选条件试试"}
+              <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.30)" }}>
+                {filter === "all" ? "找到感兴趣的工厂，预约一场 1:1 选品会议吧" : "换个筛选条件试试"}
               </p>
               {filter === "all" && (
-                <Button
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  className="h-10 px-6 rounded-xl text-sm font-semibold text-white flex items-center gap-2 mx-auto"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
                   onClick={() => setLocation("/factories")}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4" />
                   浏览工厂并预约会议
-                </Button>
+                </motion.button>
               )}
             </div>
           ) : (

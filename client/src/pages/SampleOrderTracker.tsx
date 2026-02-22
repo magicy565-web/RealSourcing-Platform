@@ -290,7 +290,7 @@ export default function SampleOrderTracker() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <p className="text-white text-xl mb-4">请先登录</p>
           <Button onClick={() => setLocation("/login")} className="bg-purple-600 hover:bg-purple-700">前往登录</Button>
@@ -311,7 +311,7 @@ export default function SampleOrderTracker() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]">
+    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* Header */}
       <div className="border-b border-white/10 bg-[#0F0F23]/80 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">

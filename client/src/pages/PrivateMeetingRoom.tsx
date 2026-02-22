@@ -100,7 +100,7 @@ function SampleRequestModal({ state, onClose, onSuccess, meetingId }: SampleRequ
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#141628] border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-md bg-transparent border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden">
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
@@ -514,7 +514,7 @@ export default function PrivateMeetingRoom() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
           <p className="text-white/60">Joining meeting room...</p>
@@ -531,7 +531,7 @@ export default function PrivateMeetingRoom() {
   // ── 渲染 ─────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]">
+    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* ── 样品申请弹窗 ── */}
       <SampleRequestModal
         state={sampleRequest}

@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { motion } from "framer-motion";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Search, Filter, Calendar, Users, Bell, User, Radio, Loader2, ArrowRight } from "lucide-react";
+import { Search, Filter, Calendar, Users, Bell, User, Radio, Loader2, ArrowRight, Play } from "lucide-react";
 import { useLocation } from "wouter";
+
+const GRID_BG = `
+  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
+`;
 
 export default function Webinars() {
   const { user } = useAuth();
@@ -17,21 +18,14 @@ export default function Webinars() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // ── tRPC Queries（不得修改）──────────────────────────────────────────────
   const { data: webinars = [], isLoading } = trpc.webinars.list.useQuery();
   const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery();
 
-  // 不得修改：tRPC 注册 mutation
   const registerMutation = trpc.webinars.register.useMutation({
-    onSuccess: () => {
-      toast.success("注册成功！");
-    },
-    onError: (err) => {
-      toast.error(`注册失败: ${err.message}`);
-    },
+    onSuccess: () => toast.success("注册成功！"),
+    onError: (err) => toast.error(`注册失败: ${err.message}`),
   });
 
-  // ── Filtering（不得修改）─────────────────────────────────────────────────
   const filteredWebinars = webinars.filter((webinar) => {
     const matchesSearch =
       webinar.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -43,17 +37,10 @@ export default function Webinars() {
   const liveCount = webinars.filter((w) => w.status === "live").length;
   const upcomingCount = webinars.filter((w) => w.status === "scheduled" || w.status === "upcoming").length;
 
-  const getStatusBadge = (status: string) => {
-    if (status === "live")
-      return (
-        <Badge variant="live" className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-          LIVE
-        </Badge>
-      );
-    if (status === "scheduled" || status === "upcoming")
-      return <Badge variant="upcoming">即将开始</Badge>;
-    return <Badge variant="past">已结束</Badge>;
+  const getStatusStyle = (status: string) => {
+    if (status === "live") return { bg: "rgba(239,68,68,0.20)", color: "#f87171", label: "LIVE", dot: true };
+    if (status === "scheduled" || status === "upcoming") return { bg: "rgba(96,165,250,0.15)", color: "#60a5fa", label: "即将开始", dot: false };
+    return { bg: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)", label: "已结束", dot: false };
   };
 
   const formatTime = (scheduledAt: Date | null | undefined) => {
@@ -70,217 +57,245 @@ export default function Webinars() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
+    <div className="flex min-h-screen" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
+      <div className="fixed inset-0 pointer-events-none"
+        style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+
       <BuyerSidebar userRole={user?.role || "buyer"} />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative z-10">
         {/* Top Bar */}
-        <div className="h-16 bg-card border-b border-border/60 flex items-center justify-between px-8">
+        <div className="h-16 flex items-center justify-between px-8"
+          style={{
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(5,3,16,0.80)",
+            backdropFilter: "blur(20px)",
+          }}>
           <div>
-            <h1 className="text-xl font-bold text-foreground">在线研讨会</h1>
-            <p className="text-xs text-muted-foreground">发现并参与精彩的工厂展示活动</p>
+            <div className="flex items-center gap-2">
+              <Radio className="w-4 h-4 text-violet-400" />
+              <h1 className="text-lg font-bold text-white">在线研讨会</h1>
+            </div>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>发现并参与精彩的工厂展示活动</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative h-9 w-9 rounded-full"
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              className="relative w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
               onClick={() => setLocation("/notifications")}
             >
-              <Bell className="w-4.5 h-4.5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-background" />
-              )}
-            </Button>
-            <div
-              className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/15 transition-colors"
+              <Bell className="w-4 h-4" style={{ color: "rgba(255,255,255,0.60)" }} />
+              {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />}
+            </motion.button>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
               onClick={() => setLocation("/settings")}
             >
-              <User className="w-4.5 h-4.5 text-primary" />
-            </div>
+              <User className="w-4 h-4 text-white" />
+            </motion.div>
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-8 max-w-7xl mx-auto">
           {/* Stats Row */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-card rounded-xl border border-border/60 p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                <Radio className="w-5 h-5 text-red-400" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-foreground">
-                  {isLoading ? <span className="w-6 h-5 block bg-muted/50 rounded animate-pulse" /> : liveCount}
+            {[
+              { icon: Radio, value: liveCount, label: "场直播中", accent: "#f87171" },
+              { icon: Calendar, value: upcomingCount, label: "场即将开始", accent: "#a78bfa" },
+              { icon: Users, value: webinars.length, label: "场总计", accent: "#4ade80" },
+            ].map((stat, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${stat.accent}18`,
+                  backdropFilter: "blur(20px)",
+                }}
+              >
+                <div className="absolute top-0 left-0 right-0 h-0.5"
+                  style={{ background: `linear-gradient(90deg, ${stat.accent}, transparent)` }} />
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: `${stat.accent}15` }}>
+                  <stat.icon className="w-5 h-5" style={{ color: stat.accent }} />
                 </div>
-                <div className="text-xs text-muted-foreground font-medium">场直播中</div>
-              </div>
-            </div>
-            <div className="bg-card rounded-xl border border-border/60 p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-violet-400" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-foreground">
-                  {isLoading ? <span className="w-6 h-5 block bg-muted/50 rounded animate-pulse" /> : upcomingCount}
+                <div>
+                  <div className="text-3xl font-black text-white">
+                    {isLoading ? <span className="w-7 h-6 block rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} /> : stat.value}
+                  </div>
+                  <div className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{stat.label}</div>
                 </div>
-                <div className="text-xs text-muted-foreground font-medium">场即将开始</div>
-              </div>
-            </div>
-            <div className="bg-card rounded-xl border border-border/60 p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                <Users className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-foreground">
-                  {isLoading ? <span className="w-6 h-5 block bg-muted/50 rounded animate-pulse" /> : webinars.length}
-                </div>
-                <div className="text-xs text-muted-foreground font-medium">场总计</div>
-              </div>
-            </div>
+              </motion.div>
+            ))}
           </div>
 
-          {/* Search & Filter Bar */}
+          {/* Search & Filter */}
           <div className="flex flex-col md:flex-row gap-3 mb-6">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "rgba(255,255,255,0.25)" }} />
+              <input
                 placeholder="搜索 Webinar、工厂、产品类别..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-10"
+                className="w-full pl-10 pr-4 h-10 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                }}
+                onFocus={(e) => e.target.style.borderColor = "rgba(124,58,237,0.55)"}
+                onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.09)"}
               />
             </div>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-44 h-10">
-                <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="live">正在直播</SelectItem>
-                <SelectItem value="scheduled">即将开始</SelectItem>
-                <SelectItem value="completed">已结束</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button className="h-10 shadow-sm shadow-primary/20">
-              <Calendar className="w-4 h-4 mr-2" />
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "rgba(255,255,255,0.25)" }} />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="pl-9 pr-4 h-10 rounded-xl text-sm text-white outline-none appearance-none cursor-pointer"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                }}
+              >
+                <option value="all" style={{ background: "#0f0c1a" }}>全部状态</option>
+                <option value="live" style={{ background: "#0f0c1a" }}>正在直播</option>
+                <option value="scheduled" style={{ background: "#0f0c1a" }}>即将开始</option>
+                <option value="completed" style={{ background: "#0f0c1a" }}>已结束</option>
+              </select>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+            >
+              <Calendar className="w-4 h-4" />
               我的日程
-            </Button>
+            </motion.button>
           </div>
 
-          {/* Loading State */}
+          {/* Loading */}
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">加载 Webinar...</p>
+                <Loader2 className="w-10 h-10 animate-spin mx-auto mb-3 text-violet-400" />
+                <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>加载 Webinar...</p>
               </div>
             </div>
           ) : (
             <>
-              {/* Webinar Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredWebinars.map((webinar) => (
-                  <Card
-                    key={webinar.id}
-                    className="card-hover overflow-hidden cursor-pointer group border-border/60"
-                    onClick={() => setLocation(`/webinar/${webinar.id}`)}
-                  >
-                    <CardContent className="p-0">
+                {filteredWebinars.map((webinar, i) => {
+                  const st = getStatusStyle(webinar.status);
+                  return (
+                    <motion.div
+                      key={webinar.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.06 }}
+                      whileHover={{ y: -4 }}
+                      className="rounded-2xl overflow-hidden cursor-pointer group"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        backdropFilter: "blur(20px)",
+                      }}
+                      onClick={() => setLocation(`/webinar/${webinar.id}`)}
+                    >
                       {/* Image */}
-                      <div className="relative overflow-hidden">
+                      <div className="relative overflow-hidden" style={{ height: "11rem" }}>
                         <img
-                          src={
-                            webinar.coverImage ||
-                            "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=250&fit=crop"
-                          }
+                          src={webinar.coverImage || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=250&fit=crop"}
                           alt={webinar.title}
-                          className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
-                        {/* Status Badge */}
+                        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(5,3,16,0.7) 0%, transparent 60%)" }} />
                         <div className="absolute top-3 left-3">
-                          {getStatusBadge(webinar.status)}
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                            style={{ background: st.bg, color: st.color, backdropFilter: "blur(8px)" }}>
+                            {st.dot && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: st.color }} />}
+                            {st.label}
+                          </span>
                         </div>
-                        {/* Live 直播遮罩 */}
                         {webinar.status === "live" && (
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center"
+                              style={{ background: "rgba(124,58,237,0.80)", backdropFilter: "blur(8px)" }}>
+                              <Play className="w-5 h-5 text-white ml-0.5" />
+                            </div>
+                          </div>
                         )}
                       </div>
 
                       {/* Content */}
                       <div className="p-4">
-                        {/* Title */}
-                        <h3 className="font-semibold text-foreground text-sm mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                        <h3 className="font-semibold text-white text-sm mb-2 line-clamp-2 leading-snug group-hover:text-violet-300 transition-colors">
                           {webinar.title}
                         </h3>
-
-                        {/* Time & Action */}
                         <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
                             <Calendar className="w-3.5 h-3.5" />
-                            <span>{formatTime(webinar.scheduledAt)}</span>
+                            {formatTime(webinar.scheduledAt)}
                           </div>
-
                           {webinar.status === "live" && (
-                            <Button
-                              size="sm"
-                              className="h-7 text-xs px-3 shadow-sm shadow-primary/20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocation(`/webinar/${webinar.id}`);
-                              }}
+                            <motion.button
+                              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                              className="h-7 px-3 rounded-lg text-xs font-bold text-white flex items-center gap-1"
+                              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                              onClick={(e) => { e.stopPropagation(); setLocation(`/webinar/${webinar.id}`); }}
                             >
-                              立即参与
-                              <ArrowRight className="w-3 h-3 ml-1" />
-                            </Button>
+                              立即参与 <ArrowRight className="w-3 h-3" />
+                            </motion.button>
                           )}
                           {(webinar.status === "scheduled" || webinar.status === "upcoming") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs px-3"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                registerMutation.mutate({ webinarId: webinar.id });
+                            <motion.button
+                              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                              className="h-7 px-3 rounded-lg text-xs font-medium"
+                              style={{
+                                background: "rgba(255,255,255,0.06)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "rgba(255,255,255,0.60)",
                               }}
+                              onClick={(e) => { e.stopPropagation(); registerMutation.mutate({ webinarId: webinar.id }); }}
                               disabled={registerMutation.isPending}
                             >
                               注册
-                            </Button>
+                            </motion.button>
                           )}
                           {(webinar.status === "completed" || webinar.status === "past") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs px-3"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocation(`/webinar/${webinar.id}`);
+                            <motion.button
+                              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                              className="h-7 px-3 rounded-lg text-xs font-medium"
+                              style={{
+                                background: "rgba(255,255,255,0.06)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "rgba(255,255,255,0.60)",
                               }}
+                              onClick={(e) => { e.stopPropagation(); setLocation(`/webinar/${webinar.id}`); }}
                             >
                               回放
-                            </Button>
+                            </motion.button>
                           )}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
 
-              {/* Empty State */}
               {filteredWebinars.length === 0 && (
                 <div className="text-center py-20">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-blue-400" />
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    style={{ background: "rgba(124,58,237,0.10)", border: "1px solid rgba(124,58,237,0.20)" }}>
+                    <Search className="w-8 h-8 text-violet-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2">未找到匹配的 Webinar</h3>
-                  <p className="text-muted-foreground text-sm">尝试调整搜索条件或筛选器</p>
+                  <h3 className="text-lg font-bold text-white mb-2">未找到匹配的 Webinar</h3>
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>尝试调整搜索条件或筛选器</p>
                 </div>
               )}
             </>

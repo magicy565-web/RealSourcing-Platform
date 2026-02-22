@@ -85,7 +85,7 @@ export default function MeetingDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading meeting details...</p>
@@ -96,7 +96,7 @@ export default function MeetingDetail() {
 
   if (error || !meeting) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Calendar className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Meeting Not Found</h2>
@@ -124,9 +124,9 @@ export default function MeetingDetail() {
   ].filter(t => t.value) : [];
 
   return (
-    <div className="min-h-screen bg-[#0D0F1A] text-white">
+    <div className="min-h-screen text-white" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* ── Top Navigation ── */}
-      <div className="sticky top-0 z-50 h-14 bg-[#0D0F1A]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
+      <div className="sticky top-0 z-50 h-14 bg-transparent/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
         <button
           onClick={() => setLocation("/dashboard")}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all text-sm border border-white/10"
@@ -257,7 +257,7 @@ export default function MeetingDetail() {
                   </button>
                 )}
               </div>
-              <div className="px-4 py-3 bg-[#0D0F1A] flex items-center justify-between">
+              <div className="px-4 py-3 bg-transparent flex items-center justify-between">
                 <span className="text-sm text-gray-400 flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-400" />
                   Meeting Recording
@@ -270,7 +270,7 @@ export default function MeetingDetail() {
               </div>
             </div>
           ) : (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-8 text-center">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-8 text-center">
               <Play className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Recording not available yet</p>
               <p className="text-gray-600 text-xs mt-1">Recording will appear here after the meeting ends</p>
@@ -279,7 +279,7 @@ export default function MeetingDetail() {
 
           {/* AI Business Terms (shown after AI analysis) */}
           {businessTerms.length > 0 && (
-            <div className="bg-[#141628] border border-amber-500/30 rounded-2xl p-6">
+            <div className="bg-transparent border border-amber-500/30 rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-base font-semibold text-white">Key Business Terms</h3>
                 <Badge className="bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs px-2 py-0.5">
@@ -307,7 +307,7 @@ export default function MeetingDetail() {
 
           {/* Transcript */}
           {transcripts.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
                   <FileText className="w-4 h-4 text-purple-400" />
@@ -354,7 +354,7 @@ export default function MeetingDetail() {
 
           {/* Meeting Inquiries */}
           {meeting.inquiries && meeting.inquiries.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-purple-400" />
                 Related Inquiries ({meeting.inquiries.length})
@@ -393,7 +393,7 @@ export default function MeetingDetail() {
         {/* Right Column */}
         <div className="space-y-5">
           {/* AI Summary */}
-          <div className="bg-[#141628] border border-amber-500/30 rounded-2xl p-6">
+          <div className="bg-transparent border border-amber-500/30 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold text-white">AI Meeting Summary</h3>
@@ -450,7 +450,7 @@ export default function MeetingDetail() {
 
           {/* Follow-up Actions */}
           {followUpActions.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-purple-400" />
                 Follow-up Actions
@@ -469,7 +469,7 @@ export default function MeetingDetail() {
           )}
 
           {/* AI Reel Generator */}
-          <div className="bg-[#141628] border border-amber-500/30 rounded-2xl p-6">
+          <div className="bg-transparent border border-amber-500/30 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <h3 className="text-base font-semibold text-white">AI Highlight Reel</h3>
               <Badge className="bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs px-2 py-0.5">AI</Badge>
@@ -491,7 +491,7 @@ export default function MeetingDetail() {
           </div>
 
           {/* Send Meeting Minutes */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="bg-transparent border border-white/10 rounded-2xl p-6">
             <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
               <Send className="w-4 h-4 text-blue-400" />
               Send Meeting Minutes
@@ -517,7 +517,7 @@ export default function MeetingDetail() {
           {/* Factory Info */}
           {meeting.factory && (
             <div
-              className="bg-[#141628] border border-white/10 rounded-2xl p-6 cursor-pointer hover:border-purple-500/40 transition-all"
+              className="bg-transparent border border-white/10 rounded-2xl p-6 cursor-pointer hover:border-purple-500/40 transition-all"
               onClick={() => setLocation(`/factory/${meeting.factory!.id}`)}
             >
               <h3 className="text-base font-semibold text-white mb-4">Factory Info</h3>

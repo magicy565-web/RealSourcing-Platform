@@ -260,10 +260,10 @@ export default function FactoryDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
         <div className="text-center">
-          <div className="w-12 h-12 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading factory...</p>
+          <div className="w-12 h-12 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{borderColor:'rgba(124,58,237,0.6)',borderTopColor:'transparent'}} />
+          <p style={{color:'rgba(255,255,255,0.35)'}}>Loading factory...</p>
         </div>
       </div>
     );
@@ -271,14 +271,14 @@ export default function FactoryDetail() {
 
   if (error || !factory) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
         <div className="text-center">
-          <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Factory Not Found</h2>
-          <p className="text-gray-400 mb-4">{error?.message || "The factory you're looking for doesn't exist."}</p>
-          <Button onClick={() => setLocation("/factories")} className="bg-purple-600 hover:bg-purple-500">
+          <Building2 className="w-16 h-16 mx-auto mb-4" style={{color:'rgba(255,255,255,0.15)'}} />
+          <h2 className="text-xl font-bold mb-2 text-white">Factory Not Found</h2>
+          <p className="mb-4" style={{color:'rgba(255,255,255,0.35)'}}>{error?.message || "The factory you're looking for doesn't exist."}</p>
+          <button onClick={() => setLocation("/factories")} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{background:'linear-gradient(135deg,#7c3aed,#4f46e5)'}}>
             Back to Factories
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -368,9 +368,9 @@ export default function FactoryDetail() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0D0F1A] text-white">
+    <div className="min-h-screen text-white" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
       {/* ── 顶部导航 ── */}
-      <div className="sticky top-0 z-50 h-14 bg-[#0D0F1A]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
+      <div className="sticky top-0 z-50 h-14 backdrop-blur-xl flex items-center justify-between px-6" style={{background:'rgba(5,3,16,0.85)',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
         <button
           onClick={() => setLocation("/factories")}
           className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
@@ -401,7 +401,7 @@ export default function FactoryDetail() {
       {/* ── 封面图 ── */}
       <div className="relative h-[300px] overflow-hidden">
         <img src={coverImage} alt={factory.name} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0D0F1A] via-[#0D0F1A]/30 to-transparent" />
+          <div className="absolute inset-0" style={{background:'linear-gradient(to top, #050310 0%, rgba(5,3,16,0.3) 50%, transparent 100%)'}} />
       </div>
 
       {/* ── 工厂标识栏 ── */}
@@ -464,7 +464,7 @@ export default function FactoryDetail() {
         <div className="col-span-12 lg:col-span-3 space-y-5">
 
           {/* AMR 雷达图 */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-5">
+          <div className="rounded-2xl p-5" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 className="w-4 h-4 text-violet-400" />
               <h3 className="text-sm font-semibold text-white">AMR 敏捷指数</h3>
@@ -514,7 +514,7 @@ export default function FactoryDetail() {
 
           {/* 联系方式 */}
           {(details?.phone || details?.email) && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-4 space-y-2.5 text-sm">
+            <div className="rounded-2xl p-4 space-y-2.5 text-sm" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               {details.phone && (
                 <div className="flex items-center gap-2 text-gray-400">
                   <Phone className="w-4 h-4 text-purple-400 shrink-0" />
@@ -541,7 +541,7 @@ export default function FactoryDetail() {
         <div className="col-span-12 lg:col-span-6 space-y-6">
 
           {/* 买家体感词云 */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-4 h-4 text-violet-400" />
               <h3 className="text-base font-semibold text-white">买家体感词云</h3>
@@ -551,7 +551,7 @@ export default function FactoryDetail() {
           </div>
 
           {/* 履约时效图 */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <div className="flex items-center gap-2 mb-4">
               <Zap className="w-4 h-4 text-emerald-400" />
               <h3 className="text-base font-semibold text-white">履约时效</h3>
@@ -561,7 +561,7 @@ export default function FactoryDetail() {
 
           {/* 产品展示 */}
           {products.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               <h3 className="text-base font-semibold mb-4 text-white">Main Products</h3>
               <div className="flex gap-1 mb-4 border-b border-white/10 pb-0">
                 {productTabs.map((tab) => (
@@ -605,7 +605,7 @@ export default function FactoryDetail() {
 
           {/* 买家评价 */}
           {reviews.length > 0 && (
-            <div id="reviews" className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div id="reviews" className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               <h3 className="text-base font-semibold mb-4 text-white">Buyer Reviews</h3>
               <div className="space-y-4">
                 {reviews.slice(0, 5).map((review) => (
@@ -630,7 +630,7 @@ export default function FactoryDetail() {
         <div className="col-span-12 lg:col-span-3 space-y-5">
 
           {/* 渠道能力看板 */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-5">
+          <div className="rounded-2xl p-5" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-4 h-4 text-violet-400" />
               <h3 className="text-sm font-semibold text-white">渠道能力</h3>
@@ -639,7 +639,7 @@ export default function FactoryDetail() {
           </div>
 
           {/* 全球生态地图 */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-5">
+          <div className="rounded-2xl p-5" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-4 h-4 text-violet-400" />
               <h3 className="text-sm font-semibold text-white">全球买家生态</h3>
@@ -650,7 +650,7 @@ export default function FactoryDetail() {
 
           {/* 国际认证 */}
           {certifications.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-5">
+            <div className="rounded-2xl p-5" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               <div className="flex items-center gap-2 mb-3">
                 <Award className="w-4 h-4 text-amber-400" />
                 <h3 className="text-sm font-semibold text-white">国际认证</h3>

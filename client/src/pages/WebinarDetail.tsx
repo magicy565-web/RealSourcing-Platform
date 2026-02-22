@@ -73,7 +73,7 @@ export default function WebinarDetail() {
   // ── Loading / Error States ────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading webinar...</p>
@@ -84,7 +84,7 @@ export default function WebinarDetail() {
 
   if (error || !webinar) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <Radio className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Webinar Not Found</h2>
@@ -116,9 +116,9 @@ export default function WebinarDetail() {
   const shareLink = `${window.location.origin}/webinar/${webinarId}`;
 
   return (
-    <div className="min-h-screen bg-[#0D0F1A] text-white">
+    <div className="min-h-screen text-white" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* ── Top Navigation ── */}
-      <div className="sticky top-0 z-50 h-14 bg-[#0D0F1A]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
+      <div className="sticky top-0 z-50 h-14 bg-transparent/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
         <button
           onClick={() => setLocation("/webinars")}
           className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
@@ -255,7 +255,7 @@ export default function WebinarDetail() {
         <div className="lg:col-span-2 space-y-5">
 
           {/* Basic Info Card */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="bg-transparent border border-white/10 rounded-2xl p-6">
             <h3 className="text-base font-semibold mb-4 text-white">基本信息</h3>
             <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div className="flex items-center gap-2 text-gray-300">
@@ -286,7 +286,7 @@ export default function WebinarDetail() {
 
           {/* Webinar Description */}
           {webinar.description && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-3 text-white">Webinar 介绍</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{webinar.description}</p>
             </div>
@@ -294,7 +294,7 @@ export default function WebinarDetail() {
 
           {/* Host Info */}
           {webinar.host && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-4 text-white">主持人</h3>
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-purple-900/30 border border-purple-500/30 flex items-center justify-center">
@@ -318,7 +318,7 @@ export default function WebinarDetail() {
         {/* ── Right Column (1/3) ── */}
         <div className="space-y-5">
           {/* Registration CTA */}
-          <div className="bg-[#141628] border border-purple-500/40 rounded-2xl p-6">
+          <div className="bg-transparent border border-purple-500/40 rounded-2xl p-6">
             <h3 className="text-base font-semibold mb-4 text-white">
               {isLive ? "正在直播" : isUpcoming ? "立即报名" : "回放"}
             </h3>
@@ -357,7 +357,7 @@ export default function WebinarDetail() {
           </div>
 
           {/* Share */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="bg-transparent border border-white/10 rounded-2xl p-6">
             <h3 className="text-base font-semibold mb-4 text-white">分享</h3>
             <div className="grid grid-cols-4 gap-3">
               {[
@@ -382,7 +382,7 @@ export default function WebinarDetail() {
 
           {/* Related Webinars */}
           {relatedWebinars.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="bg-transparent border border-white/10 rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-4 text-white">相关 Webinar</h3>
               <div className="space-y-3">
                 {relatedWebinars.map((w) => (

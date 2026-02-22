@@ -78,7 +78,7 @@ export default function ProductDetail() {
   // ── Loading / Error States ────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading product...</p>
@@ -89,7 +89,7 @@ export default function ProductDetail() {
 
   if (error || !product) {
     return (
-      <div className="min-h-screen bg-[#0D0F1A] text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
         <div className="text-center">
           <Package className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Product Not Found</h2>
@@ -128,9 +128,9 @@ export default function ProductDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0D0F1A] text-white">
+    <div className="min-h-screen text-white" style={{background:'linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)'}}>
       {/* ── Top Navigation ── */}
-      <div className="sticky top-0 z-50 h-14 bg-[#0D0F1A]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
+      <div className="sticky top-0 z-50 h-14 backdrop-blur-xl flex items-center justify-between px-6" style={{background:'rgba(5,3,16,0.85)',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
         <button
           onClick={() => window.history.back()}
           className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
@@ -168,7 +168,7 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
           {/* Image Gallery */}
           <div className="space-y-4">
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-[#141628] border border-white/10">
+            <div className="relative aspect-square rounded-2xl overflow-hidden" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)'}}>
               {images.length > 0 ? (
                 <img
                   src={images[activeImage]}
@@ -239,7 +239,7 @@ export default function ProductDetail() {
 
             {/* Price */}
             {(details?.priceMin || details?.moq) && (
-              <div className="bg-[#141628] border border-white/10 rounded-xl p-4">
+              <div className="rounded-xl p-4" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
                 <div className="flex items-baseline gap-2 mb-2">
                   {details?.priceMin && (
                     <span className="text-3xl font-bold text-amber-400">
@@ -260,7 +260,7 @@ export default function ProductDetail() {
             {/* Factory Info */}
             {product.factory && (
               <div
-                className="flex items-center gap-3 p-4 bg-[#141628] border border-white/10 rounded-xl cursor-pointer hover:border-purple-500/40 transition-all"
+                className="flex items-center gap-3 p-4  rounded-xl cursor-pointer hover:border-purple-500/40 transition-all"
                 onClick={() => setLocation(`/factory/${product.factory!.id}`)}
               >
                 {product.factory.logo ? (
@@ -352,7 +352,7 @@ export default function ProductDetail() {
 
           {/* Description */}
           {product.description && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               <h3 className="text-lg font-semibold mb-3 text-white">Product Description</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{product.description}</p>
             </div>
@@ -360,7 +360,7 @@ export default function ProductDetail() {
 
           {/* Reviews */}
           {product.reviews.length > 0 && (
-            <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+            <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
               <h3 className="text-lg font-semibold mb-4 text-white">Reviews ({product.reviews.length})</h3>
               <div className="space-y-4">
                 {product.reviews.slice(0, 5).map((review) => (
@@ -463,7 +463,7 @@ export default function ProductDetail() {
           </div>
 
           {/* Share Card */}
-          <div className="bg-[#141628] border border-white/10 rounded-2xl p-6">
+          <div className="rounded-2xl p-6" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',backdropFilter:'blur(20px)'}}>
             <h3 className="text-base font-semibold mb-4 text-white">Share Card</h3>
             <div className="grid grid-cols-4 gap-3">
               {[

@@ -66,7 +66,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-transparent flex items-center justify-center px-4 py-12" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* 背景装饰 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
@@ -129,7 +129,7 @@ export default function Onboarding() {
         </div>
 
         {/* 卡片 */}
-        <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-transparent/50 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
           {/* Step 1: 分类选择 */}
           {step === 1 && (
             <div>

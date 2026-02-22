@@ -119,7 +119,7 @@ export default function Subscription() {
   const yearlyDiscount = 20;
 
   return (
-    <div className="min-h-screen bg-background p-6 max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-transparent p-6 max-w-6xl mx-auto space-y-8" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* 页面头部 */}
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">Choose Your Plan</h1>
@@ -127,7 +127,7 @@ export default function Subscription() {
       </div>
 
       {/* 当前配额使用情况 */}
-      <div className="bg-card/50 border border-white/10 rounded-2xl p-6">
+      <div className="bg-transparent/50 border border-white/10 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold">Current Usage</h3>
@@ -213,7 +213,7 @@ export default function Subscription() {
             <div
               key={plan.id}
               className={cn(
-                "relative bg-card/50 border-2 rounded-2xl p-6 flex flex-col transition-all hover:shadow-lg",
+                "relative bg-transparent/50 border-2 rounded-2xl p-6 flex flex-col transition-all hover:shadow-lg",
                 plan.color,
                 isPopular && "shadow-lg shadow-purple-600/20",
                 isCurrent && "opacity-80"

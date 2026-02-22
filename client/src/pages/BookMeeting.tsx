@@ -52,7 +52,7 @@ export default function BookMeeting() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <p className="text-white text-xl mb-4">请先登录后再预约会议</p>
           <Button onClick={() => setLocation("/login")} className="bg-purple-600 hover:bg-purple-700">前往登录</Button>
@@ -63,7 +63,7 @@ export default function BookMeeting() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
@@ -71,7 +71,7 @@ export default function BookMeeting() {
 
   if (!factory) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center">
           <p className="text-white text-xl mb-4">工厂不存在</p>
           <Button onClick={() => setLocation("/factories")} variant="outline" className="border-white/20 text-gray-400">返回工厂列表</Button>
@@ -114,7 +114,7 @@ export default function BookMeeting() {
 
   if (step === "success") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
         <div className="text-center max-w-md">
           <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-green-400" />
@@ -145,7 +145,7 @@ export default function BookMeeting() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]">
+    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
       {/* 顶部导航 */}
       <div className="border-b border-white/10 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center gap-4">

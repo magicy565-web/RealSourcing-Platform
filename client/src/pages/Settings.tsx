@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
 import {
   User, Bell, Shield, Globe, Palette, Link2, Trash2, Save,
   Camera, Check, ChevronRight, Mail, Phone, MapPin, Building2,
-  Eye, EyeOff, Smartphone, Monitor, Moon, Sun, Loader2
+  Eye, EyeOff, Smartphone, Loader2
 } from "lucide-react";
 
 type SettingsTab = "profile" | "notifications" | "security" | "preferences" | "integrations";
+
+const GRID_BG = `
+  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
+`;
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "profile", label: "Profile", icon: <User className="w-4 h-4" /> },
@@ -37,6 +40,43 @@ const INTEGRATIONS = [
   { id: "zapier", name: "Zapier", icon: "⚡", desc: "Connect with 5000+ apps", connected: false },
 ];
 
+const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
+  <button
+    onClick={onChange}
+    className="w-10 h-6 rounded-full transition-all duration-200 relative flex-shrink-0"
+    style={{ background: checked ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : "rgba(255,255,255,0.12)" }}
+  >
+    <div
+      className="absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 shadow-sm"
+      style={{ left: checked ? "1.25rem" : "0.25rem" }}
+    />
+  </button>
+);
+
+const InputField = ({ icon: Icon, label, value, onChange, type = "text", disabled = false, placeholder = "" }: any) => (
+  <div>
+    <label className="text-xs font-medium mb-1.5 block" style={{ color: "rgba(255,255,255,0.40)" }}>{label}</label>
+    <div className="relative">
+      <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "rgba(255,255,255,0.25)" }} />
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        placeholder={placeholder}
+        className="w-full pl-10 pr-4 h-10 rounded-xl text-sm text-white outline-none transition-all"
+        style={{
+          background: disabled ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.09)",
+          color: disabled ? "rgba(255,255,255,0.30)" : "white",
+        }}
+        onFocus={(e) => !disabled && (e.target.style.borderColor = "rgba(124,58,237,0.55)")}
+        onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.09)")}
+      />
+    </div>
+  </div>
+);
+
 export default function Settings() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
@@ -49,15 +89,10 @@ export default function Settings() {
     }), {} as Record<string, { email: boolean; push: boolean; sms: boolean }>)
   );
 
-  // ── tRPC Queries ──────────────────────────────────────────────────────────
   const { data: profileData, isLoading: profileLoading } = trpc.profile.get.useQuery();
   const updateProfileMutation = trpc.profile.update.useMutation({
-    onSuccess: () => {
-      toast.success("Profile saved successfully!");
-    },
-    onError: (err) => {
-      toast.error(`Failed to save: ${err.message}`);
-    },
+    onSuccess: () => toast.success("Profile saved successfully!"),
+    onError: (err) => toast.error(`Failed to save: ${err.message}`),
   });
 
   const [profile, setProfile] = useState({
@@ -71,7 +106,6 @@ export default function Settings() {
     timezone: "America/Los_Angeles",
   });
 
-  // Sync profile when data loads
   useEffect(() => {
     if (profileData) {
       setProfile((prev) => ({
@@ -82,178 +116,117 @@ export default function Settings() {
     }
   }, [profileData]);
 
-  const handleSave = () => {
-    updateProfileMutation.mutate({
-      name: profile.name,
-    });
-  };
-
+  const handleSave = () => updateProfileMutation.mutate({ name: profile.name });
   const toggleNotification = (id: string, channel: "email" | "push" | "sms") => {
-    setNotifications((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], [channel]: !prev[id][channel] }
-    }));
+    setNotifications((prev) => ({ ...prev, [id]: { ...prev[id], [channel]: !prev[id][channel] } }));
   };
-
-  const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
-    <button
-      onClick={onChange}
-      className={cn(
-        "w-10 h-6 rounded-full transition-all duration-200 relative flex-shrink-0",
-        checked ? "bg-purple-600" : "bg-white/20"
-      )}
-    >
-      <div className={cn(
-        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 shadow-sm",
-        checked ? "left-5" : "left-1"
-      )} />
-    </button>
-  );
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto p-6">
-        {/* 头部 */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your account preferences and configurations</p>
-        </div>
+    <div className="min-h-screen" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
+      <div className="fixed inset-0 pointer-events-none"
+        style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+
+      <div className="relative z-10 max-w-5xl mx-auto p-8">
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="text-2xl font-black text-white">Settings</h1>
+          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>Manage your account preferences and configurations</p>
+        </motion.div>
 
         <div className="flex gap-6">
-          {/* 侧边导航 */}
-          <div className="w-52 flex-shrink-0">
-            <div className="bg-card/50 border border-white/10 rounded-2xl p-2 space-y-1">
+          {/* Sidebar Nav */}
+          <motion.div
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-52 flex-shrink-0"
+          >
+            <div className="rounded-2xl p-2 space-y-1"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", backdropFilter: "blur(20px)" }}>
               {TABS.map((tab) => (
-                <button
+                <motion.button
                   key={tab.id}
+                  whileHover={{ x: 2 }}
                   onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
-                    activeTab === tab.id
-                      ? "bg-purple-600/20 text-purple-300"
-                      : "text-muted-foreground hover:text-white hover:bg-white/5"
-                  )}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    background: activeTab === tab.id ? "rgba(124,58,237,0.20)" : "transparent",
+                    color: activeTab === tab.id ? "#c4b5fd" : "rgba(255,255,255,0.40)",
+                    border: activeTab === tab.id ? "1px solid rgba(124,58,237,0.30)" : "1px solid transparent",
+                  }}
                 >
                   {tab.icon}
                   {tab.label}
-                </button>
+                </motion.button>
               ))}
             </div>
-          </div>
+          </motion.div>
 
-          {/* 内容区 */}
-          <div className="flex-1 bg-card/50 border border-white/10 rounded-2xl p-6">
+          {/* Content */}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex-1 rounded-2xl p-6"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", backdropFilter: "blur(20px)" }}
+          >
             {/* Profile Tab */}
             {activeTab === "profile" && (
               <div className="space-y-6">
-                <h2 className="font-bold text-lg">Profile Information</h2>
-
+                <h2 className="font-bold text-lg text-white">Profile Information</h2>
                 {profileLoading ? (
                   <div className="flex items-center justify-center h-40">
-                    <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                    <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
                   </div>
                 ) : (
                   <>
-                    {/* 头像 */}
                     <div className="flex items-center gap-4">
                       <div className="relative">
-                        <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-400 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">
+                        <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black text-white"
+                          style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
                           {(profile.name || "U").slice(0, 2).toUpperCase()}
                         </div>
-                        <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-purple-600 hover:bg-purple-500 rounded-full flex items-center justify-center transition-all shadow-lg">
+                        <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
+                          style={{ background: "#7c3aed" }}>
                           <Camera className="w-3.5 h-3.5 text-white" />
                         </button>
                       </div>
                       <div>
-                        <p className="font-semibold">{profile.name}</p>
-                        <p className="text-sm text-muted-foreground">{profile.email}</p>
-                        <button className="text-xs text-purple-400 hover:text-purple-300 mt-1 transition-colors">
-                          Change avatar
-                        </button>
+                        <p className="font-semibold text-white">{profile.name}</p>
+                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.40)" }}>{profile.email}</p>
+                        <button className="text-xs text-violet-400 hover:text-violet-300 mt-1 transition-colors">Change avatar</button>
                       </div>
                     </div>
-
-                    {/* 表单 */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Full Name</label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            value={profile.name}
-                            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Email</label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            value={profile.email}
-                            onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                            disabled
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Phone</label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            value={profile.phone}
-                            onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Company</label>
-                        <div className="relative">
-                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            value={profile.company}
-                            onChange={(e) => setProfile({ ...profile, company: e.target.value })}
-                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                          />
-                        </div>
+                      <InputField icon={User} label="Full Name" value={profile.name} onChange={(e: any) => setProfile({ ...profile, name: e.target.value })} />
+                      <InputField icon={Mail} label="Email" value={profile.email} onChange={(e: any) => setProfile({ ...profile, email: e.target.value })} disabled />
+                      <InputField icon={Phone} label="Phone" value={profile.phone} onChange={(e: any) => setProfile({ ...profile, phone: e.target.value })} />
+                      <InputField icon={Building2} label="Company" value={profile.company} onChange={(e: any) => setProfile({ ...profile, company: e.target.value })} />
+                      <div className="col-span-2">
+                        <InputField icon={MapPin} label="Location" value={profile.location} onChange={(e: any) => setProfile({ ...profile, location: e.target.value })} />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Location</label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            value={profile.location}
-                            onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                            className="pl-9 bg-white/5 border-white/10 focus:border-purple-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Bio</label>
+                        <label className="text-xs font-medium mb-1.5 block" style={{ color: "rgba(255,255,255,0.40)" }}>Bio</label>
                         <textarea
                           value={profile.bio}
                           onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                           rows={3}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white resize-none focus:outline-none focus:border-purple-500 placeholder:text-muted-foreground"
+                          className="w-full px-4 py-2.5 rounded-xl text-sm text-white resize-none outline-none transition-all"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+                          onFocus={(e) => e.target.style.borderColor = "rgba(124,58,237,0.55)"}
+                          onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.09)"}
                         />
                       </div>
                     </div>
-
                     <div className="flex justify-end">
-                      <Button
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                         onClick={handleSave}
                         disabled={updateProfileMutation.isPending}
-                        className="bg-purple-600 hover:bg-purple-500 gap-2"
+                        className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
                       >
-                        {updateProfileMutation.isPending ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />Saving...</>
-                        ) : (
-                          <><Save className="w-4 h-4" />Save Changes</>
-                        )}
-                      </Button>
+                        {updateProfileMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4" />Save Changes</>}
+                      </motion.button>
                     </div>
                   </>
                 )}
@@ -263,57 +236,52 @@ export default function Settings() {
             {/* Notifications Tab */}
             {activeTab === "notifications" && (
               <div className="space-y-6">
-                <h2 className="font-bold text-lg">Notification Preferences</h2>
-                <div className="overflow-hidden rounded-xl border border-white/10">
+                <h2 className="font-bold text-lg text-white">Notification Preferences</h2>
+                <div className="overflow-hidden rounded-xl" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/5">
-                        <th className="text-left px-4 py-3 text-sm font-semibold text-muted-foreground">Notification</th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold text-muted-foreground">
-                          <div className="flex items-center justify-center gap-1.5"><Mail className="w-3.5 h-3.5" />Email</div>
-                        </th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold text-muted-foreground">
-                          <div className="flex items-center justify-center gap-1.5"><Smartphone className="w-3.5 h-3.5" />Push</div>
-                        </th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold text-muted-foreground">
-                          <div className="flex items-center justify-center gap-1.5"><Phone className="w-3.5 h-3.5" />SMS</div>
-                        </th>
+                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                        <th className="text-left px-4 py-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>Notification</th>
+                        {["Email", "Push", "SMS"].map((ch) => (
+                          <th key={ch} className="text-center px-4 py-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {ch === "Email" && <Mail className="w-3.5 h-3.5" />}
+                              {ch === "Push" && <Smartphone className="w-3.5 h-3.5" />}
+                              {ch === "SMS" && <Phone className="w-3.5 h-3.5" />}
+                              {ch}
+                            </div>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {NOTIFICATION_SETTINGS.map((n, i) => (
-                        <tr key={n.id} className={cn("border-b border-white/5", i % 2 === 0 ? "" : "bg-white/2")}>
+                        <tr key={n.id} style={{ borderBottom: i < NOTIFICATION_SETTINGS.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
                           <td className="px-4 py-4">
                             <div className="font-medium text-sm text-white">{n.label}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">{n.desc}</div>
+                            <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.30)" }}>{n.desc}</div>
                           </td>
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex justify-center">
-                              <Toggle checked={notifications[n.id]?.email} onChange={() => toggleNotification(n.id, "email")} />
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex justify-center">
-                              <Toggle checked={notifications[n.id]?.push} onChange={() => toggleNotification(n.id, "push")} />
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex justify-center">
-                              <Toggle checked={notifications[n.id]?.sms} onChange={() => toggleNotification(n.id, "sms")} />
-                            </div>
-                          </td>
+                          {(["email", "push", "sms"] as const).map((ch) => (
+                            <td key={ch} className="px-4 py-4 text-center">
+                              <div className="flex justify-center">
+                                <Toggle checked={notifications[n.id]?.[ch]} onChange={() => toggleNotification(n.id, ch)} />
+                              </div>
+                            </td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <div className="flex justify-end">
-                  <Button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     onClick={() => toast.success("Notification preferences saved!")}
-                    className="bg-purple-600 hover:bg-purple-500 gap-2"
+                    className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
                   >
                     <Save className="w-4 h-4" />Save Preferences
-                  </Button>
+                  </motion.button>
                 </div>
               </div>
             )}
@@ -321,68 +289,66 @@ export default function Settings() {
             {/* Security Tab */}
             {activeTab === "security" && (
               <div className="space-y-6">
-                <h2 className="font-bold text-lg">Security Settings</h2>
-
-                {/* 修改密码 */}
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10 space-y-4">
-                  <h3 className="font-semibold">Change Password</h3>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Current Password</label>
-                    <div className="relative">
-                      <Input
-                        type={showCurrentPassword ? "text" : "password"}
-                        placeholder="Enter current password"
-                        className="pr-10 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                      <button
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-                      >
-                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                <h2 className="font-bold text-lg text-white">Security Settings</h2>
+                <div className="rounded-xl p-5 space-y-4"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <h3 className="font-semibold text-white">Change Password</h3>
+                  {[
+                    { label: "Current Password", show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword) },
+                    { label: "New Password", show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword) },
+                  ].map(({ label, show, toggle }) => (
+                    <div key={label}>
+                      <label className="text-xs font-medium mb-1.5 block" style={{ color: "rgba(255,255,255,0.40)" }}>{label}</label>
+                      <div className="relative">
+                        <input
+                          type={show ? "text" : "password"}
+                          placeholder={`Enter ${label.toLowerCase()}`}
+                          className="w-full pl-4 pr-10 h-10 rounded-xl text-sm text-white outline-none"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+                          onFocus={(e) => e.target.style.borderColor = "rgba(124,58,237,0.55)"}
+                          onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.09)"}
+                        />
+                        <button onClick={toggle} className="absolute right-3 top-1/2 -translate-y-1/2"
+                          style={{ color: "rgba(255,255,255,0.30)" }}>
+                          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-1.5 block">New Password</label>
-                    <div className="relative">
-                      <Input
-                        type={showNewPassword ? "text" : "password"}
-                        placeholder="Enter new password"
-                        className="pr-10 bg-white/5 border-white/10 focus:border-purple-500"
-                      />
-                      <button
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <Button onClick={() => toast.success("Password updated!")} className="bg-purple-600 hover:bg-purple-500 gap-2">
+                  ))}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    onClick={() => toast.success("Password updated!")}
+                    className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                  >
                     <Shield className="w-4 h-4" />Update Password
-                  </Button>
+                  </motion.button>
                 </div>
-
-                {/* 两步验证 */}
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold">Two-Factor Authentication</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Add an extra layer of security to your account</p>
-                    </div>
-                    <Button variant="outline" className="border-white/20 hover:bg-white/10">
-                      Enable 2FA
-                    </Button>
+                <div className="rounded-xl p-5 flex items-center justify-between"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <div>
+                    <h3 className="font-semibold text-white">Two-Factor Authentication</h3>
+                    <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>Add an extra layer of security to your account</p>
                   </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    className="h-9 px-4 rounded-xl text-sm font-medium"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.60)" }}
+                  >
+                    Enable 2FA
+                  </motion.button>
                 </div>
-
-                {/* 危险区域 */}
-                <div className="bg-red-900/10 rounded-xl p-5 border border-red-500/20">
+                <div className="rounded-xl p-5"
+                  style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)" }}>
                   <h3 className="font-semibold text-red-400 mb-2">Danger Zone</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Permanently delete your account and all associated data.</p>
-                  <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10 gap-2">
+                  <p className="text-sm mb-4" style={{ color: "rgba(255,255,255,0.35)" }}>Permanently delete your account and all associated data.</p>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    className="h-9 px-4 rounded-xl text-sm font-medium flex items-center gap-2"
+                    style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}
+                  >
                     <Trash2 className="w-4 h-4" />Delete Account
-                  </Button>
+                  </motion.button>
                 </div>
               </div>
             )}
@@ -390,60 +356,37 @@ export default function Settings() {
             {/* Preferences Tab */}
             {activeTab === "preferences" && (
               <div className="space-y-6">
-                <h2 className="font-bold text-lg">Display Preferences</h2>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div>
-                      <p className="font-medium">Language</p>
-                      <p className="text-sm text-muted-foreground">Interface language</p>
+                <h2 className="font-bold text-lg text-white">Display Preferences</h2>
+                <div className="space-y-3">
+                  {[
+                    { label: "Language", desc: "Interface language", options: ["English", "中文", "日本語", "한국어"], value: profile.language, key: "language" },
+                    { label: "Timezone", desc: "Used for webinar times and meeting scheduling", options: ["America/Los_Angeles (UTC-8)", "America/New_York (UTC-5)", "Europe/London (UTC+0)", "Asia/Shanghai (UTC+8)"], value: profile.timezone, key: "timezone" },
+                    { label: "Currency", desc: "Display prices in your preferred currency", options: ["USD ($)", "EUR (€)", "GBP (£)", "CNY (¥)"], value: "USD ($)", key: "currency" },
+                  ].map((pref) => (
+                    <div key={pref.label} className="flex items-center justify-between p-4 rounded-xl"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div>
+                        <p className="font-medium text-white text-sm">{pref.label}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{pref.desc}</p>
+                      </div>
+                      <select
+                        className="px-3 py-1.5 rounded-xl text-sm text-white outline-none"
+                        style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                      >
+                        {pref.options.map((opt) => <option key={opt} style={{ background: "#0f0c1a" }}>{opt}</option>)}
+                      </select>
                     </div>
-                    <select
-                      value={profile.language}
-                      onChange={(e) => setProfile({ ...profile, language: e.target.value })}
-                      className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
-                    >
-                      <option>English</option>
-                      <option>中文</option>
-                      <option>日本語</option>
-                      <option>한국어</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div>
-                      <p className="font-medium">Timezone</p>
-                      <p className="text-sm text-muted-foreground">Used for webinar times and meeting scheduling</p>
-                    </div>
-                    <select
-                      value={profile.timezone}
-                      onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
-                      className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="America/Los_Angeles">America/Los_Angeles (UTC-8)</option>
-                      <option value="America/New_York">America/New_York (UTC-5)</option>
-                      <option value="Europe/London">Europe/London (UTC+0)</option>
-                      <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div>
-                      <p className="font-medium">Currency</p>
-                      <p className="text-sm text-muted-foreground">Display prices in your preferred currency</p>
-                    </div>
-                    <select className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500">
-                      <option>USD ($)</option>
-                      <option>EUR (€)</option>
-                      <option>GBP (£)</option>
-                      <option>CNY (¥)</option>
-                    </select>
-                  </div>
+                  ))}
                 </div>
                 <div className="flex justify-end">
-                  <Button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     onClick={() => toast.success("Preferences saved!")}
-                    className="bg-purple-600 hover:bg-purple-500 gap-2"
+                    className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
                   >
                     <Save className="w-4 h-4" />Save Preferences
-                  </Button>
+                  </motion.button>
                 </div>
               </div>
             )}
@@ -451,43 +394,51 @@ export default function Settings() {
             {/* Integrations Tab */}
             {activeTab === "integrations" && (
               <div className="space-y-6">
-                <h2 className="font-bold text-lg">Integrations</h2>
+                <h2 className="font-bold text-lg text-white">Integrations</h2>
                 <div className="space-y-3">
                   {INTEGRATIONS.map((integration) => (
-                    <div key={integration.id} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10 hover:border-white/20 transition-all">
+                    <motion.div
+                      key={integration.id}
+                      whileHover={{ x: 2 }}
+                      className="flex items-center justify-between p-4 rounded-xl transition-all"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    >
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-2xl">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                          style={{ background: "rgba(255,255,255,0.06)" }}>
                           {integration.icon}
                         </div>
                         <div>
-                          <p className="font-semibold">{integration.name}</p>
-                          <p className="text-sm text-muted-foreground">{integration.desc}</p>
+                          <p className="font-semibold text-white text-sm">{integration.name}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{integration.desc}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {integration.connected && (
-                          <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">
+                          <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+                            style={{ background: "rgba(74,222,128,0.10)", color: "#4ade80" }}>
                             <Check className="w-3 h-3" />Connected
                           </span>
                         )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "border-white/20 gap-1.5",
-                            integration.connected ? "hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30" : "hover:bg-white/10"
-                          )}
+                        <motion.button
+                          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                          className="h-8 px-3 rounded-xl text-xs font-medium flex items-center gap-1"
+                          style={{
+                            background: integration.connected ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.06)",
+                            border: `1px solid ${integration.connected ? "rgba(239,68,68,0.20)" : "rgba(255,255,255,0.10)"}`,
+                            color: integration.connected ? "#f87171" : "rgba(255,255,255,0.50)",
+                          }}
                           onClick={() => toast.info(integration.connected ? `Disconnected ${integration.name}` : `Connecting to ${integration.name}...`)}
                         >
-                          {integration.connected ? "Disconnect" : <>Connect <ChevronRight className="w-3.5 h-3.5" /></>}
-                        </Button>
+                          {integration.connected ? "Disconnect" : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>}
+                        </motion.button>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>
