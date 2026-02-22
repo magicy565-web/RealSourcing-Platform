@@ -233,6 +233,7 @@ export const products = mysqlTable("products", {
   slug:        varchar("slug", { length: 255 }).unique(),
   category:    varchar("category", { length: 100 }),
   description: text("description"),
+  coverImage:  varchar("coverImage", { length: 1024 }),
   images:      json("images"),
   status:      varchar("status", { length: 20 }).notNull().default("draft"),
   createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
