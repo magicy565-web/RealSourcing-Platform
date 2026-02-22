@@ -28,6 +28,7 @@ import {
   // Meeting
   getMeetingById, getMeetingsByBuyerId, getMeetingsByFactoryId,
   getMeetingTranscripts, createMeeting, updateMeeting,
+  getMeetingReelsWithThumbnail,
   // Inquiry
   getInquiryById, getInquiriesByBuyerId, getInquiriesByFactoryId,
   createInquiry, updateInquiry,
@@ -862,7 +863,39 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+  // ── Meeting Reels (预制视频缩略图识别) ─────────────────────────────────────────
+  meetingReels: router({
+    /**
+     * 获取当前买家的所有会议录像，并自动解析缩略图：
+     * - thumbnailSource === 'stored'     → resolvedThumbnail 直接可用
+     * - thumbnailSource === 'first_frame' → videoUrlForFrame 供前端 <video> 提取第一帧
+     * - thumbnailSource === 'none'        → 无视频，显示占位符
+     */
+    listWithThumbnail: protectedProcedure.query(async ({ ctx }) => {
+      return await getMeetingReelsWithThumbnail(ctx.user.id);
+    }),
 
+    /**
+     * 将前端提取到的第一帧 dataURL 作为 recordingThumbnail 持久化到数据库，
+     * 避免下次重复提取帧。
+     */
+    saveThumbnail: protectedProcedure
+      .input(z.object({
+        meetingId: z.number(),
+        thumbnailDataUrl: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        await updateMeeting(input.meetingId, {
+          recordingThumbnail: input.thumbnailDataUrl,
+        });
+        return { success: true };
+      }),
+  }),
   // ── Inquiries ─────────────────────────────────────────────────────────────────
   inquiries: router({
     myInquiries: protectedProcedure.query(async ({ ctx }) => {

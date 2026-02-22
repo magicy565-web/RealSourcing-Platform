@@ -339,6 +339,41 @@ export async function updateMeeting(id: number, data: Partial<typeof schema.meet
   return await database.update(schema.meetings).set(data).where(eq(schema.meetings.id, id));
 }
 
+/**
+ * 获取买家的所有会议，并附带缩略图解析结果：
+ * - 优先使用 recordingThumbnail（已存储的封面 URL）
+ * - 其次使用 aiReelThumbnail（AI Reel 封面）
+ * - 若均为空，则返回 recordingUrl 供前端提取第一帧
+ * - resolvedThumbnail 为最终可用的缩略图 URL（可能为 null）
+ * - thumbnailSource 标记来源：'stored' | 'first_frame' | 'none'
+ */
+export async function getMeetingReelsWithThumbnail(buyerId: number) {
+  const database = await dbPromise;
+  const meetings = await database
+    .select()
+    .from(schema.meetings)
+    .where(eq(schema.meetings.buyerId, buyerId))
+    .orderBy(desc(schema.meetings.scheduledAt));
+
+  return meetings.map((m) => {
+    // 优先级：recordingThumbnail > aiReelThumbnail > 从 recordingUrl 提取第一帧
+    const storedThumbnail = m.recordingThumbnail || m.aiReelThumbnail || null;
+    const thumbnailSource: 'stored' | 'first_frame' | 'none' =
+      storedThumbnail
+        ? 'stored'
+        : m.recordingUrl
+        ? 'first_frame'
+        : 'none';
+
+    return {
+      ...m,
+      resolvedThumbnail: storedThumbnail,   // 已有封面 URL（null 表示需前端提取帧）
+      thumbnailSource,                       // 来源标记
+      videoUrlForFrame: thumbnailSource === 'first_frame' ? m.recordingUrl : null, // 供前端提取帧的视频 URL
+    };
+  });
+}
+
 // ─── Inquiry Operations ───────────────────────────────────────────────────────
 
 export async function getInquiryById(id: number) {

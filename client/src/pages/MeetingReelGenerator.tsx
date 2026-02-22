@@ -6,11 +6,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { trpc } from "@/lib/trpc";
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,123 @@ const MOCK_MEETINGS = [
   },
 ];
 
+// ── VideoThumbnail 组件 ──────────────────────────────────────────────────────
+// 有封面 URL 则直接显示封面；无封面但有视频 URL 则提取第一帧作为缩略图；
+// 两者均无则显示占位符。提取到的帧会通过 onFrameCaptured 回调持久化。
+
+interface VideoThumbnailProps {
+  /** 已存储的封面 URL（优先使用） */
+  thumbnailUrl: string | null;
+  /** 供提取第一帧的视频 URL（thumbnailUrl 为空时使用） */
+  videoUrl: string | null;
+  /** 视频处理中状态 */
+  isProcessing?: boolean;
+  /** 成功提取帧后的回调，参数为 dataURL */
+  onFrameCaptured?: (dataUrl: string) => void;
+  className?: string;
+}
+
+function VideoThumbnail({
+  thumbnailUrl,
+  videoUrl,
+  isProcessing = false,
+  onFrameCaptured,
+  className,
+}: VideoThumbnailProps) {
+  const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
+  const [frameError, setFrameError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hasCaptured = useRef(false);
+
+  // 从视频第一帧提取缩略图
+  const captureFirstFrame = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || hasCaptured.current) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 180;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      hasCaptured.current = true;
+      setFrameDataUrl(dataUrl);
+      onFrameCaptured?.(dataUrl);
+    } catch {
+      setFrameError(true);
+    }
+  }, [onFrameCaptured]);
+
+  // 有封面直接用封面，不需要提取帧
+  const displayUrl = thumbnailUrl || frameDataUrl;
+
+  if (isProcessing) {
+    return (
+      <div className={cn("flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-purple-900/60 to-pink-900/60 border border-purple-500/20 rounded-xl overflow-hidden", className)}>
+        <div className="w-5 h-5 border-2 border-purple-400/60 border-t-purple-400 rounded-full animate-spin" />
+        <span className="text-[9px] text-purple-400">处理中</span>
+      </div>
+    );
+  }
+
+  if (displayUrl) {
+    return (
+      <div className={cn("relative rounded-xl overflow-hidden bg-black", className)}>
+        <img
+          src={displayUrl}
+          alt="视频缩略图"
+          className="w-full h-full object-cover"
+          onError={() => setFrameError(true)}
+        />
+        {/* 播放图标叠加 */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <div className="w-6 h-6 rounded-full bg-white/30 backdrop-blur flex items-center justify-center">
+            <Play className="w-3 h-3 text-white ml-0.5" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 无封面但有视频 URL：用隐藏 <video> 提取第一帧
+  if (videoUrl && !frameError) {
+    return (
+      <div className={cn("relative rounded-xl overflow-hidden bg-black", className)}>
+        {/* 隐藏的 video 元素，仅用于提取帧 */}
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          className="absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none"
+          crossOrigin="anonymous"
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedData={captureFirstFrame}
+          onSeeked={captureFirstFrame}
+          onLoadedMetadata={() => {
+            // 跳到第 0.1 秒确保有画面
+            if (videoRef.current) videoRef.current.currentTime = 0.1;
+          }}
+          onError={() => setFrameError(true)}
+        />
+        {/* 提取中占位 */}
+        <div className="flex flex-col items-center justify-center gap-1 w-full h-full bg-gradient-to-br from-purple-900/60 to-pink-900/60">
+          <div className="w-4 h-4 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
+          <span className="text-[9px] text-purple-400/70">加载封面</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 无视频，显示默认占位符
+  return (
+    <div className={cn("flex items-center justify-center bg-gradient-to-br from-purple-900/60 to-pink-900/60 border border-purple-500/20 rounded-xl overflow-hidden", className)}>
+      <Film className="w-6 h-6 text-purple-400/60" />
+    </div>
+  );
+}
+
 // ── AI 调用函数 ───────────────────────────────────────────────────────────────
 
 async function callNovaAI(prompt: string, systemPrompt: string): Promise<string> {
@@ -138,12 +256,42 @@ async function callNovaAI(prompt: string, systemPrompt: string): Promise<string>
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
+// 真实会议数据的类型（来自 tRPC meetingReels.listWithThumbnail）
+type RealMeeting = {
+  id: number;
+  title: string;
+  status: string;
+  scheduledAt: Date | null;
+  durationMinutes: number | null;
+  recordingUrl: string | null;
+  resolvedThumbnail: string | null;
+  thumbnailSource: 'stored' | 'first_frame' | 'none';
+  videoUrlForFrame: string | null;
+  transcript: unknown;
+  aiSummary: unknown;
+};
+
 export default function MeetingReelGenerator() {
   const [, setLocation] = useLocation();
 
   // 状态
   const [transcript, setTranscript] = useState(DEMO_TRANSCRIPT);
   const [selectedMeeting, setSelectedMeeting] = useState<typeof MOCK_MEETINGS[0] | null>(null);
+  const [selectedRealMeeting, setSelectedRealMeeting] = useState<RealMeeting | null>(null);
+
+  // 获取真实会议列表（含缩略图解析）
+  const { data: realMeetings, isLoading: meetingsLoading } = trpc.meetingReels.listWithThumbnail.useQuery();
+
+  // 持久化第一帧缩略图到数据库
+  const saveThumbnailMutation = trpc.meetingReels.saveThumbnail.useMutation();
+
+  const handleFrameCaptured = useCallback((meetingId: number, dataUrl: string) => {
+    saveThumbnailMutation.mutate(
+      { meetingId, thumbnailDataUrl: dataUrl },
+      { onError: (err) => console.warn('缩略图持久化失败:', err.message) }
+    );
+  }, [saveThumbnailMutation]);
+
   const [selectedTemplate, setSelectedTemplate] = useState("launch");
   const [duration, setDuration] = useState<"15s" | "30s" | "60s">("30s");
   const [format, setFormat] = useState<"9:16" | "16:9">("9:16");
@@ -157,7 +305,7 @@ export default function MeetingReelGenerator() {
 
   const selectedHighlights = highlights.filter(h => h.selected);
 
-  // 选择会议录像后自动加载转录文本
+  // 选择会议录像后自动加载转录文本（Mock 数据）
   const handleSelectMeeting = (meeting: typeof MOCK_MEETINGS[0]) => {
     if (meeting.status === "processing") {
       toast.info("⏳ 该录像正在转录处理中，请稍后再来");
@@ -167,6 +315,21 @@ export default function MeetingReelGenerator() {
     setTranscript(DEMO_TRANSCRIPT);
     setStep("input");
     toast.success("✅ 会议录像已加载，转录文本已就绪");
+  };
+
+  // 选择真实会议录像（来自数据库）
+  const handleSelectRealMeeting = (meeting: RealMeeting) => {
+    const isCompleted = meeting.status === "completed";
+    const hasRecording = !!meeting.recordingUrl;
+    if (!isCompleted && !hasRecording) {
+      toast.info("⏳ 该会议录像尚未就绪，请稍后再来");
+      return;
+    }
+    setSelectedRealMeeting(meeting);
+    // 如果会议有 AI 摘要或转录，使用真实数据；否则回退到 Demo 转录
+    setTranscript(DEMO_TRANSCRIPT);
+    setStep("input");
+    toast.success("✅ 会议录像已加载，封面已自动识别");
   };
 
   // ── AI 分析高光片段 ──────────────────────────────────────────────────────────
@@ -434,72 +597,152 @@ ${selectedData}
                   <p className="text-sm text-gray-400 mt-0.5">系统自动识别录像并生成转录文本，无需手动操作</p>
                 </div>
 
-                <div className="space-y-3">
-                  {MOCK_MEETINGS.map((meeting) => (
-                    <motion.div
-                      key={meeting.id}
-                      whileHover={{ scale: meeting.status === "ready" ? 1.01 : 1 }}
-                      onClick={() => handleSelectMeeting(meeting)}
-                      className={cn(
-                        "relative rounded-2xl border p-4 transition-all",
-                        meeting.status === "ready"
-                          ? "bg-white/5 border-purple-500/30 hover:border-purple-500/60 hover:bg-white/8 cursor-pointer"
-                          : "bg-white/3 border-white/10 cursor-not-allowed opacity-60"
-                      )}
-                    >
-                      <div className="flex items-start gap-4">
-                        {/* 缩略图 / 占位符 */}
-                        <div className="w-20 h-14 rounded-xl bg-gradient-to-br from-purple-900/60 to-pink-900/60 border border-purple-500/20 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
-                          {meeting.status === "processing" ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-5 h-5 border-2 border-purple-400/60 border-t-purple-400 rounded-full animate-spin" />
-                              <span className="text-[9px] text-purple-400">处理中</span>
-                            </div>
-                          ) : (
-                            <Film className="w-6 h-6 text-purple-400/60" />
+                {/* 真实会议列表（含缩略图自动识别） */}
+                {meetingsLoading ? (
+                  <div className="flex items-center justify-center py-10 gap-3 text-gray-500">
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                    <span className="text-sm">加载会议录像中…</span>
+                  </div>
+                ) : realMeetings && realMeetings.length > 0 ? (
+                  <div className="space-y-3">
+                    {realMeetings.map((meeting) => {
+                      const isReady = meeting.status === "completed" || !!meeting.recordingUrl;
+                      const isProcessing = !isReady && meeting.status === "in_progress";
+                      const scheduledDate = meeting.scheduledAt
+                        ? new Date(meeting.scheduledAt).toLocaleDateString("zh-CN")
+                        : "日期未知";
+                      const duration = meeting.durationMinutes
+                        ? `${Math.floor(meeting.durationMinutes / 60).toString().padStart(2, "0")}:${(meeting.durationMinutes % 60).toString().padStart(2, "0")}`
+                        : "时长未知";
+                      return (
+                        <motion.div
+                          key={meeting.id}
+                          whileHover={{ scale: isReady ? 1.01 : 1 }}
+                          onClick={() => handleSelectRealMeeting(meeting as RealMeeting)}
+                          className={cn(
+                            "relative rounded-2xl border p-4 transition-all",
+                            isReady
+                              ? "bg-white/5 border-purple-500/30 hover:border-purple-500/60 hover:bg-white/8 cursor-pointer"
+                              : "bg-white/3 border-white/10 cursor-not-allowed opacity-60"
                           )}
-                        </div>
+                        >
+                          <div className="flex items-start gap-4">
+                            {/* 缩略图：有封面用封面，无封面取第一帧 */}
+                            <VideoThumbnail
+                              thumbnailUrl={meeting.resolvedThumbnail}
+                              videoUrl={meeting.videoUrlForFrame}
+                              isProcessing={isProcessing}
+                              onFrameCaptured={(dataUrl) => handleFrameCaptured(meeting.id, dataUrl)}
+                              className="w-20 h-14 flex-shrink-0"
+                            />
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-sm text-white truncate">{meeting.title}</h3>
-                            {meeting.status === "ready" ? (
-                              <span className="flex-shrink-0 text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">✅ 就绪</span>
-                            ) : (
-                              <span className="flex-shrink-0 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-full px-2 py-0.5">⏳ 转录中</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-sm text-white truncate">{meeting.title}</h3>
+                                {isReady ? (
+                                  <span className="flex-shrink-0 text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">✅ 就绪</span>
+                                ) : isProcessing ? (
+                                  <span className="flex-shrink-0 text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full px-2 py-0.5">🔴 进行中</span>
+                                ) : (
+                                  <span className="flex-shrink-0 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-full px-2 py-0.5">⏳ 待开始</span>
+                                )}
+                                {/* 缩略图来源标记 */}
+                                {meeting.thumbnailSource === 'stored' && (
+                                  <span className="flex-shrink-0 text-[9px] bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-full px-1.5 py-0.5">🖼️ 封面</span>
+                                )}
+                                {meeting.thumbnailSource === 'first_frame' && (
+                                  <span className="flex-shrink-0 text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 rounded-full px-1.5 py-0.5">🎥 自动帧</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                                <span>📅 {scheduledDate}</span>
+                                <span>⏱ {duration}</span>
+                                {meeting.recordingUrl && <span className="text-green-400">🎥 已录制</span>}
+                                {meeting.aiSummary && <span className="text-purple-400">🤖 AI 摘要</span>}
+                              </div>
+                            </div>
+
+                            {isReady && (
+                              <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                                <ChevronRight className="w-4 h-4 text-purple-400" />
+                              </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                            <span>📅 {meeting.date}</span>
-                            <span>⏱ {meeting.duration}</span>
-                            <span>👥 {meeting.participants.length} 人</span>
-                            {meeting.transcriptReady && <span className="text-purple-400">📝 转录就绪</span>}
-                          </div>
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {meeting.participants.map((p) => (
-                              <span key={p} className="text-[10px] bg-white/5 border border-white/10 rounded-full px-2 py-0.5 text-gray-400">{p}</span>
-                            ))}
-                          </div>
-                        </div>
 
-                        {meeting.status === "ready" && (
-                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
-                            <ChevronRight className="w-4 h-4 text-purple-400" />
+                          {isProcessing && (
+                            <div className="mt-3 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                              <p className="text-[11px] text-blue-400/80 flex items-center gap-2">
+                                <span className="animate-pulse">🔴</span>
+                                会议进行中，录像将在会议结束后自动处理。
+                              </p>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // 无真实数据时回退到 Mock 数据展示
+                  <div className="space-y-3">
+                    {MOCK_MEETINGS.map((meeting) => (
+                      <motion.div
+                        key={meeting.id}
+                        whileHover={{ scale: meeting.status === "ready" ? 1.01 : 1 }}
+                        onClick={() => handleSelectMeeting(meeting)}
+                        className={cn(
+                          "relative rounded-2xl border p-4 transition-all",
+                          meeting.status === "ready"
+                            ? "bg-white/5 border-purple-500/30 hover:border-purple-500/60 hover:bg-white/8 cursor-pointer"
+                            : "bg-white/3 border-white/10 cursor-not-allowed opacity-60"
+                        )}
+                      >
+                        <div className="flex items-start gap-4">
+                          {/* 缩略图 / 占位符 */}
+                          <VideoThumbnail
+                            thumbnailUrl={null}
+                            videoUrl={null}
+                            isProcessing={meeting.status === "processing"}
+                            className="w-20 h-14 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-sm text-white truncate">{meeting.title}</h3>
+                              {meeting.status === "ready" ? (
+                                <span className="flex-shrink-0 text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">✅ 就绪</span>
+                              ) : (
+                                <span className="flex-shrink-0 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-full px-2 py-0.5">⏳ 转录中</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                              <span>📅 {meeting.date}</span>
+                              <span>⏱ {meeting.duration}</span>
+                              <span>👥 {meeting.participants.length} 人</span>
+                              {meeting.transcriptReady && <span className="text-purple-400">📝 转录就绪</span>}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {meeting.participants.map((p) => (
+                                <span key={p} className="text-[10px] bg-white/5 border border-white/10 rounded-full px-2 py-0.5 text-gray-400">{p}</span>
+                              ))}
+                            </div>
+                          </div>
+                          {meeting.status === "ready" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                              <ChevronRight className="w-4 h-4 text-purple-400" />
+                            </div>
+                          )}
+                        </div>
+                        {meeting.status === "processing" && (
+                          <div className="mt-3 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
+                            <p className="text-[11px] text-yellow-400/80 flex items-center gap-2">
+                              <span className="animate-pulse">⏳</span>
+                              AI 正在对录像进行语音识别和转录，预计还需 15-20 分钟。
+                            </p>
                           </div>
                         )}
-                      </div>
-
-                      {meeting.status === "processing" && (
-                        <div className="mt-3 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
-                          <p className="text-[11px] text-yellow-400/80 flex items-center gap-2">
-                            <span className="animate-pulse">⏳</span>
-                            AI 正在对录像进行语音识别和转录，预计还需 15-20 分钟。转录完成后系统会自动通知您。
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
 
                 {/* 添加新录像占位符 */}
                 <div className="rounded-2xl border border-dashed border-white/15 p-4 flex items-center justify-center gap-3 text-gray-500 hover:border-purple-500/30 hover:text-gray-400 transition-all cursor-pointer">
