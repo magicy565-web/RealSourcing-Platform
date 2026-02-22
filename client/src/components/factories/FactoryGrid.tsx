@@ -47,6 +47,18 @@ const FACTORY_AMR_PROFILES: Record<string, {
   channels: string[];
   vibeTags: string[];
 }> = {
+  // 鸿毅实业（ID:1）- 品质认证型：D1信任极高（GMP），D3市场洞察强（美妆ODM）
+  "1": {
+    acumen: 0.90, channel: 0.80, velocity: 0.96, global: 0.85,
+    channels: ["amazon_fba", "dropshipping", "trade_show"],
+    vibeTags: ["GMP+FDA认证", "无尘灌装车间", "快速打样"],
+  },
+  // 极联智能（ID:2）- 渠道生态型：D4生态系统极强（北美欧洲），D2敏捷交付（FBA）
+  "2": {
+    acumen: 0.78, channel: 0.94, velocity: 0.93, global: 0.99,
+    channels: ["amazon_fba", "small_moq", "trade_show"],
+    vibeTags: ["Alexa/Google认证", "生态集成强", "英文沟通流畅"],
+  },
   // 极联智能（ID:10）- 生态协作型：全球化强，渠道广（D4 生态协作）
   "10": {
     acumen: 0.82, channel: 1.00, velocity: 0.90, global: 0.98,
