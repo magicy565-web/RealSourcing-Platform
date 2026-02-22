@@ -504,6 +504,21 @@ export const meetingAvailability = mysqlTable("meeting_availability", {
 });
 export type MeetingAvailability = typeof meetingAvailability.$inferSelect;
 
+// ─── Inquiry Messages (询价专用消息表) ───────────────────────────────────────────
+// 独立的询价消息表，支持双向通信（买家/工厂）及未读状态管理
+export const inquiryMessages = mysqlTable("inquiry_messages", {
+  id:         int("id").primaryKey().autoincrement(),
+  inquiryId:  int("inquiryId").notNull(),
+  senderId:   int("senderId").notNull(),
+  senderRole: varchar("senderRole", { length: 20 }).notNull().default("buyer"), // 'buyer' | 'factory'
+  content:    text("content").notNull(),
+  isRead:     tinyint("isRead").notNull().default(0),
+  createdAt:  datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:  datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type InquiryMessage = typeof inquiryMessages.$inferSelect;
+export type InsertInquiryMessage = typeof inquiryMessages.$inferInsert;
+
 // ─── Webinar Leads (意向线索) ─────────────────────────────────────────────────
 // 直播间抢单产生的高意向线索，供应链管家通过 WhatsApp 跟进
 export const webinarLeads = mysqlTable("webinar_leads", {

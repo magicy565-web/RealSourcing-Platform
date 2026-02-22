@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useInquiryRTM } from "@/hooks/useInquiryRTM";
 import {
   Search, Plus, MessageSquare, Clock, CheckCircle2, XCircle,
   Package, Building2, Calendar, DollarSign, FileText,
-  Send, Paperclip, MoreHorizontal, Eye, Loader2
+  Send, Paperclip, MoreHorizontal, Eye, Loader2, Wifi, WifiOff,
+  Circle
 } from "lucide-react";
 
 type InquiryStatus = "pending" | "replied" | "negotiating" | "closed" | "rejected";
@@ -26,10 +28,13 @@ const GRID_BG = `
 
 export default function Inquiries() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [replyText, setReplyText] = useState("");
+  const [inputText, setInputText] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: inquiries = [], isLoading, refetch } = trpc.inquiries.myInquiries.useQuery();
 
@@ -46,6 +51,32 @@ export default function Inquiries() {
   const selectedInquiry = selectedInquiryId
     ? inquiries.find((i) => i.id === selectedInquiryId) || null
     : filteredInquiries[0] || null;
+
+  // RTM 实时消息 Hook
+  const {
+    messages,
+    connectionState,
+    isConnected,
+    sendMessage,
+    isSending,
+    refetchMessages,
+  } = useInquiryRTM({
+    inquiryId: selectedInquiry?.id ?? null,
+    currentUserId: user?.id ?? null,
+    enabled: !!selectedInquiry && !!user,
+  });
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  // 切换询价时重置输入框
+  useEffect(() => {
+    setInputText("");
+  }, [selectedInquiry?.id]);
 
   const formatDate = (date: Date | null | undefined) => {
     if (!date) return "N/A";
@@ -64,6 +95,51 @@ export default function Inquiries() {
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return formatDate(date);
+  };
+
+  const formatMessageTime = (date: Date | null | undefined) => {
+    if (!date) return "";
+    return new Date(date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if (!text || isSending) return;
+    setInputText("");
+    await sendMessage(text);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // 连接状态指示器
+  const ConnectionIndicator = () => {
+    if (connectionState === "connected") {
+      return (
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: "#4ade80" }}>
+          <Circle className="w-2 h-2 fill-current" />
+          <span>Live</span>
+        </div>
+      );
+    }
+    if (connectionState === "connecting" || connectionState === "reconnecting") {
+      return (
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: "#facc15" }}>
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span>{connectionState === "reconnecting" ? "Reconnecting..." : "Connecting..."}</span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+        <WifiOff className="w-3 h-3" />
+        <span>Offline</span>
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -216,13 +292,13 @@ export default function Inquiries() {
           key={selectedInquiry.id}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex-1 flex flex-col relative z-10"
+          className="flex-1 flex flex-col relative z-10 min-w-0"
         >
           {/* 详情头部 */}
-          <div className="flex items-center justify-between px-6 py-4"
+          <div className="flex items-center justify-between px-6 py-4 flex-shrink-0"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: "rgba(255,255,255,0.06)" }}>
                 {selectedInquiry.factory?.logo
                   ? <img src={selectedInquiry.factory.logo} alt={selectedInquiry.factory.name} className="w-full h-full object-cover rounded-xl" />
@@ -240,7 +316,10 @@ export default function Inquiries() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* 连接状态指示器 */}
+              <ConnectionIndicator />
+
               {(() => {
                 const sc = STATUS_CONFIG[selectedInquiry.status] || STATUS_CONFIG["pending"];
                 return (
@@ -270,9 +349,8 @@ export default function Inquiries() {
             </div>
           </div>
 
-          {/* 消息列表 */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* 询价摘要卡片 */}
+          {/* 询价摘要卡片 */}
+          <div className="px-6 pt-4 flex-shrink-0">
             <div className="rounded-xl p-4 flex items-center gap-6 flex-wrap"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
               {selectedInquiry.quantity && (
@@ -309,9 +387,12 @@ export default function Inquiries() {
                 </>
               )}
             </div>
+          </div>
 
-            {/* Notes / Initial Message */}
-            {selectedInquiry.notes && (
+          {/* 消息列表 */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+            {/* 初始询价消息（notes） */}
+            {selectedInquiry.notes && messages.length === 0 && (
               <div className="flex justify-end">
                 <div className="max-w-[70%]">
                   <div className="rounded-2xl rounded-tr-sm px-4 py-3"
@@ -325,70 +406,89 @@ export default function Inquiries() {
               </div>
             )}
 
-            {/* Reply from factory */}
-            {selectedInquiry.replyContent && (
-              <div className="flex justify-start">
-                <div className="max-w-[70%]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(59,130,246,0.25)" }}>
-                      <Building2 className="w-3 h-3" style={{ color: "#60a5fa" }} />
-                    </div>
-                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                      {selectedInquiry.factory?.name || "Factory"}
-                    </span>
-                  </div>
-                  <div className="rounded-2xl rounded-tl-sm px-4 py-3"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <p className="text-sm text-white">{selectedInquiry.replyContent}</p>
-                    {selectedInquiry.quotedPrice && (
-                      <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>Quoted: </span>
-                        <span className="text-xs font-bold" style={{ color: "#4ade80" }}>
-                          {selectedInquiry.currency || "USD"} {selectedInquiry.quotedPrice}/unit
-                        </span>
+            {/* RTM 消息列表 */}
+            {messages.length > 0 ? (
+              <AnimatePresence initial={false}>
+                {messages.map((msg, idx) => {
+                  const isMine = msg.senderId === user?.id;
+                  const isFirstInGroup = idx === 0 || messages[idx - 1].senderId !== msg.senderId;
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className={`max-w-[70%] ${isFirstInGroup ? "mt-2" : "mt-0.5"}`}>
+                        {!isMine && isFirstInGroup && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                              style={{ background: "rgba(59,130,246,0.25)" }}>
+                              <Building2 className="w-3 h-3" style={{ color: "#60a5fa" }} />
+                            </div>
+                            <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                              {msg.senderRole === "factory"
+                                ? selectedInquiry.factory?.name || "Factory"
+                                : "Buyer"}
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          className={`rounded-2xl px-4 py-2.5 ${isMine ? "rounded-tr-sm" : "rounded-tl-sm"}`}
+                          style={isMine
+                            ? { background: "rgba(124,58,237,0.25)", border: "1px solid rgba(124,58,237,0.35)" }
+                            : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }
+                          }
+                        >
+                          <p className="text-sm text-white leading-relaxed">{msg.content}</p>
+                        </div>
+                        <p className={`text-[10px] mt-1 ${isMine ? "text-right" : "text-left"}`}
+                          style={{ color: "rgba(255,255,255,0.22)" }}>
+                          {formatMessageTime(msg.createdAt)}
+                          {isMine && (
+                            <span className="ml-1.5" style={{ color: msg.isRead ? "#4ade80" : "rgba(255,255,255,0.22)" }}>
+                              {msg.isRead ? "✓✓" : "✓"}
+                            </span>
+                          )}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  {selectedInquiry.repliedAt && (
-                    <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.25)" }}>
-                      {formatDate(selectedInquiry.repliedAt)}
-                    </p>
-                  )}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            ) : (
+              !selectedInquiry.notes && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <MessageSquare className="w-12 h-12 mb-3" style={{ color: "rgba(255,255,255,0.10)" }} />
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>No messages yet</p>
+                  <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.20)" }}>
+                    Start the conversation below
+                  </p>
                 </div>
-              </div>
+              )
             )}
 
-            {!selectedInquiry.notes && !selectedInquiry.replyContent && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <MessageSquare className="w-12 h-12 mb-3" style={{ color: "rgba(255,255,255,0.10)" }} />
-                <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>No messages yet</p>
-                <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.20)" }}>
-                  The factory will reply to your inquiry soon
-                </p>
-              </div>
-            )}
+            {/* 自动滚动锚点 */}
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* 回复输入框 */}
-          <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}>
+          {/* 输入框 */}
+          <div className="p-4 flex-shrink-0"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}>
             <div className="flex items-end gap-3">
               <div className="flex-1 relative">
                 <textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type a follow-up message..."
+                  ref={textareaRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
                   rows={2}
                   className="w-full px-4 py-3 rounded-xl text-sm text-white resize-none outline-none pr-12"
                   style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)" }}
                   onFocus={(e) => e.target.style.borderColor = "rgba(124,58,237,0.45)"}
                   onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.09)"}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (replyText.trim()) { toast.info("消息功能即将上线"); setReplyText(""); }
-                    }
-                  }}
                 />
                 <button className="absolute right-3 bottom-3 transition-colors"
                   style={{ color: "rgba(255,255,255,0.25)" }}
@@ -402,10 +502,13 @@ export default function Inquiries() {
                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
-                disabled={!replyText.trim()}
-                onClick={() => { if (replyText.trim()) { toast.info("消息功能即将上线"); setReplyText(""); } }}
+                disabled={!inputText.trim() || isSending}
+                onClick={handleSend}
               >
-                <Send className="w-4 h-4 text-white" />
+                {isSending
+                  ? <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  : <Send className="w-4 h-4 text-white" />
+                }
               </motion.button>
             </div>
           </div>

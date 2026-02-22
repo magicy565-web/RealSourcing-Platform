@@ -484,37 +484,67 @@ export async function getUnreadNotificationsCount(userId: number) {
   return rows[0]?.count || 0;
 }
 
-// ─── Inquiry Messages (using messages table with inquiryId stored in webinarId field) ──
-// Note: messages table has webinarId field; we repurpose it as contextId for inquiry messages
-// by storing inquiryId as a negative number to distinguish from webinar messages.
-// A cleaner approach: filter by type='inquiry' and match senderId/content patterns.
-// For now we use a dedicated approach: store inquiryId in webinarId as negative value.
+// ─── Inquiry Messages (dedicated inquiry_messages table) ───────────────────────
+// 使用独立的 inquiry_messages 表，支持双向通信和未读状态
 
 export async function getInquiryMessages(inquiryId: number) {
   const database = await dbPromise;
-  // Use webinarId = -inquiryId as a convention to store inquiry messages
-  const rows = await database.select().from(schema.messages)
-    .where(and(
-      eq(schema.messages.webinarId, -inquiryId),
-      eq(schema.messages.type, "inquiry")
-    ))
-    .orderBy(schema.messages.createdAt);
-  return rows;
+  return await database.select().from(schema.inquiryMessages)
+    .where(eq(schema.inquiryMessages.inquiryId, inquiryId))
+    .orderBy(schema.inquiryMessages.createdAt);
 }
 
 export async function createInquiryMessage(data: {
   inquiryId: number;
   senderId: number;
+  senderRole: 'buyer' | 'factory';
   content: string;
 }) {
   const database = await dbPromise;
-  await database.insert(schema.messages).values({
-    webinarId: -data.inquiryId,
+  const result = await database.insert(schema.inquiryMessages).values({
+    inquiryId: data.inquiryId,
     senderId: data.senderId,
+    senderRole: data.senderRole,
     content: data.content,
-    type: "inquiry",
+    isRead: 0,
   });
+  const insertId = (result as any)[0]?.insertId ?? 0;
+  // 返回新插入的消息
+  const rows = await database.select().from(schema.inquiryMessages)
+    .where(eq(schema.inquiryMessages.id, insertId));
+  return rows[0] || { success: true };
+}
+
+export async function markInquiryMessagesRead(inquiryId: number, readerRole: 'buyer' | 'factory') {
+  const database = await dbPromise;
+  // 将对方发送的消息标记为已读
+  const oppositeRole = readerRole === 'buyer' ? 'factory' : 'buyer';
+  await database.update(schema.inquiryMessages)
+    .set({ isRead: 1 })
+    .where(and(
+      eq(schema.inquiryMessages.inquiryId, inquiryId),
+      eq(schema.inquiryMessages.senderRole, oppositeRole),
+      eq(schema.inquiryMessages.isRead, 0)
+    ));
   return { success: true };
+}
+
+export async function getUnreadInquiryMessageCount(inquiryId: number, readerRole: 'buyer' | 'factory') {
+  const database = await dbPromise;
+  const oppositeRole = readerRole === 'buyer' ? 'factory' : 'buyer';
+  const rows = await database.select({ count: sql<number>`COUNT(*)` })
+    .from(schema.inquiryMessages)
+    .where(and(
+      eq(schema.inquiryMessages.inquiryId, inquiryId),
+      eq(schema.inquiryMessages.senderRole, oppositeRole),
+      eq(schema.inquiryMessages.isRead, 0)
+    ));
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function getRtmTokenForInquiry(inquiryId: number, userId: number) {
+  // 返回 RTM 频道名，格式： inquiry_{inquiryId}
+  return `inquiry_${inquiryId}`;
 }
 
 // ─── Factory Follows (using user_favorites with targetType='factory_follow') ──

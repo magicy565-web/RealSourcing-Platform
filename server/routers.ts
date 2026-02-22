@@ -34,6 +34,7 @@ import {
   createInquiry, updateInquiry,
   // Inquiry Messages
   getInquiryMessages, createInquiryMessage,
+  markInquiryMessagesRead, getUnreadInquiryMessageCount,
   // Favorites
   getUserFavorites, addUserFavorite, removeUserFavorite, checkUserFavorite,
   // Factory Follow
@@ -1047,14 +1048,16 @@ ${transcriptSample}
         return { success: true };
       }),
 
-    // ── 消息子路由（提示词优先级1第3条要求）──────────────────────────────────
+      // ── 消息子路由（支持买家和工厂双向通信）────────────────────────────
     messages: protectedProcedure
       .input(z.object({ inquiryId: z.number() }))
       .query(async ({ input, ctx }) => {
-        // 权限检查：只有询价相关方才能查看消息
         const inquiry = await getInquiryById(input.inquiryId);
         if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
-        if (inquiry.buyerId !== ctx.user.id) {
+        // 权限检查：买家或该工厂的工厂用户均可查看
+        const factory = await getFactoryById(inquiry.factoryId);
+        const isFactoryUser = factory?.userId === ctx.user.id;
+        if (inquiry.buyerId !== ctx.user.id && !isFactoryUser) {
           throw new TRPCError({ code: "FORBIDDEN", message: "无权查看此询价消息" });
         }
         return await getInquiryMessages(input.inquiryId);
@@ -1066,18 +1069,103 @@ ${transcriptSample}
         content: z.string().min(1),
       }))
       .mutation(async ({ input, ctx }) => {
-        // 权限检查：只有询价相关方才能发送消息
         const inquiry = await getInquiryById(input.inquiryId);
         if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
-        if (inquiry.buyerId !== ctx.user.id) {
+        // 权限检查：买家或该工厂的工厂用户均可发送
+        const factory = await getFactoryById(inquiry.factoryId);
+        const isFactoryUser = factory?.userId === ctx.user.id;
+        if (inquiry.buyerId !== ctx.user.id && !isFactoryUser) {
           throw new TRPCError({ code: "FORBIDDEN", message: "无权发送此询价消息" });
         }
-        return await createInquiryMessage({
+        const senderRole: 'buyer' | 'factory' = isFactoryUser ? 'factory' : 'buyer';
+        const msg = await createInquiryMessage({
           inquiryId: input.inquiryId,
           senderId: ctx.user.id,
+          senderRole,
           content: input.content,
         });
+        // 如果是工厂回复，自动更新询价状态为 replied
+        if (isFactoryUser && inquiry.status === 'pending') {
+          await updateInquiry(input.inquiryId, { status: 'replied', repliedAt: new Date() });
+        }
+        return msg;
       }),
+
+    // RTM Token 获取接口：为指定询价生成 RTM 鉴权 Token
+    getRtmToken: protectedProcedure
+      .input(z.object({ inquiryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const inquiry = await getInquiryById(input.inquiryId);
+        if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
+        const factory = await getFactoryById(inquiry.factoryId);
+        const isFactoryUser = factory?.userId === ctx.user.id;
+        if (inquiry.buyerId !== ctx.user.id && !isFactoryUser) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权访问此询价频道" });
+        }
+        const channelName = `inquiry_${input.inquiryId}`;
+        const uid = ctx.user.id.toString();
+        try {
+          const rtmToken = agoraTokenService.generateRtmToken(uid);
+          return {
+            rtmToken,
+            appId: agoraTokenService.getAppId(),
+            channelName,
+            uid,
+            role: isFactoryUser ? 'factory' : 'buyer',
+          };
+        } catch (e) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to generate RTM token' });
+        }
+      }),
+
+    // 标记已读接口
+    markRead: protectedProcedure
+      .input(z.object({ inquiryId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const inquiry = await getInquiryById(input.inquiryId);
+        if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
+        const factory = await getFactoryById(inquiry.factoryId);
+        const isFactoryUser = factory?.userId === ctx.user.id;
+        if (inquiry.buyerId !== ctx.user.id && !isFactoryUser) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        const readerRole: 'buyer' | 'factory' = isFactoryUser ? 'factory' : 'buyer';
+        return await markInquiryMessagesRead(input.inquiryId, readerRole);
+      }),
+
+    // 获取未读消息数
+    unreadCount: protectedProcedure
+      .input(z.object({ inquiryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const inquiry = await getInquiryById(input.inquiryId);
+        if (!inquiry) throw new TRPCError({ code: "NOT_FOUND", message: "询价不存在" });
+        const factory = await getFactoryById(inquiry.factoryId);
+        const isFactoryUser = factory?.userId === ctx.user.id;
+        if (inquiry.buyerId !== ctx.user.id && !isFactoryUser) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        const readerRole: 'buyer' | 'factory' = isFactoryUser ? 'factory' : 'buyer';
+        return { count: await getUnreadInquiryMessageCount(input.inquiryId, readerRole) };
+      }),
+
+    // 工厂端获取询价列表（附带未读数）
+    factoryInquiries: protectedProcedure.query(async ({ ctx }) => {
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: "NOT_FOUND", message: "工厂不存在" });
+      const inquiries = await getInquiriesByFactoryId(factory.id);
+      const enriched = await Promise.all(inquiries.map(async (inq) => {
+        const product = inq.productId ? await getProductById(inq.productId) : null;
+        const buyer = await getUserById(inq.buyerId);
+        const unreadCount = await getUnreadInquiryMessageCount(inq.id, 'factory');
+        return {
+          ...inq,
+          product: product ? { id: product.id, name: product.name } : null,
+          buyer: buyer ? { id: buyer.id, name: buyer.name, avatar: buyer.avatar, email: buyer.email } : null,
+          unreadCount,
+        };
+      }));
+      return enriched;
+    }),
   }),
 
   // ── Favorites ─────────────────────────────────────────────────────────────────

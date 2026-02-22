@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,8 +13,10 @@ import {
   Plus, Edit, Trash2, CheckCircle, Clock, AlertCircle,
   Award, Globe, Phone, Mail, Building2, Star, Eye,
   BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload,
-  Play, Sparkles, ChevronRight, Save, RefreshCw
+  Play, Sparkles, ChevronRight, Save, RefreshCw,
+  Send, Search, Circle, WifiOff
 } from "lucide-react";
+import { useInquiryRTM } from "@/hooks/useInquiryRTM";
 
 // ── MeetingsTab Component ─────────────────────────────────────────────────────
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -301,6 +303,12 @@ export default function FactoryDashboard() {
   const [shippingOrderId, setShippingOrderId] = useState<number | null>(null);
   const [trackingInput, setTrackingInput] = useState("");
   const [trackingCarrier, setTrackingCarrier] = useState("");
+  // 询价聊天状态
+  const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null);
+  const [inquirySearchQuery, setInquirySearchQuery] = useState("");
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<string>("all");
+  const [chatInput, setChatInput] = useState("");
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── tRPC Queries ──────────────────────────────────────────────────────────────
   const { data: factoryData, isLoading, refetch } = trpc.factoryDashboard.myFactory.useQuery(undefined, {
@@ -308,6 +316,34 @@ export default function FactoryDashboard() {
   });
   const { data: stats } = trpc.factoryDashboard.stats.useQuery(undefined, { enabled: !!user });
   const { data: sampleOrders, refetch: refetchOrders } = trpc.sampleOrders.factorySampleOrders.useQuery(undefined, { enabled: !!user });
+  // 工厂端询价列表（附带未读数）
+  const { data: factoryInquiries = [], refetch: refetchFactoryInquiries } = trpc.inquiries.factoryInquiries.useQuery(undefined, {
+    enabled: !!user && activeTab === "inquiries",
+    refetchInterval: 30000, // 每30秒自动刷新
+  });
+
+  // 询价聊天 RTM Hook
+  const selectedInquiry = selectedInquiryId
+    ? factoryInquiries.find((i: any) => i.id === selectedInquiryId) || null
+    : null;
+  const {
+    messages: chatMessages,
+    connectionState: chatConnectionState,
+    isConnected: chatIsConnected,
+    sendMessage: sendChatMessage,
+    isSending: isChatSending,
+  } = useInquiryRTM({
+    inquiryId: selectedInquiry?.id ?? null,
+    currentUserId: user?.id ?? null,
+    enabled: !!selectedInquiry && activeTab === "inquiries",
+  });
+
+  // 消息自动滚动
+  useEffect(() => {
+    if (chatMessagesEndRef.current) {
+      chatMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
 
   // ── tRPC Mutations ────────────────────────────────────────────────────────────
   const updateProfile = trpc.factoryDashboard.updateProfile.useMutation({
@@ -800,38 +836,277 @@ export default function FactoryDashboard() {
 
         {/* ── 询价管理 Tab ── */}
         {activeTab === "inquiries" && (
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-6">询价管理</h1>
-            <div className="space-y-4">
-              {factoryData.inquiries && factoryData.inquiries.length > 0 ? factoryData.inquiries.map((inq: any) => (
-                <div key={inq.id} className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/30 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-white font-medium">{inq.subject || "产品询价"}</h3>
-                      <p className="text-gray-400 text-sm mt-1 line-clamp-2">{inq.message}</p>
-                      <p className="text-gray-500 text-xs mt-2">{new Date(inq.createdAt).toLocaleDateString('zh-CN')}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`text-xs px-3 py-1 rounded-full ${
-                        inq.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                        inq.status === 'replied' ? 'bg-green-500/20 text-green-400' :
-                        'bg-gray-500/20 text-gray-400'
+          <div className="flex h-[calc(100vh-120px)] -mx-8 -mt-6 overflow-hidden">
+            {/* 左侧询价列表 */}
+            <div className="w-80 flex flex-col border-r border-white/10 bg-white/[0.02] flex-shrink-0">
+              {/* 头部 */}
+              <div className="p-4 border-b border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-bold text-white">询价管理</h2>
+                  <button onClick={() => refetchFactoryInquiries()}
+                    className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />刷新
+                  </button>
+                </div>
+                {/* 搜索 */}
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    value={inquirySearchQuery}
+                    onChange={(e) => setInquirySearchQuery(e.target.value)}
+                    placeholder="搜索询价..."
+                    className="w-full pl-9 pr-4 h-9 rounded-xl text-sm text-white bg-white/5 border border-white/10 outline-none focus:border-purple-500/50"
+                  />
+                </div>
+                {/* 状态筛选 */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {(["all", "pending", "replied"] as const).map((s) => (
+                    <button key={s}
+                      onClick={() => setInquiryStatusFilter(s)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-all ${
+                        inquiryStatusFilter === s
+                          ? "bg-purple-600 text-white"
+                          : "bg-white/5 text-gray-400 border border-white/10 hover:border-white/20"
                       }`}>
-                        {inq.status === 'pending' ? '待回复' : inq.status === 'replied' ? '已回复' : inq.status}
-                      </span>
-                      <Button size="sm" variant="outline" onClick={() => setLocation(`/inquiries`)} className="border-white/20 text-gray-400 text-xs">
-                        查看详情
-                      </Button>
+                      {s === "all" ? "全部" : s === "pending" ? "待回复" : "已回复"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 询价列表 */}
+              <div className="flex-1 overflow-y-auto">
+                {factoryInquiries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                    <MessageSquare className="w-12 h-12 text-gray-700 mb-3" />
+                    <p className="text-gray-500 text-sm">暂无询价记录</p>
+                  </div>
+                ) : (
+                  factoryInquiries
+                    .filter((inq: any) => {
+                      const productName = inq.product?.name || "";
+                      const buyerName = inq.buyer?.name || inq.buyer?.email || "";
+                      const matchSearch = productName.toLowerCase().includes(inquirySearchQuery.toLowerCase()) ||
+                        buyerName.toLowerCase().includes(inquirySearchQuery.toLowerCase());
+                      const matchStatus = inquiryStatusFilter === "all" || inq.status === inquiryStatusFilter;
+                      return matchSearch && matchStatus;
+                    })
+                    .map((inq: any) => {
+                      const isSelected = selectedInquiryId === inq.id;
+                      return (
+                        <div key={inq.id}
+                          onClick={() => setSelectedInquiryId(inq.id)}
+                          className={`p-4 cursor-pointer transition-all border-b border-white/5 ${
+                            isSelected ? "bg-purple-500/10 border-l-2 border-l-purple-500" : "hover:bg-white/[0.03] border-l-2 border-l-transparent"
+                          }`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                              <Package className="w-4 h-4 text-gray-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="font-medium text-sm text-white truncate">
+                                  {inq.product?.name || `询价 #${inq.id}`}
+                                </span>
+                                {inq.unreadCount > 0 && (
+                                  <span className="ml-2 w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                    {inq.unreadCount > 9 ? "9+" : inq.unreadCount}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 truncate">
+                                {inq.buyer?.name || inq.buyer?.email || "未知买家"}
+                              </p>
+                              <div className="flex items-center justify-between mt-1.5">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                  inq.status === "pending" ? "bg-yellow-500/15 text-yellow-400" :
+                                  inq.status === "replied" ? "bg-blue-500/15 text-blue-400" :
+                                  "bg-gray-500/15 text-gray-400"
+                                }`}>
+                                  {inq.status === "pending" ? "待回复" : inq.status === "replied" ? "已回复" : inq.status}
+                                </span>
+                                <span className="text-[10px] text-gray-600">
+                                  {new Date(inq.createdAt).toLocaleDateString("zh-CN")}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* 右侧聊天面板 */}
+            {selectedInquiry ? (
+              <div className="flex-1 flex flex-col min-w-0">
+                {/* 聊天头部 */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02] flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white">
+                        {selectedInquiry.product?.name || `询价 #${selectedInquiry.id}`}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        {selectedInquiry.buyer?.name || selectedInquiry.buyer?.email || "未知买家"}
+                        {selectedInquiry.quantity && ` · ${selectedInquiry.quantity.toLocaleString()} 件`}
+                      </p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-3">
+                    {/* 连接状态 */}
+                    {chatConnectionState === "connected" ? (
+                      <div className="flex items-center gap-1.5 text-xs text-green-400">
+                        <Circle className="w-2 h-2 fill-current" />实时
+                      </div>
+                    ) : chatConnectionState === "connecting" || chatConnectionState === "reconnecting" ? (
+                      <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+                        <Loader2 className="w-3 h-3 animate-spin" />连接中...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <WifiOff className="w-3 h-3" />离线
+                      </div>
+                    )}
+                    <span className={`text-xs px-3 py-1.5 rounded-full ${
+                      selectedInquiry.status === "pending" ? "bg-yellow-500/15 text-yellow-400" :
+                      selectedInquiry.status === "replied" ? "bg-blue-500/15 text-blue-400" :
+                      "bg-gray-500/15 text-gray-400"
+                    }`}>
+                      {selectedInquiry.status === "pending" ? "待回复" : selectedInquiry.status === "replied" ? "已回复" : selectedInquiry.status}
+                    </span>
+                  </div>
                 </div>
-              )) : (
-                <div className="text-center py-12">
-                  <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">暂无询价记录</p>
+
+                {/* 询价信息卡片 */}
+                <div className="px-6 pt-4 flex-shrink-0">
+                  <div className="rounded-xl p-4 bg-white/[0.03] border border-white/8 flex items-center gap-5 flex-wrap">
+                    {selectedInquiry.quantity && (
+                      <>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-0.5">订购数量</div>
+                          <div className="font-bold text-white">{selectedInquiry.quantity.toLocaleString()} 件</div>
+                        </div>
+                        <div className="w-px h-8 bg-white/10" />
+                      </>
+                    )}
+                    {selectedInquiry.destination && (
+                      <>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-0.5">目的地</div>
+                          <div className="font-bold text-white">{selectedInquiry.destination}</div>
+                        </div>
+                        <div className="w-px h-8 bg-white/10" />
+                      </>
+                    )}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">询价时间</div>
+                      <div className="font-bold text-white">{new Date(selectedInquiry.createdAt).toLocaleDateString("zh-CN")}</div>
+                    </div>
+                    {selectedInquiry.notes && (
+                      <>
+                        <div className="w-px h-8 bg-white/10" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-500 mb-0.5">备注</div>
+                          <div className="text-sm text-gray-300 truncate">{selectedInquiry.notes}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {/* 消息列表 */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <MessageSquare className="w-12 h-12 text-gray-700 mb-3" />
+                      <p className="text-gray-500 text-sm">暂无消息</p>
+                      <p className="text-gray-600 text-xs mt-1">回复买家的询价开始对话</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg: any, idx: number) => {
+                      const isMine = msg.senderId === user?.id;
+                      return (
+                        <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                          <div className="max-w-[70%]">
+                            {!isMine && (
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                  <span className="text-[10px] text-blue-400">买</span>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                  {selectedInquiry.buyer?.name || "买家"}
+                                </span>
+                              </div>
+                            )}
+                            <div className={`rounded-2xl px-4 py-2.5 ${
+                              isMine
+                                ? "rounded-tr-sm bg-purple-600/25 border border-purple-500/30"
+                                : "rounded-tl-sm bg-white/5 border border-white/10"
+                            }`}>
+                              <p className="text-sm text-white leading-relaxed">{msg.content}</p>
+                            </div>
+                            <p className={`text-[10px] mt-1 text-gray-600 ${isMine ? "text-right" : "text-left"}`}>
+                              {new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                              {isMine && <span className="ml-1.5" style={{ color: msg.isRead ? "#4ade80" : undefined }}>{msg.isRead ? "✓✓" : "✓"}</span>}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatMessagesEndRef} />
+                </div>
+
+                {/* 输入框 */}
+                <div className="p-4 border-t border-white/10 bg-white/[0.02] flex-shrink-0">
+                  <div className="flex items-end gap-3">
+                    <textarea
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (chatInput.trim() && !isChatSending) {
+                            sendChatMessage(chatInput.trim());
+                            setChatInput("");
+                          }
+                        }
+                      }}
+                      placeholder="回复买家的询价... (Enter 发送)"
+                      rows={2}
+                      className="flex-1 px-4 py-3 rounded-xl text-sm text-white bg-white/5 border border-white/10 focus:border-purple-500/50 outline-none resize-none"
+                    />
+                    <button
+                      disabled={!chatInput.trim() || isChatSending}
+                      onClick={() => {
+                        if (chatInput.trim() && !isChatSending) {
+                          sendChatMessage(chatInput.trim());
+                          setChatInput("");
+                        }
+                      }}
+                      className="h-10 w-10 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition-colors"
+                    >
+                      {isChatSending
+                        ? <Loader2 className="w-4 h-4 text-white animate-spin" />
+                        : <Send className="w-4 h-4 text-white" />
+                      }
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <MessageSquare className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-white mb-2">选择一个询价</h3>
+                  <p className="text-gray-500 text-sm">点击左侧询价开始对话</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
