@@ -115,7 +115,7 @@ async function callNovai(
 }
 
 /**
- * 智能路由：优先使用逆次代理 gpt-5.1，失败时切换到阿里云百炼
+ * 智能路由：优先使用 ENV.openaiModel（默认 gpt-4.1-mini），失败时切换到阿里云百炼
  */
 async function callAI(
   messages: ChatMessage[],
@@ -125,16 +125,17 @@ async function callAI(
     preferJson?: boolean;
   } = {}
 ): Promise<string> {
-  // 优先：逆次代理 [次]gpt-5.1（高质量，OpenAI 兼容）
+  const primaryModel = ENV.openaiModel || 'gpt-4.1-mini';
+  // 优先：使用配置的 OpenAI 兼容模型
   if (ENV.openaiApiKey) {
     try {
       return await callNovai(messages, {
-        model: '[次]gpt-5.1',
+        model: primaryModel,
         maxTokens: options.maxTokens,
         temperature: options.temperature,
       });
     } catch (e) {
-      console.warn('⚠️ Novai gpt-5.1 failed, falling back to DashScope:', (e as Error).message);
+      console.warn(`⚠️ ${primaryModel} failed, falling back to DashScope:`, (e as Error).message);
     }
   }
 

@@ -318,6 +318,86 @@ export const appRouter = router({
 
         return { highlights };
       }),
+
+    // P1.4: 生成 Reels 脚本（通过后端 AI 调用，避免前端直接暴露 API Key）
+    generateReelScript: protectedProcedure
+      .input(z.object({
+        meetingId: z.number(),
+        highlights: z.array(z.object({
+          title: z.string(),
+          startTime: z.string(),
+          endTime: z.string(),
+          description: z.string(),
+          category: z.string().optional(),
+          importance: z.string().optional(),
+        })),
+        style: z.string().optional().default('科技感'),
+        duration: z.number().optional().default(30),
+        orientation: z.string().optional().default('竖屏'),
+        reelType: z.string().optional().default('产品发布'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: 'NOT_FOUND', message: '会议不存在' });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        }
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        const factory = await getFactoryById(meeting.factoryId);
+        const factoryName = factory?.name || meeting.title.split('·')[0].trim() || 'Wanhua Chemical';
+        const highlightText = input.highlights.map((h, i) =>
+          `片段${i + 1}: ${h.title}\n时间: ${h.startTime} → ${h.endTime}\n描述: ${h.description}`
+        ).join('\n\n');
+        const transcriptSample = transcripts.slice(0, 20).map(t =>
+          `[${t.timestamp}] ${t.speakerName}: ${t.content}`
+        ).join('\n');
+        const systemPrompt = `你是一个专业的短视频 Reels 脚本生成专家，擅长为 B2B 工厂 Webinar 生成适合 TikTok/抖音/微信的高光短视频脚本。`;
+        const userPrompt = `请为以下 Webinar 高光片段生成一个完整的 Reels 脚本。
+
+会议标题: ${meeting.title}
+工厂名称: ${factoryName}
+Reels 类型: ${input.reelType}
+视频时长: ${input.duration}秒
+视频方向: ${input.orientation}
+风格: ${input.style}
+
+高光片段:
+${highlightText}
+
+转录样本:
+${transcriptSample}
+
+请生成一个 JSON 格式的脚本，包含以下字段:
+{
+  "hook": "开场钩子文案（3秒内抓住注意力）",
+  "segments": [
+    {
+      "timeRange": "0-3s",
+      "visual": "画面描述",
+      "voiceover": "配音文案",
+      "text": "字幕文字"
+    }
+  ],
+  "cta": "行动号召文案",
+  "hashtags": ["相关标签"]
+}
+
+要求:
+1. 开场钩子必须在3秒内引起注意
+2. 使用真实的产品数据和认证信息
+3. 适合 ${input.orientation === '竖屏' ? 'TikTok/抖音' : 'YouTube/微信视频号'}
+4. 风格要${input.style}，突出 ${factoryName} 的专业性
+5. 只返回 JSON，不要其他文字`;
+        const responseText = await aiService.callAI(systemPrompt, userPrompt);
+        let script;
+        try {
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          script = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        } catch {
+          script = null;
+        }
+        return { script, rawText: responseText };
+      }),
   }),
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -894,6 +974,30 @@ export const appRouter = router({
           recordingThumbnail: input.thumbnailDataUrl,
         });
         return { success: true };
+      }),
+    /**
+     * 获取指定会议的转录文本（格式化为 [HH:MM:SS] 说话人: 内容）
+     * 供前端 AI 分析高光片段使用
+     */
+    getTranscriptText: protectedProcedure
+      .input(z.object({ meetingId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const meeting = await getMeetingById(input.meetingId);
+        if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "会议不存在" });
+        if (meeting.buyerId !== ctx.user.id && meeting.factoryUserId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+        }
+        const transcripts = await getMeetingTranscripts(input.meetingId);
+        if (transcripts.length === 0) return { text: null, count: 0 };
+        // 格式化为 [HH:MM:SS] 说话人: 内容
+        const text = transcripts
+          .map(t => {
+            const ts = t.timestamp ? `[${t.timestamp}]` : "";
+            const speaker = t.speakerName ? `${t.speakerName}: ` : "";
+            return `${ts} ${speaker}${t.content}`.trim();
+          })
+          .join("\n\n");
+        return { text, count: transcripts.length };
       }),
   }),
   // ── Inquiries ─────────────────────────────────────────────────────────────────

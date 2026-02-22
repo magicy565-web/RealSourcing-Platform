@@ -179,7 +179,7 @@ function VideoThumbnail({
           src={displayUrl}
           alt="视频缩略图"
           className="w-full h-full object-cover"
-          onError={() => setFrameError(true)}
+          onError={() => setFrameDataUrl(null)}
         />
         {/* 播放图标叠加 */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
@@ -276,7 +276,7 @@ async function callNovaAI(prompt: string, systemPrompt: string): Promise<string>
       "Authorization": "Bearer sk-LIs2MGKmDuGZhcfHbvLs1EiWHPwm2ELf3E8JkJXlFXgFLPBM",
     },
     body: JSON.stringify({
-      model: "[次]gpt-5.1",
+      model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
@@ -318,6 +318,7 @@ export default function MeetingReelGenerator() {
   const [transcript, setTranscript] = useState(DEMO_TRANSCRIPT);
   const [selectedMeeting, setSelectedMeeting] = useState<typeof MOCK_MEETINGS[0] | null>(null);
   const [selectedRealMeeting, setSelectedRealMeeting] = useState<RealMeeting | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
 
   // 获取真实会议列表（含缩略图解析）
   const { data: realMeetings, isLoading: meetingsLoading } = trpc.meetingReels.listWithThumbnail.useQuery();
@@ -331,6 +332,28 @@ export default function MeetingReelGenerator() {
       { onError: (err) => console.warn('缩略图持久化失败:', err.message) }
     );
   }, [saveThumbnailMutation]);
+
+  // 获取真实转录文本（通过 tRPC）
+  const utils = trpc.useUtils();
+  const loadRealTranscript = useCallback(async (meetingId: number) => {
+    setTranscriptLoading(true);
+    try {
+      const result = await utils.meetingReels.getTranscriptText.fetch({ meetingId });
+      if (result.text) {
+        setTranscript(result.text);
+        toast.success(`✅ 已加载 ${result.count} 条转录片段`);
+      } else {
+        setTranscript(DEMO_TRANSCRIPT);
+        toast.info("⚠️ 该会议暂无转录文本，使用演示数据");
+      }
+    } catch (err) {
+      console.warn("加载转录失败:", err);
+      setTranscript(DEMO_TRANSCRIPT);
+      toast.error("转录加载失败，使用演示数据");
+    } finally {
+      setTranscriptLoading(false);
+    }
+  }, [utils]);
 
   const [selectedTemplate, setSelectedTemplate] = useState("launch");
   const [duration, setDuration] = useState<"15s" | "30s" | "60s">("30s");
@@ -366,13 +389,16 @@ export default function MeetingReelGenerator() {
       return;
     }
     setSelectedRealMeeting(meeting);
-    // 如果会议有 AI 摘要或转录，使用真实数据；否则回退到 Demo 转录
-    setTranscript(DEMO_TRANSCRIPT);
+    setSelectedMeeting(null); // 清除 Mock 选择
     setStep("input");
-    toast.success("✅ 会议录像已加载，封面已自动识别");
+    // 自动加载真实转录文本
+    loadRealTranscript(meeting.id);
+    toast.success("✅ 会议录像已加载，正在获取转录文本…");
   };
 
   // ── AI 分析高光片段 ──────────────────────────────────────────────────────────
+
+  const identifyHighlightsMutation = trpc.ai.identifyReelHighlights.useMutation();
 
   const handleAnalyzeWithAI = async () => {
     if (!transcript.trim()) {
@@ -392,6 +418,27 @@ export default function MeetingReelGenerator() {
     }, 300);
 
     try {
+      // 如果选择了真实会议，使用 tRPC ai.identifyReelHighlights（直接读取数据库转录）
+      if (selectedRealMeeting) {
+        const durationMap = { "15s": 15, "30s": 30, "60s": 60 };
+        const result = await identifyHighlightsMutation.mutateAsync({
+          meetingId: selectedRealMeeting.id,
+          targetDurationSeconds: durationMap[duration],
+        });
+        clearInterval(progressInterval);
+        setAnalyzeProgress(100);
+        const withSelected = result.highlights.map((h: Omit<ReelHighlight, "selected">, i: number) => ({
+          ...h,
+          selected: h.importance === "high" || i < 3,
+        }));
+        setHighlights(withSelected);
+        setStep("highlights");
+        setActiveTab("highlights");
+        toast.success(`🎯 AI 识别了 ${withSelected.length} 个高光片段！`);
+        return;
+      }
+
+      // 回退：使用前端 callNovaAI（Mock 数据或手动输入的转录）
       const systemPrompt = `你是一位专业的 B2B 跨境贸易短视频剪辑师，专门为 RealSourcing 平台制作 TikTok/抖音/微信视频号的爆款 Reels 短片。
 
 你的任务是从 Webinar 直播文字稿中识别最具传播力的高光片段，重点关注：
@@ -481,6 +528,64 @@ ${transcript.slice(0, 5000)}
     }, 400);
 
     try {
+      // 当有真实会议时，优先通过后端 tRPC 调用 AI（避免前端暴露 API Key）
+      if (selectedRealMeeting) {
+        const realHighlights = selectedHighlights.map(h => ({
+          title: h.title,
+          startTime: h.startTime,
+          endTime: h.endTime,
+          description: h.description,
+          category: h.category,
+          importance: h.importance,
+        }));
+        const styleMap: Record<string, string> = {
+          'tech': '科技感', 'viral': '燃爆款', 'business': '商务风'
+        };
+        const reelTypeMap: Record<string, string> = {
+          'product': '产品发布', 'factory': '工厂实力', 'qa': 'Q&A精华', 'data': '数据驱动'
+        };
+        const durationMap: Record<string, number> = { '15s': 15, '30s': 30, '60s': 60 };
+        try {
+          console.log('[DEBUG] Calling generateReelScript with:', { meetingId: selectedRealMeeting.id, highlightsCount: realHighlights.length });
+          const result = await trpc.ai.generateReelScript.mutate({
+            meetingId: selectedRealMeeting.id,
+            highlights: realHighlights,
+            style: styleMap[selectedTemplate] || '科技感',
+            duration: durationMap[duration] || 30,
+            orientation: format === '9:16' ? '竖屏' : '横屏',
+            reelType: reelTypeMap[selectedTemplate] || '产品发布',
+          });
+          console.log('[DEBUG] tRPC generateReelScript result:', result);
+          clearInterval(progressInterval);
+          setGenerateProgress(100);
+          if (result.script) {
+          // 将后端返回的 JSON 脚本转换为前端的 ReelScript 格式
+          const s = result.script;
+          const reelScript: ReelScript = {
+            hook: s.hook || '',
+            scenes: (s.segments || s.scenes || []).map((seg: any) => ({
+              time: seg.timeRange || seg.time || '',
+              visual: seg.visual || '',
+              caption: seg.text || seg.caption || '',
+              voiceover: seg.voiceover || '',
+            })),
+            cta: s.cta || '',
+            hashtags: s.hashtags || [],
+            douyinTitle: s.douyinTitle || `${selectedRealMeeting.title} | ${s.hook || ''}`,
+            wechatCaption: s.wechatCaption || s.cta || '',
+          };
+            setReelScript(reelScript);
+            setStep('done');
+            setActiveTab('script');
+            toast.success('🍌 Reels 脚本生成完成！');
+            return;
+          }
+        } catch (err) {
+          console.error('[DEBUG] generateReelScript error:', err);
+          toast.error(`后端脚本生成失败: ${err instanceof Error ? err.message : '未知错误'}`);
+        }
+      }
+
       const systemPrompt = `你是一位专业的跨境电商短视频文案策划师，专门为抖音、TikTok、微信视频号创作爆款 B2B 采购内容。
 
 你的文案风格：
@@ -591,10 +696,12 @@ ${selectedData}
               <h1 className="font-bold text-sm flex items-center gap-2">
                 AI Webinar → Reels 生成器
                 <Badge className="bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[10px] px-1.5 py-0">
-                  GPT-5.1
+                  GPT-4.1
                 </Badge>
               </h1>
-              <p className="text-[11px] text-gray-400">RealSourcing · 迪拜卖家聚会专版</p>
+              <p className="text-[11px] text-gray-400">
+                {selectedRealMeeting ? selectedRealMeeting.title : selectedMeeting ? selectedMeeting.title : "RealSourcing · Webinar Reels 生成器"}
+              </p>
             </div>
           </div>
         </div>
@@ -807,17 +914,23 @@ ${selectedData}
                 className="flex-1 p-6 flex flex-col gap-4"
               >
                 {/* 已选会议信息卡片 */}
-                {selectedMeeting && (
+                {(selectedMeeting || selectedRealMeeting) && (
                   <div className="rounded-xl bg-green-500/5 border border-green-500/20 p-3 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      {transcriptLoading
+                        ? <Loader2 className="w-4 h-4 text-green-400 animate-spin" />
+                        : <CheckCircle className="w-4 h-4 text-green-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-green-400">录像已加载 · AI 转录就绪</p>
-                      <p className="text-[11px] text-gray-400 truncate">{selectedMeeting.title}</p>
+                      <p className="text-xs font-medium text-green-400">
+                        {transcriptLoading ? "转录加载中…" : "录像已加载 · AI 转录就绪"}
+                      </p>
+                      <p className="text-[11px] text-gray-400 truncate">
+                        {selectedRealMeeting?.title || selectedMeeting?.title}
+                      </p>
                     </div>
                     <button
-                      onClick={() => setStep("select")}
+                      onClick={() => { setStep("select"); setSelectedRealMeeting(null); setSelectedMeeting(null); }}
                       className="text-[10px] text-gray-500 hover:text-gray-300 border border-white/10 rounded-lg px-2 py-1 transition-all flex-shrink-0"
                     >
                       换一个
@@ -928,6 +1041,7 @@ ${selectedData}
                 key="highlights"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
+                style={{ height: '100%', minHeight: 0 }}
                 className="flex-1 overflow-y-auto p-6 space-y-4"
               >
                 {/* 标签页 */}
