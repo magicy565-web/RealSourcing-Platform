@@ -270,7 +270,15 @@
 
   /* 兼容旧版 glass-card */
   .glass-card {
-    @apply glass-l2;
+    background: var(--glass-l2-bg);
+    border: 1px solid var(--glass-border-subtle);
+    backdrop-filter: var(--glass-blur-sm);
+    -webkit-backdrop-filter: var(--glass-blur-sm);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 4px 16px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-lg);
   }
 
   /* ── 辉光变体 ── */
@@ -315,7 +323,15 @@
   }
 
   /* ── 旧版兼容 ── */
-  .glow-purple { @apply glass-glow-purple; }
+  .glow-purple {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(124, 58, 237, 0.25),
+      0 4px 24px rgba(124, 58, 237, 0.20),
+      0 0 60px rgba(124, 58, 237, 0.10);
+  }
 
   /* ══════════════════════════════════════════════
      BENTO GRID 布局系统
@@ -327,7 +343,16 @@
   }
 
   .bento-cell {
-    @apply glass-l1;
+    background: var(--glass-l1-bg);
+    border: 1px solid var(--glass-border-subtle);
+    backdrop-filter: var(--glass-blur-md);
+    -webkit-backdrop-filter: var(--glass-blur-md);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-xl);
     transition: transform var(--duration-normal) var(--ease-smooth),
                 box-shadow var(--duration-normal) var(--ease-smooth);
   }
@@ -384,7 +409,19 @@
   .btn-primary:active { transform: translateY(0px); }
 
   /* 旧版兼容 */
-  .btn-gradient-purple { @apply btn-primary; }
+  .btn-gradient-purple {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4f46e5 100%);
+    background-size: 200% 200%;
+    color: white;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    transition: all var(--duration-normal) var(--ease-smooth);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.10) inset,
+      0 4px 14px rgba(124, 58, 237, 0.40);
+  }
 
   /* 次要按钮：玻璃态 */
   .btn-glass {
@@ -497,7 +534,16 @@
 
   /* ── 统计卡片 ── */
   .stat-card {
-    @apply glass-l1;
+    background: var(--glass-l1-bg);
+    border: 1px solid var(--glass-border-subtle);
+    backdrop-filter: var(--glass-blur-md);
+    -webkit-backdrop-filter: var(--glass-blur-md);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-xl);
     padding: 1.5rem;
     transition: transform var(--duration-normal) var(--ease-smooth),
                 box-shadow var(--duration-normal) var(--ease-smooth);
@@ -505,7 +551,13 @@
 
   .stat-card:hover {
     transform: translateY(-3px);
-    @apply glass-glow-purple;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(124, 58, 237, 0.25),
+      0 4px 24px rgba(124, 58, 237, 0.20),
+      0 0 60px rgba(124, 58, 237, 0.10);
   }
 
   /* ── Input 深色主题 ── */
