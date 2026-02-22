@@ -361,4 +361,36 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* ── 移动端安全区域（刘海屏适配）── */
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ── TikTok 直播间：抢单按钮渐变动画 ── */
+  @keyframes gradient-shift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* ── 弹幕消息滑入动画 ── */
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out forwards;
+  }
+
+  /* ── 直播间全屏布局（禁止页面滚动）── */
+  .webinar-live-page {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
 }

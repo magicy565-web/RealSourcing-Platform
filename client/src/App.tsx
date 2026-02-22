@@ -72,14 +72,16 @@ function Router() {
       </Route>
 
       {/* Webinar Live Rooms */}
+      {/* /webinar-live/:id → 移动端沉浸式直播间（买家视角，精进点1-4） */}
       <Route path="/webinar-live/:id">
         <ProtectedRoute>
-          <WebinarLive />
+          <WebinarLiveRoom />
         </ProtectedRoute>
       </Route>
-      <Route path="/webinar-live-legacy/:id">
+      {/* /webinar-live/host/:id → 主播控制台（工厂/主持人视角） */}
+      <Route path="/webinar-live/host/:id">
         <ProtectedRoute>
-          <WebinarLiveRoom />
+          <WebinarLive />
         </ProtectedRoute>
       </Route>
 

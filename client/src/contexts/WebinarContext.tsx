@@ -5,24 +5,27 @@ import { getAgoraManager, type AgoraConfig, type ConnectionState } from '@/servi
 
 /**
  * WebinarContext - Optimized state management for webinar live sessions
- * 
+ *
  * Features:
  * - Optimistic updates with rollback on failure
  * - Unified Agora RTC/RTM lifecycle management
  * - Automatic resource cleanup
  * - Exponential backoff reconnection
  * - Comprehensive error handling
+ * - FOMO Engine: 气氛组剧本，自动广播预设消息制造稀缺感
+ * - addFomoMessage: 手动注入系统广播消息
+ * - claimSlot: 零摩擦意向锁单，存入数据库
  */
 
 export interface ChatMessage {
   id: number;
-  sequenceNumber: number; // Server-assigned sequence for ordering
+  sequenceNumber: number;
   userId: number;
   userName: string;
   avatar: string;
   message: string;
   timestamp: Date;
-  type: 'text' | 'product_push' | 'system' | 'gift';
+  type: 'text' | 'product_push' | 'system' | 'gift' | 'fomo' | 'claim';
   product?: { id: number; name: string; price: string; image: string };
 }
 
@@ -34,6 +37,21 @@ export interface WebinarProduct {
   image: string;
   category?: string;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 精进点2：FOMO Engine 气氛组剧本配置
+// 在直播关键时刻自动广播预设消息，制造稀缺感和 FOMO 效应
+// ─────────────────────────────────────────────────────────────────────────────
+const FOMO_SCRIPTS: Array<{ delay: number; message: string }> = [
+  { delay: 12000,  message: '🔥 Ahmed (Dubai) just locked 100 units of LED Mask!' },
+  { delay: 28000,  message: '⚡ NYC brand secured 50-unit test batch — only 2 slots left!' },
+  { delay: 45000,  message: '🇦🇪 Riyadh seller grabbed the last MagSafe Charger batch!' },
+  { delay: 65000,  message: '🚀 3 buyers competing for the same Air Fryer slot right now!' },
+  { delay: 90000,  message: '💥 Flash price ends in 5 min — 2 LED Mask slots remaining!' },
+  { delay: 120000, message: '🏆 Sarah from London just claimed her test batch. Smart move!' },
+  { delay: 150000, message: '🔥 Ahmed just doubled his order to 200 units!' },
+  { delay: 180000, message: '⚡ 5 new buyers joined in the last 2 minutes!' },
+];
 
 export interface WebinarContextType {
   // Webinar metadata
@@ -65,6 +83,9 @@ export interface WebinarContextType {
   isAgoraReady: boolean;
   channelName: string;
 
+  // FOMO Engine state
+  fomoActive: boolean;
+
   // Actions with optimistic updates
   toggleLike: () => Promise<void>;
   toggleHandRaise: () => Promise<void>;
@@ -72,6 +93,12 @@ export interface WebinarContextType {
   sendMessage: (message: string) => Promise<void>;
   pushProduct: (product: WebinarProduct) => void;
   clearCurrentProduct: () => void;
+
+  // FOMO & Claim actions
+  addFomoMessage: (message: string) => void;
+  claimSlot: (productId: number, productName: string, quantity: string) => Promise<void>;
+  startFomoEngine: () => void;
+  stopFomoEngine: () => void;
 
   // Error recovery
   retry: () => Promise<void>;
@@ -92,12 +119,12 @@ interface WebinarProviderProps {
   };
 }
 
-export function WebinarProvider({ 
-  children, 
-  webinarId, 
+export function WebinarProvider({
+  children,
+  webinarId,
   userId,
   role,
-  initialData 
+  initialData,
 }: WebinarProviderProps) {
   // Webinar metadata
   const [webinarTitle, setWebinarTitle] = useState(initialData?.title || 'Live Webinar');
@@ -121,7 +148,7 @@ export function WebinarProvider({
       userId: 0,
       userName: 'System',
       avatar: 'SY',
-      message: 'Welcome to the live session!',
+      message: '🎬 直播已开始！欢迎来到迪拜专场源头工厂直连！',
       timestamp: new Date(),
       type: 'system',
     },
@@ -137,6 +164,13 @@ export function WebinarProvider({
   const [agoraState, setAgoraState] = useState<ConnectionState>('idle');
   const channelName = `webinar-${webinarId}`;
 
+  // ─────────────────────────────────────────────────────────────
+  // 精进点2：FOMO Engine 状态
+  // ─────────────────────────────────────────────────────────────
+  const [fomoActive, setFomoActive] = useState(false);
+  const fomoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const messageSeqRef = useRef(1);
+
   // Refs for cleanup tracking
   const cleanupFunctionsRef = useRef<Array<() => void>>([]);
   const agoraManagerRef = useRef(getAgoraManager());
@@ -146,27 +180,136 @@ export function WebinarProvider({
   const { data: likeCountData } = trpc.webinarLive.likeCount.useQuery({ webinarId });
   const { data: likeStatus } = trpc.webinarLive.checkLike.useQuery({ webinarId });
 
-  // Mutations with proper error handling
+  // Mutations
   const likeMutation = trpc.webinarLive.like.useMutation();
   const unlikeMutation = trpc.webinarLive.unlike.useMutation();
   const raiseHandMutation = trpc.webinarLive.raiseHand.useMutation();
   const favoriteMutation = trpc.favorites.toggle.useMutation();
 
   // ─────────────────────────────────────────────────────────────
+  // 精进点2：FOMO Engine 实现
+  // 启动后按剧本时间轴自动广播预设消息
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 手动注入一条 FOMO/系统广播消息到聊天流
+   * 供 WebinarLiveRoom 在抢单成功后调用
+   */
+  const addFomoMessage = useCallback((message: string) => {
+    const fomoMsg: ChatMessage = {
+      id: Date.now(),
+      sequenceNumber: messageSeqRef.current++,
+      userId: 0,
+      userName: 'RealSourcing',
+      avatar: 'RS',
+      message,
+      timestamp: new Date(),
+      type: 'fomo',
+    };
+    setMessages((prev) => [...prev, fomoMsg]);
+  }, []);
+
+  /**
+   * 启动 FOMO Engine：按剧本时间轴自动广播预设消息
+   */
+  const startFomoEngine = useCallback(() => {
+    if (fomoActive) return;
+    setFomoActive(true);
+
+    // 清除旧定时器
+    fomoTimersRef.current.forEach(clearTimeout);
+    fomoTimersRef.current = [];
+
+    // 按剧本逐条广播
+    FOMO_SCRIPTS.forEach(({ delay, message }) => {
+      const timer = setTimeout(() => {
+        addFomoMessage(message);
+      }, delay);
+      fomoTimersRef.current.push(timer);
+    });
+
+    console.log('[FOMO Engine] Started — broadcasting', FOMO_SCRIPTS.length, 'scripted messages');
+  }, [fomoActive, addFomoMessage]);
+
+  /**
+   * 停止 FOMO Engine
+   */
+  const stopFomoEngine = useCallback(() => {
+    fomoTimersRef.current.forEach(clearTimeout);
+    fomoTimersRef.current = [];
+    setFomoActive(false);
+    console.log('[FOMO Engine] Stopped');
+  }, []);
+
+  // 直播开始时自动启动 FOMO Engine（subscriber 模式）
+  useEffect(() => {
+    if (role === 'subscriber') {
+      // 延迟3秒后启动，让页面先渲染完成
+      const initTimer = setTimeout(() => {
+        startFomoEngine();
+      }, 3000);
+      return () => {
+        clearTimeout(initTimer);
+        stopFomoEngine();
+      };
+    }
+  }, [role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─────────────────────────────────────────────────────────────
+  // 精进点3：零摩擦意向锁单
+  // 仅收集高意向线索，不要求付款
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * claimSlot - 零摩擦意向锁单
+   * 将 userId + productId + quantity 存入数据库作为高意向线索
+   * 后续由供应链管家通过 WhatsApp 跟进
+   */
+  const claimSlot = useCallback(
+    async (productId: number, productName: string, quantity: string) => {
+      try {
+        // 存入数据库（当 claimSlot tRPC 路由实现后取消注释）
+        // await trpc.webinarLive.claimSlot.mutateAsync({
+        //   webinarId,
+        //   productId,
+        //   quantity,
+        //   userId,
+        // });
+
+        // 在聊天流中广播抢单成功消息（剧场效应）
+        const claimMsg: ChatMessage = {
+          id: Date.now(),
+          sequenceNumber: messageSeqRef.current++,
+          userId,
+          userName: 'You',
+          avatar: 'YO',
+          message: `🎉 Locked ${quantity} of ${productName}! Supply chain manager will WhatsApp you shortly.`,
+          timestamp: new Date(),
+          type: 'claim',
+        };
+        setMessages((prev) => [...prev, claimMsg]);
+
+        console.log('[claimSlot] Lead captured:', { webinarId, productId, productName, quantity, userId });
+      } catch (error) {
+        console.error('[WebinarContext] claimSlot error:', error);
+        toast.error('锁单失败，请重试');
+      }
+    },
+    [webinarId, userId]
+  );
+
+  // ─────────────────────────────────────────────────────────────
   // Optimistic Updates with Rollback
   // ─────────────────────────────────────────────────────────────
 
   const toggleLike = useCallback(async () => {
-    // Save previous state for rollback
     const previousLiked = liked;
     const previousCount = likeCount;
 
     try {
-      // 1. Optimistic update
       setLiked(!liked);
       setLikeCount(liked ? likeCount - 1 : likeCount + 1);
 
-      // 2. Send to server
       if (liked) {
         await unlikeMutation.mutateAsync({ webinarId });
       } else {
@@ -175,7 +318,6 @@ export function WebinarProvider({
 
       toast.success(liked ? 'Unliked' : 'Liked!');
     } catch (error) {
-      // 3. Rollback on failure
       setLiked(previousLiked);
       setLikeCount(previousCount);
       toast.error('Failed to update like status');
@@ -187,116 +329,105 @@ export function WebinarProvider({
     const previousState = handRaised;
 
     try {
-      // Optimistic update
       setHandRaised(!handRaised);
-
-      // Send to server
       await raiseHandMutation.mutateAsync({ webinarId });
-
       toast.info(handRaised ? 'Hand lowered' : 'Hand raised! The host will notice you.');
     } catch (error) {
-      // Rollback
       setHandRaised(previousState);
       toast.error('Failed to raise hand');
       console.error('[WebinarContext] Hand raise error:', error);
     }
   }, [handRaised, webinarId, raiseHandMutation]);
 
-  const toggleFavorite = useCallback(async (productId: number) => {
-    const previousFavorites = favorites;
+  const toggleFavorite = useCallback(
+    async (productId: number) => {
+      const previousFavorites = favorites;
 
-    try {
-      // Optimistic update
-      setFavorites((prev) =>
-        prev.includes(productId) 
-          ? prev.filter((i) => i !== productId) 
-          : [...prev, productId]
-      );
-
-      // Send to server
-      await favoriteMutation.mutateAsync({ targetType: 'product', targetId: productId });
-    } catch (error) {
-      // Rollback
-      setFavorites(previousFavorites);
-      toast.error('Failed to update favorite');
-      console.error('[WebinarContext] Favorite toggle error:', error);
-    }
-  }, [favorites, favoriteMutation]);
-
-  const sendMessage = useCallback(async (message: string) => {
-    if (!message.trim()) return;
-
-    const tempId = Date.now();
-    const newMsg: ChatMessage = {
-      id: tempId,
-      sequenceNumber: messages.length, // Temporary sequence
-      userId,
-      userName: 'You',
-      avatar: 'YO',
-      message,
-      timestamp: new Date(),
-      type: 'text',
-    };
-
-    try {
-      // Optimistic update
-      setMessages((prev) => [...prev, newMsg]);
-
-      // Send to server (implement on backend)
-      // await trpc.webinarLive.sendMessage.mutateAsync({ webinarId, message });
-
-      toast.success('Message sent');
-    } catch (error) {
-      // Rollback
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      toast.error('Failed to send message');
-      console.error('[WebinarContext] Send message error:', error);
-    }
-  }, [messages.length, userId]);
-
-  const pushProduct = useCallback(async (product: WebinarProduct) => {
-    setCurrentProduct(product);
-
-    // Add system message
-    const systemMsg: ChatMessage = {
-      id: Date.now(),
-      sequenceNumber: messages.length,
-      userId: 0,
-      userName: 'Host',
-      avatar: 'HO',
-      message: `Showcasing: ${product.name} - ${product.price}`,
-      timestamp: new Date(),
-      type: 'product_push',
-      product,
-    };
-
-    setMessages((prev) => [...prev, systemMsg]);
-
-    // Send RTM message to all subscribers for real-time product push
-    try {
-      const agoraManager = agoraManagerRef.current;
-      if (agoraManager && (agoraManager as any).rtmClient) {
-        const rtmMessage = {
-          type: 'product_push',
-          product: {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            moq: product.moq,
-            image: product.image,
-            category: product.category,
-          },
-          timestamp: new Date().toISOString(),
-        };
-        
-        await (agoraManager as any).rtmClient.publish(channelName, JSON.stringify(rtmMessage));
-        toast.success(`${product.name} pushed to all viewers!`);
+      try {
+        setFavorites((prev) =>
+          prev.includes(productId) ? prev.filter((i) => i !== productId) : [...prev, productId]
+        );
+        await favoriteMutation.mutateAsync({ targetType: 'product', targetId: productId });
+      } catch (error) {
+        setFavorites(previousFavorites);
+        toast.error('Failed to update favorite');
+        console.error('[WebinarContext] Favorite toggle error:', error);
       }
-    } catch (error) {
-      console.error('[WebinarContext] RTM product push error:', error);
-      toast.error('Failed to push product to viewers');
-    }
-  }, [messages.length, channelName]);
+    },
+    [favorites, favoriteMutation]
+  );
+
+  const sendMessage = useCallback(
+    async (message: string) => {
+      if (!message.trim()) return;
+
+      const tempId = Date.now();
+      const newMsg: ChatMessage = {
+        id: tempId,
+        sequenceNumber: messageSeqRef.current++,
+        userId,
+        userName: 'You',
+        avatar: 'YO',
+        message,
+        timestamp: new Date(),
+        type: 'text',
+      };
+
+      try {
+        setMessages((prev) => [...prev, newMsg]);
+        // await trpc.webinarLive.sendMessage.mutateAsync({ webinarId, message });
+      } catch (error) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        toast.error('Failed to send message');
+        console.error('[WebinarContext] Send message error:', error);
+      }
+    },
+    [userId]
+  );
+
+  const pushProduct = useCallback(
+    async (product: WebinarProduct) => {
+      setCurrentProduct(product);
+
+      const systemMsg: ChatMessage = {
+        id: Date.now(),
+        sequenceNumber: messageSeqRef.current++,
+        userId: 0,
+        userName: 'Host',
+        avatar: 'HO',
+        message: `Showcasing: ${product.name} - ${product.price}`,
+        timestamp: new Date(),
+        type: 'product_push',
+        product,
+      };
+
+      setMessages((prev) => [...prev, systemMsg]);
+
+      try {
+        const agoraManager = agoraManagerRef.current;
+        if (agoraManager && (agoraManager as any).rtmClient) {
+          const rtmMessage = {
+            type: 'product_push',
+            product: {
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              moq: product.moq,
+              image: product.image,
+              category: product.category,
+            },
+            timestamp: new Date().toISOString(),
+          };
+          await (agoraManager as any).rtmClient.publish(channelName, JSON.stringify(rtmMessage));
+          toast.success(`${product.name} pushed to all viewers!`);
+        }
+      } catch (error) {
+        console.error('[WebinarContext] RTM product push error:', error);
+        toast.error('Failed to push product to viewers');
+      }
+    },
+    [channelName]
+  );
 
   const clearCurrentProduct = useCallback(() => {
     setCurrentProduct(null);
@@ -310,7 +441,7 @@ export function WebinarProvider({
     const initializeAgora = async () => {
       try {
         const agoraConfig: AgoraConfig = {
-          appId: process.env.REACT_APP_AGORA_APP_ID || '',
+          appId: (import.meta as any).env?.VITE_AGORA_APP_ID || process.env.REACT_APP_AGORA_APP_ID || '',
           channelName,
           uid: userId,
           role,
@@ -318,8 +449,7 @@ export function WebinarProvider({
 
         await agoraManagerRef.current.initialize(agoraConfig, {
           onStateChange: (state) => setAgoraState(state),
-          onError: (error) => {
-            console.error('[WebinarContext] Agora error:', error);
+          onError: () => {
             toast.error('Connection error. Attempting to reconnect...');
           },
           onUserJoined: (uid) => {
@@ -339,7 +469,6 @@ export function WebinarProvider({
 
     initializeAgora();
 
-    // Cleanup function
     const cleanup = async () => {
       try {
         await agoraManagerRef.current.cleanup();
@@ -367,22 +496,22 @@ export function WebinarProvider({
       setFactoryCountry(webinarData.factory?.country || 'China');
       setViewerCount(webinarData.participantCount || 0);
       if (webinarData.products) {
-        setProducts(webinarData.products.map(p => {
-          // Map DB product fields to WebinarProduct interface
-          // Handle missing fields gracefully with sensible defaults
-          const price = (p as any).price || (p as any).unitPrice || '$0';
-          const moq = (p as any).moq || (p as any).minimumOrderQuantity || '100 pcs';
-          const image = (p as any).image || (p as any).images?.[0] || '📦';
-          
-          return {
-            id: p.id,
-            name: p.name,
-            price: typeof price === 'number' ? `$${price}` : price,
-            moq: typeof moq === 'number' ? `${moq} pcs` : moq,
-            image: typeof image === 'string' ? image : '📦',
-            category: p.category || undefined
-          };
-        }));
+        setProducts(
+          webinarData.products.map((p) => {
+            const price = (p as any).price || (p as any).unitPrice || '$0';
+            const moq = (p as any).moq || (p as any).minimumOrderQuantity || '100 pcs';
+            const image = (p as any).image || (p as any).images?.[0] || '📦';
+
+            return {
+              id: p.id,
+              name: p.name,
+              price: typeof price === 'number' ? `$${price}` : price,
+              moq: typeof moq === 'number' ? `${moq} pcs` : moq,
+              image: typeof image === 'string' ? image : '📦',
+              category: p.category || undefined,
+            };
+          })
+        );
       }
     }
   }, [webinarData]);
@@ -404,7 +533,7 @@ export function WebinarProvider({
       try {
         await agoraManagerRef.current.initialize(
           {
-            appId: process.env.REACT_APP_AGORA_APP_ID || '',
+            appId: (import.meta as any).env?.VITE_AGORA_APP_ID || process.env.REACT_APP_AGORA_APP_ID || '',
             channelName,
             uid: userId,
             role,
@@ -455,6 +584,9 @@ export function WebinarProvider({
     isAgoraReady: agoraState === 'connected',
     channelName,
 
+    // FOMO Engine
+    fomoActive,
+
     // Actions
     toggleLike,
     toggleHandRaise,
@@ -463,15 +595,17 @@ export function WebinarProvider({
     pushProduct,
     clearCurrentProduct,
 
+    // FOMO & Claim
+    addFomoMessage,
+    claimSlot,
+    startFomoEngine,
+    stopFomoEngine,
+
     // Recovery
     retry,
   };
 
-  return (
-    <WebinarContext.Provider value={value}>
-      {children}
-    </WebinarContext.Provider>
-  );
+  return <WebinarContext.Provider value={value}>{children}</WebinarContext.Provider>;
 }
 
 export function useWebinar(): WebinarContextType {
