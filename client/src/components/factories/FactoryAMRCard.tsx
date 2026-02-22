@@ -110,6 +110,7 @@ export interface FactoryAMRData {
   country?: string;
   category?: string;
   logo?: string;
+  coverImage?: string;
   status?: string;
   // AMR 评分
   amrScore?: number;
@@ -159,7 +160,7 @@ export function FactoryAMRCard({ factory, onViewDetails }: FactoryAMRCardProps) 
       {/* ── 封面图 ── */}
       <div className="relative h-40 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950">
         <img
-          src={factory.logo || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=250&fit=crop"}
+          src={factory.coverImage || factory.logo || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=250&fit=crop"}
           alt={factory.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80"
         />
