@@ -1,3 +1,4 @@
+import "@fontsource-variable/inter";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { loadSolarIcons } from "@/lib/solar-icons";

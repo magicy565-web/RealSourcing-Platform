@@ -1,18 +1,37 @@
 import { useState, useEffect, useRef } from "react";
+import type React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import ReactMarkdown from "react-markdown";
-import {
-  Sparkles, Send, Building2, Package, MessageSquare, TrendingUp,
-  RefreshCw, Copy, ExternalLink, Zap, Globe, Shield, Loader2,
-  Bot, User, ChevronRight, DollarSign
-} from "lucide-react";
+import { Icon as SolarIcon } from "@iconify/react";
 import { Particles } from "@/components/magicui/particles";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
 import { BlurFade } from "@/components/magicui/blur-fade";
+
+// Solar Icons 封装
+const SIcon = ({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) => (
+  <SolarIcon icon={`solar:${name}`} className={className} style={style} />
+);
+const Sparkles = (p: any) => <SIcon name="magic-stick-2-bold-duotone" {...p} />;
+const Send = (p: any) => <SIcon name="send-square-bold-duotone" {...p} />;
+const Building2 = (p: any) => <SIcon name="buildings-2-bold-duotone" {...p} />;
+const Package = (p: any) => <SIcon name="delivery-bold-duotone" {...p} />;
+const MessageSquare = (p: any) => <SIcon name="chat-round-dots-bold-duotone" {...p} />;
+const TrendingUp = (p: any) => <SIcon name="chart-2-bold-duotone" {...p} />;
+const RefreshCw = (p: any) => <SIcon name="refresh-circle-bold-duotone" {...p} />;
+const Copy = (p: any) => <SIcon name="copy-bold-duotone" {...p} />;
+const ExternalLink = (p: any) => <SIcon name="arrow-right-up-bold-duotone" {...p} />;
+const Zap = (p: any) => <SIcon name="bolt-bold-duotone" {...p} />;
+const Globe = (p: any) => <SIcon name="globe-bold-duotone" {...p} />;
+const Shield = (p: any) => <SIcon name="shield-check-bold-duotone" {...p} />;
+const Bot = (p: any) => <SIcon name="cpu-bolt-bold-duotone" {...p} />;
+const User = (p: any) => <SIcon name="user-circle-bold-duotone" {...p} />;
+const ChevronRight = (p: any) => <SIcon name="alt-arrow-right-bold-duotone" {...p} />;
+const DollarSign = (p: any) => <SIcon name="dollar-minimalistic-bold-duotone" {...p} />;
+const Loader = (p: any) => <SIcon name="refresh-circle-bold-duotone" {...p} />;
 
 interface Message {
   id: number;
@@ -54,11 +73,6 @@ What are you looking to source today?`,
     "Compare factory prices",
   ],
 };
-
-const GRID_BG = `
-  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
-`;
 
 export default function AIAssistant() {
   const [, setLocation] = useLocation();
@@ -136,36 +150,34 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
-      <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+    <div className="flex h-screen overflow-hidden" style={{ background: "#09090b" }}>
       {/* Particles 背景 — 极低密度，营造 AI 科技感 */}
       <Particles
         className="fixed inset-0 pointer-events-none z-0"
-        quantity={25}
+        quantity={20}
         color="#7c3aed"
         ease={80}
-        size={0.5}
+        size={0.4}
       />
 
       {/* ── 左侧边栏 ── */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="w-64 flex flex-col relative z-10 overflow-hidden"
-        style={{ borderRight: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}
+        className="w-60 flex flex-col relative z-10 overflow-hidden"
+        style={{ borderRight: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.015)" }}
       >
-        {/* 侧边栏 BorderBeam */}
         <BorderBeam size={200} duration={12} colorFrom="#7c3aed" colorTo="#a78bfa20" />
         {/* Header */}
-        <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg"
-              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)", boxShadow: "0 0 20px rgba(124,58,237,0.35)" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)", boxShadow: "0 0 20px rgba(124,58,237,0.30)" }}>
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="font-bold text-sm text-white">AI Procurement</h2>
-              <p className="text-[10px] flex items-center gap-1" style={{ color: "#4ade80" }}>
+              <h2 className="text-card-title">AI Procurement</h2>
+              <p className="text-badge flex items-center gap-1" style={{ color: "#4ade80" }}>
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#4ade80" }} />
                 Powered by Qwen Plus
               </p>
@@ -173,7 +185,7 @@ export default function AIAssistant() {
           </div>
           <ShimmerButton
             onClick={handleReset}
-            className="w-full h-9 text-sm font-medium justify-center"
+            className="w-full h-9 text-btn font-medium justify-center"
             shimmerColor="#c4b5fd"
             background="rgba(124,58,237,0.15)"
             borderRadius="0.75rem"
@@ -183,8 +195,8 @@ export default function AIAssistant() {
         </div>
 
         {/* Quick Actions */}
-        <div className="p-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>Quick Actions</p>
+        <div className="p-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <p className="text-label mb-2">Quick Actions</p>
           <div className="space-y-0.5">
             {QUICK_PROMPTS.map((prompt) => (
               <motion.button
@@ -192,10 +204,10 @@ export default function AIAssistant() {
                 whileHover={{ x: 3 }}
                 onClick={() => handleSend(prompt)}
                 disabled={chatMutation.isPending}
-                className="w-full text-left px-3 py-2 rounded-lg text-xs truncate transition-all disabled:opacity-50"
+                className="w-full text-left px-3 py-2 rounded-lg text-caption truncate transition-all disabled:opacity-50"
                 style={{ color: "rgba(255,255,255,0.35)" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "white", e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.35)", e.currentTarget.style.background = "transparent")}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.80)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.35)"; e.currentTarget.style.background = "transparent"; }}
               >
                 <ChevronRight className="w-3 h-3 inline mr-1" style={{ color: "#7c3aed" }} />
                 {prompt}
@@ -207,21 +219,21 @@ export default function AIAssistant() {
         {/* AI Capabilities */}
         <div className="p-3 mt-auto">
           <div className="rounded-xl p-3 space-y-2"
-            style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.18)" }}>
-            <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#c4b5fd" }}>
+            style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)" }}>
+            <p className="text-caption font-semibold flex items-center gap-1.5" style={{ color: "#c4b5fd" }}>
               <Zap className="w-3 h-3" />AI Capabilities
             </p>
             {[
-              { icon: <Building2 className="w-3 h-3" />, text: "Factory matching" },
-              { icon: <DollarSign className="w-3 h-3" />, text: "Price analysis" },
-              { icon: <MessageSquare className="w-3 h-3" />, text: "Inquiry drafting" },
-              { icon: <TrendingUp className="w-3 h-3" />, text: "Market insights" },
-              { icon: <Globe className="w-3 h-3" />, text: "Multi-language" },
-              { icon: <Shield className="w-3 h-3" />, text: "Trade compliance" },
-            ].map((item) => (
-              <div key={item.text} className="flex items-center gap-2 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                <span style={{ color: "#7c3aed" }}>{item.icon}</span>
-                {item.text}
+              { icon: Building2, text: "Factory matching" },
+              { icon: DollarSign, text: "Price analysis" },
+              { icon: MessageSquare, text: "Inquiry drafting" },
+              { icon: TrendingUp, text: "Market insights" },
+              { icon: Globe, text: "Multi-language" },
+              { icon: Shield, text: "Trade compliance" },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-2 text-caption" style={{ color: "rgba(255,255,255,0.30)" }}>
+                <Icon className="w-3 h-3" style={{ color: "#7c3aed" }} />
+                {text}
               </div>
             ))}
           </div>
@@ -232,17 +244,17 @@ export default function AIAssistant() {
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Top bar */}
         <div className="h-14 flex items-center justify-between px-6"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}>
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(9,9,11,0.85)", backdropFilter: "blur(20px)" }}>
           <div className="flex items-center gap-3">
             <Bot className="w-5 h-5" style={{ color: "#7c3aed" }} />
-            <h1 className="font-semibold text-white text-sm">AI Procurement Assistant</h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"
-              style={{ background: "rgba(74,222,128,0.10)", border: "1px solid rgba(74,222,128,0.25)", color: "#4ade80" }}>
+            <h1 className="text-card-title">AI Procurement Assistant</h1>
+            <span className="text-badge px-2 py-0.5 rounded-full flex items-center gap-1"
+              style={{ background: "rgba(74,222,128,0.10)", border: "1px solid rgba(74,222,128,0.20)", color: "#4ade80" }}>
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#4ade80" }} />
               Live
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+          <div className="flex items-center gap-2 text-caption" style={{ color: "rgba(255,255,255,0.25)" }}>
             <Package className="w-3.5 h-3.5" />
             {messages.filter(m => m.role === "user").length} messages
           </div>
@@ -260,114 +272,114 @@ export default function AIAssistant() {
                   transition={{ duration: 0.2 }}
                   className={`flex gap-3 group ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
-                {/* Avatar */}
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 self-start mt-0.5"
-                  style={{
-                    background: msg.role === "assistant"
-                      ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
-                      : "rgba(59,130,246,0.70)",
-                    boxShadow: msg.role === "assistant" ? "0 0 16px rgba(124,58,237,0.30)" : "none",
-                  }}>
-                  {msg.role === "assistant" ? <Sparkles className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
-                </div>
+                  {/* Avatar */}
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 self-start mt-0.5"
+                    style={{
+                      background: msg.role === "assistant"
+                        ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
+                        : "rgba(59,130,246,0.70)",
+                      boxShadow: msg.role === "assistant" ? "0 0 16px rgba(124,58,237,0.25)" : "none",
+                    }}>
+                    {msg.role === "assistant" ? <Sparkles className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
+                  </div>
 
-                {/* Content */}
-                <div className={`max-w-[78%] space-y-2 ${msg.role === "user" ? "items-end flex flex-col" : ""}`}>
-                  {msg.isStreaming ? (
-                    <div className="rounded-2xl rounded-tl-sm px-4 py-3"
-                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                      <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.40)" }}>
-                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#7c3aed" }} />
-                        <span className="text-sm">Thinking...</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed"
-                      style={{
-                        background: msg.role === "assistant" ? "rgba(255,255,255,0.04)" : "linear-gradient(135deg, #3b82f6, #2563eb)",
-                        border: msg.role === "assistant" ? "1px solid rgba(255,255,255,0.08)" : "none",
-                        borderRadius: msg.role === "assistant" ? "0 1rem 1rem 1rem" : "1rem 0 1rem 1rem",
-                        color: msg.role === "assistant" ? "rgba(255,255,255,0.80)" : "white",
-                      }}>
-                      {msg.role === "assistant" ? (
-                        <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:text-white prose-strong:text-white">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  {/* Content */}
+                  <div className={`max-w-[78%] space-y-2 ${msg.role === "user" ? "items-end flex flex-col" : ""}`}>
+                    {msg.isStreaming ? (
+                      <div className="rounded-2xl rounded-tl-sm px-4 py-3"
+                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div className="flex items-center gap-2 text-tertiary">
+                          <Loader className="w-4 h-4 animate-spin" style={{ color: "#7c3aed" }} />
+                          <span className="text-body">Thinking...</span>
                         </div>
-                      ) : (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl px-4 py-3"
+                        style={{
+                          background: msg.role === "assistant" ? "rgba(255,255,255,0.03)" : "linear-gradient(135deg, #3b82f6, #2563eb)",
+                          border: msg.role === "assistant" ? "1px solid rgba(255,255,255,0.07)" : "none",
+                          borderRadius: msg.role === "assistant" ? "0 1rem 1rem 1rem" : "1rem 0 1rem 1rem",
+                        }}>
+                        {msg.role === "assistant" ? (
+                          <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:text-white prose-strong:text-white text-body"
+                            style={{ color: "rgba(255,255,255,0.75)" }}>
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-body text-white whitespace-pre-wrap">{msg.content}</p>
+                        )}
+                      </div>
+                    )}
 
-                  {/* Action buttons */}
-                  {msg.role === "assistant" && !msg.isStreaming && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        onClick={() => handleCopy(msg.content)}
-                        className="p-1.5 rounded-lg transition-all"
-                        style={{ color: "rgba(255,255,255,0.25)" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "white", e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.25)", e.currentTarget.style.background = "transparent")}
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </motion.button>
-                      <span className="text-xs" style={{ color: "rgba(255,255,255,0.18)" }}>
-                        {msg.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Suggested actions */}
-                  {msg.suggestedActions && msg.suggestedActions.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {msg.suggestedActions.map((action) => {
-                        const [type, id] = action.split(':');
-                        const labels: Record<string, string> = {
-                          VIEW_FACTORY: '查看工厂', REQUEST_SAMPLE: '申请样品',
-                          SEND_INQUIRY: '发送询价', SCHEDULE_MEETING: '预约会议',
-                        };
-                        return (
-                          <motion.button
-                            key={action}
-                            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                              if (type === 'VIEW_FACTORY') setLocation(`/factory/${id}`);
-                              else if (type === 'SEND_INQUIRY') setLocation(`/inquiries`);
-                              else if (type === 'SCHEDULE_MEETING') setLocation(`/meetings`);
-                            }}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
-                            style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.30)", color: "#c4b5fd" }}
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            {labels[type] || type}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Suggestion chips */}
-                  {msg.suggestions && msg.suggestions.length > 0 && !msg.isStreaming && (
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {msg.suggestions.map((s) => (
+                    {/* Action buttons */}
+                    {msg.role === "assistant" && !msg.isStreaming && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <motion.button
-                          key={s}
-                          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                          onClick={() => handleSend(s)}
-                          disabled={chatMutation.isPending}
-                          className="px-3 py-1.5 rounded-lg text-xs transition-all disabled:opacity-50"
-                          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.40)" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "white", e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.40)", e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                          whileHover={{ scale: 1.1 }}
+                          onClick={() => handleCopy(msg.content)}
+                          className="p-1.5 rounded-lg transition-all text-tertiary hover:text-primary"
+                          style={{ color: "rgba(255,255,255,0.25)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.80)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.25)"; e.currentTarget.style.background = "transparent"; }}
                         >
-                          {s}
+                          <Copy className="w-3.5 h-3.5" />
                         </motion.button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+                        <span className="text-caption" style={{ color: "rgba(255,255,255,0.18)" }}>
+                          {msg.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Suggested actions */}
+                    {msg.suggestedActions && msg.suggestedActions.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {msg.suggestedActions.map((action) => {
+                          const [type, id] = action.split(':');
+                          const labels: Record<string, string> = {
+                            VIEW_FACTORY: '查看工厂', REQUEST_SAMPLE: '申请样品',
+                            SEND_INQUIRY: '发送询价', SCHEDULE_MEETING: '预约会议',
+                          };
+                          return (
+                            <motion.button
+                              key={action}
+                              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                              onClick={() => {
+                                if (type === 'VIEW_FACTORY') setLocation(`/factory/${id}`);
+                                else if (type === 'SEND_INQUIRY') setLocation(`/inquiries`);
+                                else if (type === 'SCHEDULE_MEETING') setLocation(`/meetings`);
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-caption"
+                              style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.25)", color: "#c4b5fd" }}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {labels[type] || type}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Suggestion chips */}
+                    {msg.suggestions && msg.suggestions.length > 0 && !msg.isStreaming && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {msg.suggestions.map((s) => (
+                          <motion.button
+                            key={s}
+                            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                            onClick={() => handleSend(s)}
+                            disabled={chatMutation.isPending}
+                            className="px-3 py-1.5 rounded-lg text-caption transition-all disabled:opacity-50"
+                            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.40)" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.80)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.40)"; e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                          >
+                            {s}
+                          </motion.button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
               </BlurFade>
             ))}
           </AnimatePresence>
@@ -375,12 +387,12 @@ export default function AIAssistant() {
         </div>
 
         {/* ── Input Area ── */}
-        <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}>
+        <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(9,9,11,0.85)", backdropFilter: "blur(20px)" }}>
           <div className="max-w-4xl mx-auto">
             <div className="flex gap-3 items-end rounded-2xl px-4 py-3 transition-all"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)" }}
-              onFocus={(e) => e.currentTarget.style.borderColor = "rgba(124,58,237,0.45)"}
-              onBlur={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"}
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
+              onFocus={(e) => e.currentTarget.style.borderColor = "rgba(124,58,237,0.40)"}
+              onBlur={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
             >
               <textarea
                 ref={textareaRef}
@@ -388,8 +400,8 @@ export default function AIAssistant() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about factories, pricing, sourcing strategies... (Enter to send, Shift+Enter for new line)"
-                className="flex-1 bg-transparent border-0 resize-none text-sm text-white outline-none min-h-[36px] max-h-32"
-                style={{ color: "white" }}
+                className="flex-1 bg-transparent border-0 resize-none outline-none min-h-[36px] max-h-32 text-body text-primary placeholder:text-muted"
+                style={{ color: "rgba(255,255,255,0.90)", fontSize: "0.9375rem" }}
                 rows={1}
                 disabled={chatMutation.isPending}
               />
@@ -401,10 +413,10 @@ export default function AIAssistant() {
                 background="linear-gradient(135deg, #7c3aed, #4f46e5)"
                 borderRadius="0.75rem"
               >
-                {chatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Send className="w-4 h-4 text-white" />}
+                {chatMutation.isPending ? <Loader className="w-4 h-4 animate-spin text-white" /> : <Send className="w-4 h-4 text-white" />}
               </ShimmerButton>
             </div>
-            <p className="text-center text-xs mt-2" style={{ color: "rgba(255,255,255,0.18)" }}>
+            <p className="text-center text-caption mt-2" style={{ color: "rgba(255,255,255,0.18)" }}>
               Powered by Alibaba DashScope (Qwen Plus) · Responses may not be 100% accurate
             </p>
           </div>

@@ -27,11 +27,8 @@ const Package = (p: any) => <SIcon name="delivery-bold-duotone" {...p} />;
 const ArrowRight = (p: any) => <SIcon name="arrow-right-bold-duotone" {...p} />;
 const Sparkles = (p: any) => <SIcon name="magic-stick-2-bold-duotone" {...p} />;
 const Video = (p: any) => <SIcon name="videocamera-bold-duotone" {...p} />;
-const ChevronRight = (p: any) => <SIcon name="alt-arrow-right-bold-duotone" {...p} />;
 const Zap = (p: any) => <SIcon name="bolt-bold-duotone" {...p} />;
 const Globe = (p: any) => <SIcon name="globe-bold-duotone" {...p} />;
-const BarChart3 = (p: any) => <SIcon name="chart-2-bold-duotone" {...p} />;
-const Star = (p: any) => <SIcon name="star-bold-duotone" {...p} />;
 const Rocket = (p: any) => <SIcon name="rocket-bold-duotone" {...p} />;
 
 // LIVE 脉冲动效
@@ -42,7 +39,7 @@ function LivePulse() {
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
       </span>
-      <span className="text-[10px] font-bold text-red-400 tracking-widest">LIVE</span>
+      <span className="text-badge text-red-400 tracking-widest">LIVE</span>
     </span>
   );
 }
@@ -131,10 +128,10 @@ export default function Dashboard() {
           {/* Greeting */}
           <BlurFade delay={0.05} inView>
             <div className="mb-6">
-              <h1 className="text-3xl font-black text-white mb-1">
+              <h1 className="text-heading-1 mb-1">
                 {greeting}，{user?.name || "采购商"} 👋
               </h1>
-              <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <p className="text-body text-tertiary">
                 {liveWebinars.length > 0
                   ? `现在有 ${liveWebinars.length} 场 Webinar 正在直播`
                   : upcomingWebinars.length > 0
@@ -166,14 +163,14 @@ export default function Dashboard() {
                   </div>
                   {liveWebinars.length > 0 && <LivePulse />}
                 </div>
-                <div className="text-4xl font-black text-white mb-1">
+                <div className="text-stat-number text-numeric mb-1">
                   {webinarsLoading ? (
                     <span className="w-10 h-9 block rounded-lg animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} />
                   ) : (
-                    <NumberTicker value={liveWebinars.length} className="text-4xl font-black text-white" />
+                    <NumberTicker value={liveWebinars.length} className="text-stat-number text-numeric" />
                   )}
                 </div>
-                <p className="text-sm" style={{ color: "rgba(255,255,255,0.40)" }}>场直播中</p>
+                <p className="text-caption">场直播中</p>
               </motion.div>
 
               {/* 中卡：即将开始 (col-span-3) */}
@@ -187,14 +184,14 @@ export default function Dashboard() {
                   style={{ background: "rgba(96,165,250,0.10)" }}>
                   <Calendar className="w-4.5 h-4.5" style={{ color: "#60a5fa" }} />
                 </div>
-                <div className="text-3xl font-black text-white mb-1">
+                <div className="text-stat-number text-numeric mb-1">
                   {webinarsLoading ? (
                     <span className="w-8 h-8 block rounded-lg animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} />
                   ) : (
-                    <NumberTicker value={upcomingWebinars.length} className="text-3xl font-black text-white" />
+                    <NumberTicker value={upcomingWebinars.length} className="text-stat-number text-numeric" />
                   )}
                 </div>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>场即将开始</p>
+                <p className="text-caption">场即将开始</p>
               </motion.div>
 
               {/* 中卡：已安排会议 (col-span-3) */}
@@ -208,14 +205,14 @@ export default function Dashboard() {
                   style={{ background: "rgba(167,139,250,0.10)" }}>
                   <Building2 className="w-4.5 h-4.5" style={{ color: "#a78bfa" }} />
                 </div>
-                <div className="text-3xl font-black text-white mb-1">
+                <div className="text-stat-number text-numeric mb-1">
                   {meetingsLoading ? (
                     <span className="w-8 h-8 block rounded-lg animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} />
                   ) : (
-                    <NumberTicker value={meetings.length} className="text-3xl font-black text-white" />
+                    <NumberTicker value={meetings.length} className="text-stat-number text-numeric" />
                   )}
                 </div>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>场已安排会议</p>
+                <p className="text-caption">场已安排会议</p>
               </motion.div>
 
               {/* 小卡：询价记录 (col-span-2) */}
@@ -229,16 +226,16 @@ export default function Dashboard() {
                   style={{ background: "rgba(74,222,128,0.10)" }}>
                   <FileText className="w-4.5 h-4.5" style={{ color: "#4ade80" }} />
                 </div>
-                <div className="text-3xl font-black text-white mb-1">
+                <div className="text-stat-number text-numeric mb-1">
                   {inquiriesLoading ? (
                     <span className="w-8 h-8 block rounded-lg animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} />
                   ) : (
-                    <NumberTicker value={inquiries.length} className="text-3xl font-black text-white" />
+                    <NumberTicker value={inquiries.length} className="text-stat-number text-numeric" />
                   )}
                 </div>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>条询价记录</p>
+                <p className="text-caption">条询价记录</p>
                 {pendingInquiries.length > 0 && (
-                  <span className="absolute top-4 right-4 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  <span className="absolute top-4 right-4 text-badge px-1.5 py-0.5 rounded-full"
                     style={{ background: "rgba(74,222,128,0.15)", color: "#4ade80" }}>
                     {pendingInquiries.length} 待处理
                   </span>
@@ -261,10 +258,10 @@ export default function Dashboard() {
                       style={{ background: "rgba(124,58,237,0.12)" }}>
                       <Sparkles className="w-3.5 h-3.5 text-violet-400" />
                     </div>
-                    <h2 className="text-base font-bold text-white">推荐 Webinar</h2>
+                    <h2 className="text-card-title">推荐 Webinar</h2>
                   </div>
                   <button onClick={() => setLocation("/webinars")}
-                    className="text-xs font-medium flex items-center gap-1 transition-opacity hover:opacity-70"
+                    className="text-caption font-medium flex items-center gap-1 transition-opacity hover:opacity-70"
                     style={{ color: "#a78bfa" }}>
                     查看全部 <ArrowRight className="w-3 h-3" />
                   </button>
@@ -277,9 +274,9 @@ export default function Dashboard() {
                         style={{ background: "rgba(255,255,255,0.03)" }} />
                     ))
                   ) : webinars.length === 0 ? (
-                    <div className="text-center py-12" style={{ color: "rgba(255,255,255,0.20)" }}>
+                    <div className="text-center py-12 text-muted">
                       <Radio className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">暂无 Webinar</p>
+                      <p className="text-caption">暂无 Webinar</p>
                     </div>
                   ) : (
                     webinars.slice(0, 4).map((webinar, idx) => {
@@ -301,7 +298,7 @@ export default function Dashboard() {
                               alt={webinar.title}
                               className="w-20 h-12 rounded-lg object-cover"
                             />
-                            <span className="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded"
+                            <span className="absolute top-1 left-1 text-badge px-1 py-0.5 rounded"
                               style={{ background: st.bg, color: st.color }}>
                               {webinar.status === "live" ? (
                                 <span className="flex items-center gap-0.5">
@@ -312,8 +309,8 @@ export default function Dashboard() {
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-semibold text-sm truncate">{webinar.title}</h3>
-                            <div className="flex items-center gap-1 mt-0.5 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+                            <h3 className="text-card-title truncate">{webinar.title}</h3>
+                            <div className="flex items-center gap-1 mt-0.5 text-tertiary" style={{ fontSize: "0.75rem" }}>
                               <Clock className="w-3 h-3" />
                               {formatScheduledAt(webinar.scheduledAt)}
                             </div>
@@ -321,7 +318,7 @@ export default function Dashboard() {
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-btn"
                             style={webinar.status === "live" ? {
                               background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
                               color: "white",
@@ -352,7 +349,7 @@ export default function Dashboard() {
                     style={{ background: "rgba(124,58,237,0.12)" }}>
                     <Zap className="w-3.5 h-3.5 text-violet-400" />
                   </div>
-                  <h2 className="text-base font-bold text-white">快捷操作</h2>
+                  <h2 className="text-card-title">快捷操作</h2>
                 </div>
 
                 <div className="p-3 grid grid-cols-2 gap-2">
@@ -378,10 +375,10 @@ export default function Dashboard() {
                         style={{ background: `${accent}12` }}>
                         <Icon className="w-4 h-4" style={{ color: accent }} />
                       </div>
-                      <p className="text-white font-semibold text-xs mb-0.5 leading-tight">{label}</p>
-                      <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.30)" }}>{desc}</p>
+                      <p className="text-card-title mb-0.5 leading-tight">{label}</p>
+                      <p className="text-card-desc">{desc}</p>
                       {badge && (
-                        <span className="absolute top-2.5 right-2.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                        <span className="absolute top-2.5 right-2.5 text-badge px-1.5 py-0.5 rounded-full"
                           style={{ background: `${accent}15`, color: accent }}>
                           {badge}
                         </span>
@@ -397,10 +394,11 @@ export default function Dashboard() {
                       placeholder="问 AI 助理任何采购问题..."
                       value={aiInput}
                       onChange={(e) => setAiInput(e.target.value)}
-                      className="w-full pl-3 pr-10 h-9 rounded-xl text-xs text-white placeholder:text-white/20 outline-none"
+                      className="w-full pl-3 pr-10 h-9 rounded-xl text-body text-primary placeholder:text-muted outline-none"
                       style={{
                         background: "rgba(255,255,255,0.04)",
                         border: "1px solid rgba(255,255,255,0.08)",
+                        fontSize: "0.8125rem",
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && aiInput.trim()) {
@@ -447,13 +445,13 @@ export default function Dashboard() {
                   style={{ background: "rgba(124,58,237,0.12)", filter: "blur(30px)" }} />
                 <div className="flex items-center gap-2 mb-3">
                   <Globe className="w-5 h-5 text-violet-400" />
-                  <span className="text-xs font-bold text-violet-400 tracking-widest uppercase">精选工厂</span>
+                  <span className="text-label text-accent">精选工厂</span>
                 </div>
-                <h3 className="text-xl font-black text-white mb-1.5">发现 2,500+ 认证工厂</h3>
-                <p className="text-sm mb-4" style={{ color: "rgba(255,255,255,0.40)" }}>
+                <h3 className="text-heading-2 mb-1.5">发现 2,500+ 认证工厂</h3>
+                <p className="text-body mb-4">
                   覆盖电子、服装、家具等 50+ 品类
                 </p>
-                <div className="flex items-center gap-1.5 text-violet-400 text-sm font-semibold">
+                <div className="flex items-center gap-1.5 text-accent text-btn font-semibold">
                   浏览工厂 <ArrowRight className="w-4 h-4" />
                 </div>
               </motion.div>
@@ -470,10 +468,10 @@ export default function Dashboard() {
                       style={{ background: "rgba(96,165,250,0.10)" }}>
                       <Video className="w-3.5 h-3.5" style={{ color: "#60a5fa" }} />
                     </div>
-                    <h2 className="text-base font-bold text-white">最近会议</h2>
+                    <h2 className="text-card-title">最近会议</h2>
                   </div>
                   <button onClick={() => setLocation("/meetings")}
-                    className="text-xs font-medium flex items-center gap-1 hover:opacity-70"
+                    className="text-caption font-medium flex items-center gap-1 hover:opacity-70"
                     style={{ color: "#a78bfa" }}>
                     全部 <ArrowRight className="w-3 h-3" />
                   </button>
@@ -485,9 +483,9 @@ export default function Dashboard() {
                         style={{ background: "rgba(255,255,255,0.03)" }} />
                     ))
                   ) : meetings.length === 0 ? (
-                    <div className="text-center py-8" style={{ color: "rgba(255,255,255,0.20)" }}>
+                    <div className="text-center py-8 text-muted">
                       <Video className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">暂无会议记录</p>
+                      <p className="text-caption">暂无会议记录</p>
                     </div>
                   ) : (
                     meetings.slice(0, 3).map((meeting, idx) => (
@@ -510,12 +508,12 @@ export default function Dashboard() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-xs font-semibold truncate">{meeting.title}</p>
-                          <p className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.30)" }}>
+                          <p className="text-card-title truncate">{meeting.title}</p>
+                          <p className="text-card-desc truncate">
                             {meeting.factory?.name || "Unknown Factory"}
                           </p>
                         </div>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        <span className="text-badge px-1.5 py-0.5 rounded-full flex-shrink-0"
                           style={
                             meeting.status === "completed" ? { background: "rgba(74,222,128,0.10)", color: "#4ade80" } :
                             meeting.status === "in_progress" ? { background: "rgba(96,165,250,0.10)", color: "#60a5fa" } :
@@ -543,12 +541,12 @@ export default function Dashboard() {
                   style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.20)" }}>
                   <Rocket className="w-5 h-5 text-violet-400" />
                 </div>
-                <h3 className="text-base font-black text-white mb-1.5">升级 Pro 计划</h3>
-                <p className="text-xs mb-5 flex-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                <h3 className="text-card-title mb-1.5">升级 Pro 计划</h3>
+                <p className="text-card-desc mb-5 flex-1">
                   解锁无限询价、优先匹配和专属客户经理
                 </p>
                 <ShimmerButton
-                  className="w-full h-9 text-xs font-bold rounded-xl"
+                  className="w-full h-9 text-btn font-bold rounded-xl"
                   shimmerColor="#c4b5fd"
                   background="linear-gradient(135deg, #7c3aed, #4f46e5)"
                   onClick={() => setLocation("/subscription")}

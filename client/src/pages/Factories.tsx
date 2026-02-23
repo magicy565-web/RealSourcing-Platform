@@ -1,5 +1,6 @@
+import type React from "react";
 import { motion } from "framer-motion";
-import { Bell, User, Globe } from "lucide-react";
+import { Icon as SolarIcon } from "@iconify/react";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -10,12 +11,14 @@ import { FactoryFilters } from "@/components/factories/FactoryFilters";
 import { FactoryGrid } from "@/components/factories/FactoryGrid";
 import { FactoryLoading } from "@/components/factories/FactoryLoading";
 import { BlurFade } from "@/components/magicui/blur-fade";
-import { ShimmerButton } from "@/components/magicui/shimmer-button";
 
-const GRID_BG = `
-  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
-`;
+// Solar Icons 封装
+const SIcon = ({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) => (
+  <SolarIcon icon={`solar:${name}`} className={className} style={style} />
+);
+const Globe = (p: any) => <SIcon name="globe-bold-duotone" {...p} />;
+const Bell = (p: any) => <SIcon name="bell-bing-bold-duotone" {...p} />;
+const User = (p: any) => <SIcon name="user-circle-bold-duotone" {...p} />;
 
 export default function Factories() {
   const { user } = useAuth();
@@ -51,44 +54,45 @@ export default function Factories() {
   }));
 
   return (
-    <div className="flex min-h-screen" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
-      <div className="fixed inset-0 pointer-events-none"
-        style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+    <div className="flex min-h-screen" style={{ background: "#09090b" }}>
+      {/* 背景光晕 */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.06]"
+          style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 70%)" }} />
+        <div className="absolute bottom-0 left-1/3 w-[400px] h-[400px] rounded-full opacity-[0.04]"
+          style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
+      </div>
 
       <BuyerSidebar userRole={user?.role || "buyer"} />
 
       <div className="flex-1 overflow-auto relative z-10">
         {/* Top Bar */}
-        <div className="h-16 flex items-center justify-between px-8"
-          style={{
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(5,3,16,0.80)",
-            backdropFilter: "blur(20px)",
-          }}>
+        <div className="h-14 flex items-center justify-between px-6 sticky top-0 z-20"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(9,9,11,0.85)", backdropFilter: "blur(20px)" }}>
           <div>
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-violet-400" />
-              <h1 className="text-lg font-bold text-white">工厂大厅</h1>
+              <h1 className="text-heading-3">工厂大厅</h1>
             </div>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>AI 驱动的全球工厂精准匹配平台</p>
+            <p className="text-caption">AI 驱动的全球工厂精准匹配平台</p>
           </div>
 
           <div className="flex items-center gap-3">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="relative w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+              className="relative w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
               onClick={() => setLocation("/notifications")}
             >
-              <Bell className="w-4 h-4" style={{ color: "rgba(255,255,255,0.60)" }} />
+              <Bell className="w-4 h-4" style={{ color: "rgba(255,255,255,0.50)" }} />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500" />
               )}
             </motion.button>
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
               style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
               onClick={() => setLocation("/settings")}
             >
@@ -98,7 +102,7 @@ export default function Factories() {
         </div>
 
         {/* Content */}
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className="p-6 max-w-7xl mx-auto">
           <BlurFade delay={0.05} inView>
             <FactoryStats
               totalFactories={enrichedFactoriesWithData.length}
@@ -108,7 +112,7 @@ export default function Factories() {
               isLoading={isLoading}
             />
           </BlurFade>
-          <BlurFade delay={0.1} inView>
+          <BlurFade delay={0.10} inView>
             <FactoryFilters
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}

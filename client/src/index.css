@@ -146,9 +146,12 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
-    font-variation-settings: 'opsz' 32;
+    font-family: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'cv02', 'cv03', 'cv04';
+    font-variation-settings: 'wght' 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(124, 58, 237, 0.12) 0%, transparent 60%),
                 radial-gradient(ellipse 60% 40% at 80% 80%, rgba(79, 70, 229, 0.08) 0%, transparent 50%),
                 linear-gradient(160deg, #0a0812 0%, #0f0c1a 40%, #0c0a16 100%);
@@ -626,15 +629,140 @@
     background-clip: text;
   }
 
-  /* ── 字体规范 ── */
-  .text-display   { font-size: 3.5rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; }
-  .text-heading-1 { font-size: 2.25rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
-  .text-heading-2 { font-size: 1.5rem;  font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
-  .text-heading-3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
-  .text-body-lg   { font-size: 1.125rem; font-weight: 400; line-height: 1.7; }
-  .text-body      { font-size: 1rem;    font-weight: 400; line-height: 1.6; }
-  .text-caption   { font-size: 0.875rem; font-weight: 400; line-height: 1.5; }
-  .text-label     { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  /* ══════════════════════════════════════════════
+     Typography Scale — Linear/Vercel 规范
+     颜色层级：
+       text-primary   = rgba(255,255,255,0.95)  — 标题、关键数字
+       text-secondary = rgba(255,255,255,0.65)  — 正文、描述
+       text-tertiary  = rgba(255,255,255,0.35)  — 辅助信息、时间戳
+       text-accent    = #a78bfa                 — 强调、链接
+       text-muted     = rgba(255,255,255,0.20)  — 占位符、禁用
+  ══════════════════════════════════════════════ */
+
+  /* 字体颜色语义变量 */
+  .text-primary   { color: rgba(255, 255, 255, 0.95); }
+  .text-secondary { color: rgba(255, 255, 255, 0.65); }
+  .text-tertiary  { color: rgba(255, 255, 255, 0.35); }
+  .text-accent    { color: #a78bfa; }
+  .text-muted     { color: rgba(255, 255, 255, 0.20); }
+
+  /* 字体规范 — 字号/字重/行高 */
+  .text-display   {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .text-heading-1 {
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 650;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .text-heading-2 {
+    font-size: clamp(1.25rem, 2vw, 1.625rem);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: rgba(255, 255, 255, 0.90);
+  }
+  .text-heading-3 {
+    font-size: 1.125rem;
+    font-weight: 580;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .text-body-lg   {
+    font-size: 1.0625rem;
+    font-weight: 400;
+    line-height: 1.75;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .text-body      {
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .text-caption   {
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .text-label     {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* 数字专用字体（等宽数字，更精致）*/
+  .text-numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+    letter-spacing: -0.02em;
+  }
+
+  /* 大数字展示（统计卡片）*/
+  .text-stat-number {
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  /* 卡片标题（Bento Grid 卡片内）*/
+  .text-card-title {
+    font-size: 0.9375rem;
+    font-weight: 580;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  /* 卡片描述 */
+  .text-card-desc {
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  /* 导航链接 */
+  .text-nav {
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: rgba(255, 255, 255, 0.60);
+  }
+  .text-nav-active {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  /* 按钮文字 */
+  .text-btn {
+    font-size: 0.875rem;
+    font-weight: 550;
+    letter-spacing: -0.005em;
+  }
+
+  /* 徽章/标签文字 */
+  .text-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
 
   /* ── 动画 ── */
   .animate-glow {
