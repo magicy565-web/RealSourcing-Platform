@@ -13,8 +13,6 @@ import { Particles } from "@/components/magicui/particles";
 import { NumberTicker } from "@/components/magicui/number-ticker";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
-import { AnimatedGradientText } from "@/components/magicui/animated-gradient-text";
-import { Marquee } from "@/components/magicui/marquee";
 import { BlurFade } from "@/components/magicui/blur-fade";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +25,7 @@ const GRID_BG = `
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stat Pill（使用 NumberTicker 替换原有 AnimatedNumber）
+// Glassmorphism Stat Card
 // ─────────────────────────────────────────────────────────────────────────────
 function StatPill({ value, suffix, label, accent }: {
   value: number; suffix?: string; label: string; accent: string;
@@ -57,7 +55,7 @@ function StatPill({ value, suffix, label, accent }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bento Feature Card（保留原有设计，可选 BorderBeam 增强）
+// Bento Feature Card
 // ─────────────────────────────────────────────────────────────────────────────
 function BentoCard({
   icon: Icon, title, description, badge, accent, glow, className, children, withBeam = false
@@ -87,16 +85,6 @@ function BentoCard({
       {/* Glow orb */}
       <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full pointer-events-none"
         style={{ background: glow, filter: "blur(40px)" }} />
-      {/* Magic UI BorderBeam（仅对特定卡片启用）*/}
-      {withBeam && (
-        <BorderBeam
-          size={120}
-          duration={8}
-          colorFrom={accent}
-          colorTo={`${accent}40`}
-          borderWidth={1}
-        />
-      )}
 
       {badge && (
         <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-3"
@@ -111,6 +99,9 @@ function BentoCard({
       <h3 className="text-white font-bold text-base mb-2">{title}</h3>
       <p className="text-white/45 text-sm leading-relaxed">{description}</p>
       {children}
+      {withBeam && (
+        <BorderBeam size={120} duration={8} colorFrom={accent} colorTo={`${accent}40`} borderWidth={1} />
+      )}
     </motion.div>
   );
 }
@@ -144,7 +135,6 @@ function PricingCard({
         <>
           <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
             style={{ background: "linear-gradient(90deg, #7c3aed, #4f46e5)" }} />
-          <BorderBeam size={150} duration={10} colorFrom="#7c3aed" colorTo="#4f46e5" borderWidth={1} />
           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
             <span className="text-white text-[10px] font-bold px-3 py-1 rounded-full"
               style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
@@ -170,29 +160,22 @@ function PricingCard({
         ))}
       </ul>
       <Link href="/register">
-        {highlighted ? (
-          <ShimmerButton
-            shimmerColor="#a78bfa"
-            background="linear-gradient(135deg, #7c3aed, #4f46e5)"
-            borderRadius="12px"
-            className="w-full py-3 font-bold text-sm text-white justify-center"
-          >
-            {cta}
-          </ShimmerButton>
-        ) : (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            className="w-full py-3 rounded-xl font-bold text-sm"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.80)",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }}
-          >
-            {cta}
-          </motion.button>
-        )}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          className="w-full py-3 rounded-xl font-bold text-sm"
+          style={highlighted ? {
+            background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+            color: "white",
+            boxShadow: "0 4px 20px rgba(124,58,237,0.35)",
+          } : {
+            background: "rgba(255,255,255,0.08)",
+            color: "rgba(255,255,255,0.80)",
+            border: "1px solid rgba(255,255,255,0.12)",
+          }}
+        >
+          {cta}
+        </motion.button>
       </Link>
     </motion.div>
   );
@@ -205,7 +188,10 @@ function TestimonialCard({ name, role, company, content, avatar, flag }: {
   name: string; role: string; company: string; content: string; avatar: string; flag: string;
 }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
       className="p-6 rounded-2xl"
       style={{
         background: "rgba(255,255,255,0.03)",
@@ -229,7 +215,7 @@ function TestimonialCard({ name, role, company, content, avatar, flag }: {
           <p className="text-white/35 text-xs">{role} · {company}</p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -260,12 +246,6 @@ export default function Home() {
       q: "工厂注册需要费用吗？",
       a: "基础版免费，工厂可免费展示产品和参与 Webinar。专业版（$99/月）提供无限会议、AI 摘要、Meeting Reel 生成等高级功能。"
     },
-  ];
-
-  // 品牌滚动数据（用于 Marquee）
-  const brands = [
-    "Walmart", "Target", "ASOS", "Zalando", "Noon",
-    "Carrefour", "Lulu", "H&M", "Zara", "Amazon",
   ];
 
   return (
@@ -317,14 +297,17 @@ export default function Home() {
               </button>
             </Link>
             <Link href="/register">
-              <ShimmerButton
-                shimmerColor="#c4b5fd"
-                background="linear-gradient(135deg, #7c3aed, #4f46e5)"
-                borderRadius="12px"
-                className="text-white text-sm font-bold px-4 py-2"
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="text-white text-sm font-bold px-4 py-2 rounded-xl"
+                style={{
+                  background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                  boxShadow: "0 4px 16px rgba(124,58,237,0.35)",
+                }}
               >
                 免费开始
-              </ShimmerButton>
+              </motion.button>
             </Link>
           </div>
         </div>
@@ -332,7 +315,7 @@ export default function Home() {
 
       {/* ── Hero Section ── */}
       <section className="relative pt-36 pb-28 overflow-hidden">
-        {/* Magic UI Particles 背景（仅在 Hero 区域）*/}
+        {/* Magic UI: Particles 背景 */}
         <Particles
           className="absolute inset-0 pointer-events-none"
           quantity={80}
@@ -350,23 +333,25 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           <div className="max-w-4xl mx-auto text-center">
 
-            {/* Badge — 使用 AnimatedGradientText 替换原有静态 badge */}
+            {/* Badge */}
             <motion.div
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex justify-center mb-8"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8"
+              style={{
+                background: "rgba(124,58,237,0.12)",
+                border: "1px solid rgba(124,58,237,0.30)",
+              }}
             >
-              <AnimatedGradientText>
-                <Sparkles className="w-3.5 h-3.5 text-violet-400 mr-2 inline" />
-                <span className="text-violet-300 text-xs font-semibold tracking-wide">
-                  PRD 3.1 · AI-Powered B2B Sourcing
-                </span>
-              </AnimatedGradientText>
+              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+              <span className="text-violet-300 text-xs font-semibold tracking-wide">PRD 3.1 · AI-Powered B2B Sourcing</span>
             </motion.div>
 
-            {/* Headline */}
+            {/* Headline — BlurFade 入场动画 */}
             <BlurFade delay={0.1} inView>
-              <h1 className="text-5xl md:text-7xl font-black mb-6 leading-[1.08] tracking-tight text-white">
+              <h1
+                className="text-5xl md:text-7xl font-black mb-6 leading-[1.08] tracking-tight text-white"
+              >
                 告别中间商<br />
                 <span style={{
                   background: "linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #67e8f9 100%)",
@@ -378,46 +363,52 @@ export default function Home() {
               </h1>
             </BlurFade>
 
-            {/* Subheadline */}
+            {/* Subheadline — BlurFade 入场动画 */}
             <BlurFade delay={0.2} inView>
-              <p className="text-lg md:text-xl text-white/45 mb-10 max-w-2xl mx-auto leading-relaxed">
+              <p
+                className="text-lg md:text-xl text-white/45 mb-10 max-w-2xl mx-auto leading-relaxed"
+              >
                 AI 智能匹配 · 视频实时谈判 · 自动录制存档<br />
                 让全球采购商在 48 小时内找到并验证理想工厂
               </p>
             </BlurFade>
 
             {/* CTA Buttons */}
-            <BlurFade delay={0.3} inView>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
-                <Link href="/register">
-                  <ShimmerButton
-                    shimmerColor="#c4b5fd"
-                    background="linear-gradient(135deg, #7c3aed, #4f46e5)"
-                    borderRadius="12px"
-                    className="flex items-center gap-2 px-8 py-4 text-white font-bold text-base"
-                    style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.40)" }}
-                  >
-                    免费开始采购 <ArrowRight className="w-4 h-4" />
-                  </ShimmerButton>
-                </Link>
-                <Link href="/webinars">
-                  <motion.button
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
-                    style={{
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      color: "rgba(255,255,255,0.75)",
-                    }}
-                  >
-                    <Play className="w-4 h-4" /> 观看 Demo
-                  </motion.button>
-                </Link>
-              </div>
-            </BlurFade>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center mb-20"
+            >
+              <Link href="/register">
+                {/* Magic UI: ShimmerButton 替换主 CTA */}
+                <ShimmerButton
+                  shimmerColor="#c4b5fd"
+                  background="linear-gradient(135deg, #7c3aed, #4f46e5)"
+                  borderRadius="12px"
+                  className="flex items-center gap-2 px-8 py-4 text-white font-bold text-base"
+                  style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.40)" }}
+                >
+                  免费开始采购 <ArrowRight className="w-4 h-4" />
+                </ShimmerButton>
+              </Link>
+              <Link href="/webinars">
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "rgba(255,255,255,0.75)",
+                  }}
+                >
+                  <Play className="w-4 h-4" /> 观看 Demo
+                </motion.button>
+              </Link>
+            </motion.div>
 
-            {/* Stats Row — 使用 NumberTicker */}
+            {/* Stats Row — NumberTicker 替换 AnimatedNumber */}
             <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
               <StatPill value={500} suffix="+" label="认证工厂" accent="#a78bfa" />
               <StatPill value={2000} suffix="+" label="全球采购商" accent="#67e8f9" />
@@ -427,22 +418,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Social Proof — 使用 Marquee 替换静态品牌列表 ── */}
+      {/* ── Social Proof ── */}
       <section className="py-10 relative z-10">
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-center text-white/20 text-xs mb-6 tracking-widest uppercase">全球品牌采购商信任 RealSourcing</p>
-          <div className="relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-              style={{ background: "linear-gradient(90deg, #050310, transparent)" }} />
-            <div className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-              style={{ background: "linear-gradient(-90deg, #050310, transparent)" }} />
-            <Marquee pauseOnHover className="[--duration:30s]">
-              {brands.map((brand) => (
-                <span key={brand} className="text-white/25 font-bold text-sm tracking-wider mx-6 hover:text-white/50 transition-colors">
-                  {brand}
-                </span>
-              ))}
-            </Marquee>
+          <div className="flex flex-wrap justify-center items-center gap-8 opacity-30">
+            {["Walmart", "Target", "ASOS", "Zalando", "Noon", "Carrefour", "Lulu"].map((brand) => (
+              <span key={brand} className="text-white font-bold text-sm tracking-wider">{brand}</span>
+            ))}
           </div>
         </div>
       </section>
@@ -450,21 +433,24 @@ export default function Home() {
       {/* ── Bento Features Grid ── */}
       <section id="features" className="py-24 relative z-10">
         <div className="max-w-7xl mx-auto px-6">
-          <BlurFade delay={0.1} inView>
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-black text-white mb-4">
-                重新定义 B2B 采购
-              </h2>
-              <p className="text-white/40 text-lg max-w-xl mx-auto">
-                从发现到成交，AI 驱动的全链路采购协作平台
-              </p>
-            </div>
-          </BlurFade>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4">
+              重新定义 B2B 采购
+            </h2>
+            <p className="text-white/40 text-lg max-w-xl mx-auto">
+              从发现到成交，AI 驱动的全链路采购协作平台
+            </p>
+          </motion.div>
 
           {/* Bento Grid */}
           <div className="grid grid-cols-12 gap-4">
 
-            {/* 大卡片 - TikTok 风格直播（带 BorderBeam）*/}
+            {/* 大卡片 - TikTok 风格直播 — BorderBeam 增强 */}
             <BentoCard
               icon={Flame}
               title="TikTok 风格 Webinar 直播间"
@@ -473,7 +459,7 @@ export default function Home() {
               accent="#f472b6"
               glow="rgba(244,114,182,0.08)"
               className="col-span-12 md:col-span-7"
-              withBeam
+              withBeam={true}
             >
               <div className="mt-5 grid grid-cols-3 gap-3">
                 {[
@@ -521,7 +507,7 @@ export default function Home() {
               className="col-span-12 md:col-span-4"
             />
 
-            {/* AI 采购助理 */}
+            {/* AI 采购助理 — BorderBeam 增强 (badge="NEW") */}
             <BentoCard
               icon={Zap}
               title="AI 采购助理"
@@ -530,7 +516,7 @@ export default function Home() {
               accent="#fb923c"
               glow="rgba(251,146,60,0.08)"
               className="col-span-12 md:col-span-4"
-              withBeam
+              withBeam={true}
             />
 
             {/* 私密谈判室 */}
@@ -559,12 +545,15 @@ export default function Home() {
       {/* ── How It Works ── */}
       <section className="py-24 relative z-10">
         <div className="max-w-7xl mx-auto px-6">
-          <BlurFade delay={0.1} inView>
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-black text-white mb-4">三步完成采购</h2>
-              <p className="text-white/40 text-lg">从注册到成交，最快 48 小时</p>
-            </div>
-          </BlurFade>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4">三步完成采购</h2>
+            <p className="text-white/40 text-lg">从注册到成交，最快 48 小时</p>
+          </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {/* 连接线 */}
@@ -582,7 +571,7 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.12 }}
-                className="rounded-2xl p-8 relative overflow-hidden"
+                className="rounded-2xl p-8 relative"
                 style={{
                   background: "rgba(255,255,255,0.03)",
                   border: `1px solid ${item.accent}20`,
@@ -609,13 +598,14 @@ export default function Home() {
       {/* ── Testimonials ── */}
       <section className="py-24 relative z-10">
         <div className="max-w-7xl mx-auto px-6">
-          <BlurFade delay={0.1} inView>
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-black text-white mb-4">全球买家的真实评价</h2>
-            </div>
-          </BlurFade>
-
-          {/* 静态三列（保留原有布局）*/}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4">全球买家的真实评价</h2>
+          </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <TestimonialCard
               name="Ahmed Al-Maktoum"
@@ -642,43 +632,21 @@ export default function Home() {
               flag="🇮🇳"
             />
           </div>
-
-          {/* 额外一行 Marquee 滚动评价 */}
-          <div className="mt-8 relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-              style={{ background: "linear-gradient(90deg, #050310, transparent)" }} />
-            <div className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-              style={{ background: "linear-gradient(-90deg, #050310, transparent)" }} />
-            <Marquee pauseOnHover reverse className="[--duration:50s]">
-              {[
-                { name: "Klaus Weber", flag: "🇩🇪", content: "AI 翻译让我们和中国工厂的沟通效率提升了 3 倍。" },
-                { name: "Emma Clarke", flag: "🇬🇧", content: "视频谈判录制功能非常实用，每次会议都有完整记录。" },
-                { name: "Pierre Dubois", flag: "🇫🇷", content: "工厂认证体系非常严格，我们对供应商质量非常满意。" },
-                { name: "Tanaka Hiroshi", flag: "🇯🇵", content: "平台界面简洁直观，新手也能快速上手。" },
-                { name: "James Mitchell", flag: "🇦🇺", content: "通过 RealSourcing 节省了 40% 的采购成本。" },
-                { name: "Carlos Silva", flag: "🇧🇷", content: "Webinar 直播间的互动功能让采购决策更加高效。" },
-              ].map((t) => (
-                <div key={t.name} className="mx-3 px-5 py-3 rounded-xl flex items-center gap-3 shrink-0"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                  <span className="text-base">{t.flag}</span>
-                  <span className="text-white/50 text-sm">{t.name}:</span>
-                  <span className="text-white/35 text-sm max-w-xs">{t.content}</span>
-                </div>
-              ))}
-            </Marquee>
-          </div>
         </div>
       </section>
 
       {/* ── Pricing ── */}
       <section id="pricing" className="py-24 relative z-10">
         <div className="max-w-7xl mx-auto px-6">
-          <BlurFade delay={0.1} inView>
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-black text-white mb-4">透明定价</h2>
-              <p className="text-white/40 text-lg">无隐藏费用，随时可取消</p>
-            </div>
-          </BlurFade>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4">透明定价</h2>
+            <p className="text-white/40 text-lg">无隐藏费用，随时可取消</p>
+          </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <PricingCard
               name="免费版"
@@ -712,11 +680,14 @@ export default function Home() {
       {/* ── FAQ ── */}
       <section className="py-24 relative z-10">
         <div className="max-w-3xl mx-auto px-6">
-          <BlurFade delay={0.1} inView>
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-black text-white mb-4">常见问题</h2>
-            </div>
-          </BlurFade>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-4">常见问题</h2>
+          </motion.div>
           <div className="space-y-3">
             {faqs.map((faq, i) => (
               <motion.div
@@ -761,88 +732,126 @@ export default function Home() {
       {/* ── Final CTA ── */}
       <section className="py-24 relative z-10">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <BlurFade delay={0.1} inView>
-            <div
-              className="relative rounded-3xl overflow-hidden p-14"
-              style={{
-                background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(79,70,229,0.10))",
-                border: "1px solid rgba(124,58,237,0.25)",
-                boxShadow: "0 16px 64px rgba(124,58,237,0.15)",
-              }}
-            >
-              <div className="absolute top-0 left-0 right-0 h-0.5"
-                style={{ background: "linear-gradient(90deg, transparent, #7c3aed, transparent)" }} />
-              <div className="absolute inset-0 pointer-events-none"
-                style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 70%)" }} />
-              {/* BorderBeam on CTA card */}
-              <BorderBeam size={200} duration={12} colorFrom="#7c3aed" colorTo="#67e8f9" borderWidth={1.5} />
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="relative rounded-3xl overflow-hidden p-14"
+            style={{
+              background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(79,70,229,0.10))",
+              border: "1px solid rgba(124,58,237,0.25)",
+              boxShadow: "0 16px 64px rgba(124,58,237,0.15)",
+            }}
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5"
+              style={{ background: "linear-gradient(90deg, transparent, #7c3aed, transparent)" }} />
+            <div className="absolute inset-0 pointer-events-none"
+              style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 70%)" }} />
 
-              <div className="relative z-10">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-6"
-                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                  <Zap className="w-7 h-7 text-white" />
-                </div>
-                <h2 className="text-3xl md:text-4xl font-black text-white mb-4">准备好开始了吗？</h2>
-                <p className="text-white/45 text-lg mb-8 max-w-xl mx-auto">
-                  加入 2000+ 全球采购商，用 AI 驱动的方式找到理想工厂
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link href="/register">
-                    <ShimmerButton
-                      shimmerColor="#c4b5fd"
-                      background="linear-gradient(135deg, #7c3aed, #4f46e5)"
-                      borderRadius="12px"
-                      className="flex items-center gap-2 px-8 py-4 text-white font-bold text-base"
-                      style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.40)" }}
-                    >
-                      免费开始 <ArrowRight className="w-4 h-4" />
-                    </ShimmerButton>
-                  </Link>
-                  <Link href="/factories">
-                    <motion.button
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
-                      style={{
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        color: "rgba(255,255,255,0.75)",
-                      }}
-                    >
-                      浏览工厂库 <ArrowRight className="w-4 h-4" />
-                    </motion.button>
-                  </Link>
-                </div>
+            <div className="relative z-10">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                <Zap className="w-7 h-7 text-white" />
               </div>
+              <h2 className="text-3xl md:text-4xl font-black text-white mb-4">准备好开始了吗？</h2>
+              <p className="text-white/45 text-lg mb-8 max-w-xl mx-auto">
+                加入 2000+ 全球采购商，用 AI 驱动的方式找到理想工厂
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link href="/register">
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2 px-8 py-4 rounded-xl text-white font-bold text-base"
+                    style={{
+                      background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                      boxShadow: "0 8px 32px rgba(124,58,237,0.40)",
+                    }}
+                  >
+                    免费开始 <ArrowRight className="w-4 h-4" />
+                  </motion.button>
+                </Link>
+                <Link href="/factories">
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "rgba(255,255,255,0.75)",
+                    }}
+                  >
+                    浏览工厂库
+                  </motion.button>
+                </Link>
+              </div>
+              <p className="text-white/20 text-xs mt-5">无需信用卡 · 免费试用 14 天 · 随时取消</p>
             </div>
-          </BlurFade>
+          </motion.div>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-12 relative z-10"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+      <footer className="relative z-10 py-12"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                <span className="text-white font-black text-xs">RS</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                  <span className="text-white font-black text-xs">RS</span>
+                </div>
+                <span className="text-white font-bold">RealSourcing</span>
               </div>
-              <span className="text-white/50 text-sm">RealSourcing · AI 驱动的全球工厂直连平台</span>
+              <p className="text-white/25 text-xs leading-relaxed">AI 驱动的 B2B 采购协作平台，连接全球买家与认证工厂。</p>
             </div>
-            <div className="flex items-center gap-6">
-              {["隐私政策", "服务条款", "联系我们"].map((item) => (
-                <span key={item} className="text-white/25 hover:text-white/50 text-xs cursor-pointer transition-colors">
-                  {item}
-                </span>
-              ))}
-            </div>
-            <p className="text-white/20 text-xs">© 2025 RealSourcing. All rights reserved.</p>
+            {[
+              {
+                title: "产品",
+                links: [
+                  { href: "/webinars", label: "Webinar" },
+                  { href: "/factories", label: "工厂库" },
+                  { href: "/ai-assistant", label: "AI 采购助理" },
+                ]
+              },
+              {
+                title: "公司",
+                links: [
+                  { href: "#", label: "关于我们" },
+                  { href: "#", label: "联系我们" },
+                  { href: "#", label: "隐私政策" },
+                ]
+              },
+              {
+                title: "快速入口",
+                links: [
+                  { href: "/register", label: "注册工厂" },
+                  { href: "/register", label: "注册买家" },
+                  { href: "/login", label: "登录" },
+                ]
+              },
+            ].map((col) => (
+              <div key={col.title}>
+                <h4 className="text-white/60 font-semibold text-sm mb-3">{col.title}</h4>
+                <ul className="space-y-2">
+                  {col.links.map((link) => (
+                    <li key={link.label}>
+                      <Link href={link.href}>
+                        <span className="text-white/25 hover:text-white/60 cursor-pointer transition-colors text-xs">{link.label}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="pt-6 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            <p className="text-white/15 text-xs">© 2025 RealSourcing. All rights reserved.</p>
           </div>
         </div>
       </footer>
-
     </div>
   );
 }
