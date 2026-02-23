@@ -35,6 +35,8 @@ import BookMeeting from "./pages/BookMeeting";
 import SampleOrder from "./pages/SampleOrder";
 import SampleOrderTracker from "./pages/SampleOrderTracker";
 import Meetings from "./pages/Meetings";
+import SourcingDemandPage from "./pages/SourcingDemandPage";
+import SourcingDemandDetail from "./pages/SourcingDemandDetail";
 
 function Router() {
   return (
@@ -175,6 +177,18 @@ function Router() {
       <Route path="/meetings">
         <ProtectedRoute>
           <Meetings />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── AI Sourcing Demands (Phase 3) ── */}
+      <Route path="/sourcing-demands">
+        <ProtectedRoute>
+          <SourcingDemandPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/sourcing-demands/:id">
+        <ProtectedRoute>
+          <SourcingDemandDetail />
         </ProtectedRoute>
       </Route>
 
