@@ -272,7 +272,7 @@ export const appRouter = router({
         return { success: true, summary };
       }),
 
-    // P1.2: AI 采购助理多转对话
+    // P1.2: AI 采购助理多轮对话（RAG 增强版）
     procurementChat: protectedProcedure
       .input(z.object({
         messages: z.array(z.object({
@@ -286,6 +286,55 @@ export const appRouter = router({
         }).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // ── RAG 增强：从平台数据库检索相关工厂和产品 ────────────────────────────
+        let relevantFactories: Array<{ id: number; name: string; category: string; score: number }> = [];
+        let relevantProducts: Array<{ id: number; name: string; factoryName: string; price?: string }> = [];
+
+        try {
+          // 从最新一条用户消息中提取关键词，用于检索
+          const lastUserMessage = [...input.messages].reverse().find(m => m.role === 'user');
+          const searchQuery = lastUserMessage?.content || '';
+
+          // 检索相关工厂（使用关键词搜索，取评分最高的前 5 家）
+          if (searchQuery.length > 2) {
+            const allFactories = await getAllFactories();
+            // 简单关键词匹配：名称、类别包含查询词
+            const queryLower = searchQuery.toLowerCase();
+            const matched = allFactories
+              .filter((f: any) =>
+                (f.name && f.name.toLowerCase().includes(queryLower)) ||
+                (f.category && f.category.toLowerCase().includes(queryLower)) ||
+                (input.context?.interestedCategories?.some((cat: string) =>
+                  f.category?.toLowerCase().includes(cat.toLowerCase())
+                ))
+              )
+              .sort((a: any, b: any) => (b.overallScore || 0) - (a.overallScore || 0))
+              .slice(0, 5);
+
+            relevantFactories = matched.map((f: any) => ({
+              id: f.id,
+              name: f.name,
+              category: f.category || 'General',
+              score: f.overallScore || 0,
+            }));
+
+            // 检索相关产品（取匹配工厂的产品，最多 5 个）
+            if (matched.length > 0) {
+              const topFactory = matched[0];
+              const products = await getProductsByFactoryId(topFactory.id);
+              relevantProducts = products.slice(0, 5).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                factoryName: topFactory.name,
+                price: p.details?.priceMin ? `$${p.details.priceMin}/pc` : undefined,
+              }));
+            }
+          }
+        } catch (ragError) {
+          // RAG 检索失败不影响主流程
+          console.warn('⚠️ [RAG] Context retrieval failed:', (ragError as Error).message);
+        }
+
         const response = await aiService.chatWithProcurementAssistant(
           input.messages as any,
           {
@@ -293,6 +342,8 @@ export const appRouter = router({
             currentPage: input.context?.currentPage,
             recentMeetings: input.context?.recentMeetings,
             interestedCategories: input.context?.interestedCategories,
+            relevantFactories,
+            relevantProducts,
           }
         );
         return response;
@@ -389,7 +440,13 @@ ${transcriptSample}
 3. 适合 ${input.orientation === '竖屏' ? 'TikTok/抖音' : 'YouTube/微信视频号'}
 4. 风格要${input.style}，突出 ${factoryName} 的专业性
 5. 只返回 JSON，不要其他文字`;
-        const responseText = await aiService.callAI(systemPrompt, userPrompt);
+        const responseText = await aiService.callAI(
+          [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: userPrompt },
+          ],
+          { maxTokens: 1500, temperature: 0.7 }
+        );
         let script;
         try {
           const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -775,6 +832,31 @@ ${transcriptSample}
             message: "生成推荐理由失败，请稍后重试",
           });
         }
+      }),
+
+    // P1-2: AI 推荐用户反馈
+    submitAIRecommendationFeedback: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        isHelpful: z.boolean(),
+        feedbackText: z.string().max(500).optional(),
+        recommendationMainReason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 记录反馈日志（后续可写入专用反馈表）
+        console.log(`📊 [AI Feedback] User ${ctx.user.id} rated factory ${input.factoryId} recommendation: ${input.isHelpful ? '👍 Helpful' : '👎 Not helpful'}${input.feedbackText ? ` | Note: ${input.feedbackText}` : ''}`);
+
+        // TODO: 将反馈写入数据库（需要新建 ai_recommendation_feedback 表）
+        // await db.insert(schema.aiRecommendationFeedback).values({
+        //   userId: ctx.user.id,
+        //   factoryId: input.factoryId,
+        //   isHelpful: input.isHelpful,
+        //   feedbackText: input.feedbackText,
+        //   recommendationMainReason: input.recommendationMainReason,
+        //   createdAt: new Date(),
+        // });
+
+        return { success: true, message: '感谢您的反馈！' };
       }),
   }),
 

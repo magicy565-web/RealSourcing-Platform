@@ -1,6 +1,9 @@
 import { useFactoryAIRecommendation } from "@/hooks/useFactoryAIRecommendation";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, ThumbsUp, ThumbsDown } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { useState } from "react";
 
 interface FactoryAIRecommendationProps {
   factoryId: number;
@@ -14,11 +17,12 @@ interface FactoryAIRecommendationProps {
 
 /**
  * FactoryAIRecommendation 组件
- * 
- * 展示 OpenAI 生成的工厂推荐理由
+ *
+ * 展示 LLM 生成的工厂推荐理由，并收集用户反馈。
  * - 主要推荐理由（一句话，高转化）
  * - 详细推荐理由（3-5 条，基于数据）
  * - 信任指标（3-4 条，强化信任）
+ * - 用户反馈按钮（👍/👎）
  */
 export function FactoryAIRecommendation({
   factoryId,
@@ -28,7 +32,29 @@ export function FactoryAIRecommendation({
   const { recommendation, isLoading, error, requestRecommendation, hasRequested } =
     useFactoryAIRecommendation(factoryId, buyerPreferences);
 
-  // 紧凑模式：只显示主要推荐理由和请求按钮
+  const [feedbackGiven, setFeedbackGiven] = useState<"helpful" | "not_helpful" | null>(null);
+
+  const feedbackMutation = trpc.factories.submitAIRecommendationFeedback.useMutation({
+    onSuccess: () => {
+      toast.success("感谢您的反馈！这将帮助我们改进 AI 推荐。");
+    },
+    onError: () => {
+      toast.error("反馈提交失败，请稍后重试。");
+      setFeedbackGiven(null);
+    },
+  });
+
+  const handleFeedback = (isHelpful: boolean) => {
+    if (feedbackGiven) return;
+    setFeedbackGiven(isHelpful ? "helpful" : "not_helpful");
+    feedbackMutation.mutate({
+      factoryId,
+      isHelpful,
+      recommendationMainReason: recommendation?.mainReason,
+    });
+  };
+
+  // ── 紧凑模式（工厂卡片中使用）─────────────────────────────────────────────
   if (compact) {
     return (
       <div className="space-y-2">
@@ -59,24 +85,56 @@ export function FactoryAIRecommendation({
         )}
 
         {recommendation && !isLoading && (
-          <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-2">
+          <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-2 space-y-2">
             <div className="flex items-start gap-2">
               <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-violet-300 font-medium">{recommendation.mainReason}</p>
+              <p className="text-xs text-violet-300 font-medium flex-1">{recommendation.mainReason}</p>
             </div>
+            {/* 紧凑模式反馈按钮 */}
+            {!feedbackGiven ? (
+              <div className="flex items-center gap-1 pt-1">
+                <span className="text-xs text-slate-500 mr-1">有帮助吗？</span>
+                <button
+                  onClick={() => handleFeedback(true)}
+                  className="p-1 rounded hover:bg-violet-500/20 text-slate-400 hover:text-violet-400 transition-colors"
+                  title="有帮助"
+                >
+                  <ThumbsUp className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => handleFeedback(false)}
+                  className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                  title="没帮助"
+                >
+                  <ThumbsDown className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 pt-1">
+                {feedbackGiven === "helpful" ? "👍 感谢反馈！" : "👎 已记录，我们会改进"}
+              </p>
+            )}
           </div>
         )}
       </div>
     );
   }
 
-  // 完整模式：显示所有推荐信息
+  // ── 完整模式（工厂详情页使用）────────────────────────────────────────────────
   return (
     <div className="space-y-4 bg-gradient-to-br from-violet-950/20 to-slate-950/20 border border-violet-500/20 rounded-lg p-4">
       {/* 标题 */}
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-5 h-5 text-violet-400" />
-        <h3 className="text-sm font-semibold text-white">AI 推荐分析</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-violet-400" />
+          <h3 className="text-sm font-semibold text-white">AI 推荐分析</h3>
+          {recommendation?.generatedByAI === false && (
+            <span className="text-xs text-slate-500 bg-slate-800/50 px-1.5 py-0.5 rounded">规则生成</span>
+          )}
+          {recommendation?.generatedByAI === true && (
+            <span className="text-xs text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded">AI 生成</span>
+          )}
+        </div>
       </div>
 
       {/* 加载状态 */}
@@ -135,6 +193,35 @@ export function FactoryAIRecommendation({
               </ul>
             </div>
           )}
+
+          {/* 用户反馈区域 */}
+          <div className="pt-2 border-t border-slate-700/50 flex items-center gap-3">
+            <span className="text-xs text-slate-400">这个推荐对您有帮助吗？</span>
+            {!feedbackGiven ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleFeedback(true)}
+                  disabled={feedbackMutation.isPending}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/30 transition-all"
+                >
+                  <ThumbsUp className="w-3 h-3" />
+                  有帮助
+                </button>
+                <button
+                  onClick={() => handleFeedback(false)}
+                  disabled={feedbackMutation.isPending}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
+                >
+                  <ThumbsDown className="w-3 h-3" />
+                  没帮助
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-400">
+                {feedbackGiven === "helpful" ? "👍 感谢您的反馈！" : "👎 已记录，我们会持续改进"}
+              </span>
+            )}
+          </div>
         </div>
       )}
 

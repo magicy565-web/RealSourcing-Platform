@@ -3,9 +3,9 @@
  * 统一 AI 服务层，支持多模型路由
  *
  * 模型优先级：
- * 1. 阿里云百炼 qwen-plus（中英文采购场景优化，低成本）
- * 2. 逆次代理 [次]deepseek-chat（备用，OpenAI 兼容）
- * 3. Gemini 2.5 Flash（备用）
+ * 1. 配置的 OpenAI 兼容模型（ENV.openaiModel，默认 gpt-4.1-mini）
+ * 2. 阿里云百炼 qwen-plus（中英文采购场景优化）
+ * 3. 逆次代理 [次]deepseek-chat（最终备用）
  */
 
 import { ENV } from './env';
@@ -18,22 +18,31 @@ export interface ChatMessage {
 }
 
 export interface MeetingSummary {
-  keyPoints: string[];           // 核心要点（3-5 条）
-  priceDiscussed: string | null; // 价格区间（如 "$5-8/pc"）
-  moqDiscussed: string | null;   // MOQ（如 "500 pcs"）
-  leadTime: string | null;       // 交期（如 "30 days"）
-  productsDiscussed: string[];   // 讨论的产品名称列表
-  followUpActions: string[];     // 跟进事项（3-5 条）
-  buyerSentiment: 'positive' | 'neutral' | 'negative'; // 买家态度
-  dealProbability: number;       // 成交概率 0-100
-  nextStep: string;              // 建议下一步
-  rawSummary: string;            // 完整摘要段落
+  keyPoints: string[];
+  priceDiscussed: string | null;
+  moqDiscussed: string | null;
+  leadTime: string | null;
+  productsDiscussed: string[];
+  followUpActions: string[];
+  buyerSentiment: 'positive' | 'neutral' | 'negative';
+  dealProbability: number;
+  nextStep: string;
+  rawSummary: string;
 }
 
 export interface ProcurementChatResponse {
   content: string;
-  suggestedActions?: string[];   // 建议操作（如"查看工厂"、"申请样品"）
-  relatedProducts?: string[];    // 相关产品
+  suggestedActions?: string[];
+  relatedProducts?: string[];
+}
+
+// ── 日志工具 ──────────────────────────────────────────────────────────────────
+
+function aiLog(level: 'info' | 'warn' | 'error', tag: string, message: string, meta?: Record<string, unknown>) {
+  const timestamp = new Date().toISOString();
+  const prefix = { info: '✅', warn: '⚠️', error: '❌' }[level];
+  const metaStr = meta ? ` | ${JSON.stringify(meta)}` : '';
+  console[level === 'info' ? 'log' : level](`${prefix} [AI:${tag}] ${timestamp} ${message}${metaStr}`);
 }
 
 // ── AI 客户端工厂 ─────────────────────────────────────────────────────────────
@@ -47,9 +56,19 @@ async function callOpenAICompatible(
     maxTokens?: number;
     temperature?: number;
     responseFormat?: 'json' | 'text';
+    tag?: string;
   }
 ): Promise<string> {
-  const baseUrl = options.baseUrl || 'https://once.novai.su/v1';
+  const baseUrl = (options.baseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
+  const tag = options.tag || options.model;
+  const startTime = Date.now();
+
+  aiLog('info', tag, `Calling model`, {
+    model: options.model,
+    messages: messages.length,
+    maxTokens: options.maxTokens,
+  });
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -65,16 +84,29 @@ async function callOpenAICompatible(
     }),
   });
 
+  const elapsed = Date.now() - startTime;
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
-    throw new Error(`AI API error ${response.status}: ${errorText}`);
+    aiLog('error', tag, `API error`, { status: response.status, elapsed, error: errorText.slice(0, 200) });
+    throw new Error(`AI API error ${response.status}: ${errorText.slice(0, 200)}`);
   }
 
   const data = await response.json() as any;
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
+    aiLog('error', tag, 'Empty response content', { elapsed, data: JSON.stringify(data).slice(0, 200) });
     throw new Error('No content in AI response');
   }
+
+  const usage = data.usage;
+  aiLog('info', tag, `Success`, {
+    elapsed: `${elapsed}ms`,
+    promptTokens: usage?.prompt_tokens,
+    completionTokens: usage?.completion_tokens,
+    contentLength: content.length,
+  });
+
   return content;
 }
 
@@ -92,6 +124,7 @@ async function callDashScope(
     model: options.model || ENV.dashscopeModel || 'qwen-plus',
     maxTokens: options.maxTokens,
     temperature: options.temperature,
+    tag: 'DashScope',
   });
 }
 
@@ -104,18 +137,20 @@ async function callNovai(
     responseFormat?: 'json' | 'text';
   } = {}
 ): Promise<string> {
+  const model = options.model || ENV.openaiModel || 'gpt-4.1-mini';
   return callOpenAICompatible(messages, {
     baseUrl: ENV.openaiBaseUrl || 'https://once.novai.su/v1',
     apiKey: ENV.openaiApiKey,
-    model: options.model || '[次]deepseek-chat',
+    model,
     maxTokens: options.maxTokens,
     temperature: options.temperature,
     responseFormat: options.responseFormat,
+    tag: model,
   });
 }
 
 /**
- * 智能路由：优先使用 ENV.openaiModel（默认 gpt-4.1-mini），失败时切换到阿里云百炼
+ * 智能路由：优先使用 ENV.openaiModel，失败时依次切换到 DashScope → DeepSeek
  */
 async function callAI(
   messages: ChatMessage[],
@@ -126,6 +161,8 @@ async function callAI(
   } = {}
 ): Promise<string> {
   const primaryModel = ENV.openaiModel || 'gpt-4.1-mini';
+  const errors: string[] = [];
+
   // 优先：使用配置的 OpenAI 兼容模型
   if (ENV.openaiApiKey) {
     try {
@@ -135,7 +172,9 @@ async function callAI(
         temperature: options.temperature,
       });
     } catch (e) {
-      console.warn(`⚠️ ${primaryModel} failed, falling back to DashScope:`, (e as Error).message);
+      const msg = (e as Error).message;
+      errors.push(`${primaryModel}: ${msg}`);
+      aiLog('warn', 'Router', `Primary model failed, trying DashScope`, { model: primaryModel, error: msg });
     }
   }
 
@@ -148,23 +187,31 @@ async function callAI(
         temperature: options.temperature,
       });
     } catch (e) {
-      console.warn('⚠️ DashScope failed, falling back to deepseek:', (e as Error).message);
+      const msg = (e as Error).message;
+      errors.push(`DashScope/qwen-plus: ${msg}`);
+      aiLog('warn', 'Router', `DashScope failed, trying DeepSeek`, { error: msg });
     }
   }
 
   // 最终备用：逆次代理 deepseek-chat
   if (ENV.openaiApiKey) {
-    return await callNovai(messages, {
-      model: '[次]deepseek-chat',
-      maxTokens: options.maxTokens,
-      temperature: options.temperature,
-    });
+    try {
+      return await callNovai(messages, {
+        model: '[次]deepseek-chat',
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      errors.push(`DeepSeek: ${msg}`);
+      aiLog('error', 'Router', `All models failed`, { errors });
+    }
   }
 
-  throw new Error('No AI API key configured');
+  throw new Error(`All AI models failed. Errors: ${errors.join(' | ')}`);
 }
 
-// ── P1.1: 会议摘要生成 ────────────────────────────────────────────────────────
+// ── 会议摘要生成 ──────────────────────────────────────────────────────────────
 
 const MEETING_SUMMARY_SYSTEM_PROMPT = `You are an expert B2B procurement meeting analyst for RealSourcing platform.
 Analyze the meeting transcript between a buyer and a factory, then extract structured business intelligence.
@@ -193,6 +240,7 @@ export async function generateMeetingSummary(
   }
 ): Promise<MeetingSummary> {
   if (!transcripts || transcripts.length === 0) {
+    aiLog('warn', 'MeetingSummary', 'No transcripts provided, returning default summary');
     return getDefaultSummary(context);
   }
 
@@ -210,6 +258,11 @@ ${transcriptText.slice(0, 8000)}
 Analyze and return JSON.`;
 
   try {
+    aiLog('info', 'MeetingSummary', `Generating summary`, {
+      meeting: context.meetingTitle,
+      transcriptSegments: transcripts.length,
+    });
+
     const rawResponse = await callAI(
       [
         { role: 'system', content: MEETING_SUMMARY_SYSTEM_PROMPT },
@@ -218,15 +271,19 @@ Analyze and return JSON.`;
       { maxTokens: 1500, temperature: 0.2 }
     );
 
-    // 提取 JSON（处理 markdown 代码块包裹的情况）
     const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('No JSON found in AI response');
+      aiLog('warn', 'MeetingSummary', 'No JSON found in response, using default');
+      return getDefaultSummary(context);
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as MeetingSummary;
 
-    // 数据验证和补全
+    aiLog('info', 'MeetingSummary', 'Summary generated successfully', {
+      dealProbability: parsed.dealProbability,
+      sentiment: parsed.buyerSentiment,
+    });
+
     return {
       keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0, 5) : [],
       priceDiscussed: parsed.priceDiscussed || null,
@@ -241,7 +298,7 @@ Analyze and return JSON.`;
       rawSummary: parsed.rawSummary || '',
     };
   } catch (error) {
-    console.error('❌ Failed to generate meeting summary:', error);
+    aiLog('error', 'MeetingSummary', 'Failed to generate summary', { error: (error as Error).message });
     return getDefaultSummary(context);
   }
 }
@@ -269,7 +326,7 @@ function getDefaultSummary(context: { factoryName: string; buyerName: string; me
   };
 }
 
-// ── P1.2: AI 采购助理多轮对话 ─────────────────────────────────────────────────
+// ── AI 采购助理多轮对话 ────────────────────────────────────────────────────────
 
 const PROCUREMENT_ASSISTANT_SYSTEM_PROMPT = `You are RealSourcing's AI Procurement Assistant — an expert B2B sourcing advisor.
 You help international buyers find the right Chinese manufacturers, evaluate factories, negotiate terms, and manage sample orders.
@@ -298,20 +355,47 @@ export async function chatWithProcurementAssistant(
     currentPage?: string;
     recentMeetings?: string[];
     interestedCategories?: string[];
+    // RAG 增强：注入相关工厂/产品数据
+    relevantFactories?: Array<{ id: number; name: string; category: string; score: number }>;
+    relevantProducts?: Array<{ id: number; name: string; factoryName: string; price?: string }>;
   }
 ): Promise<ProcurementChatResponse> {
-  const systemMessage: ChatMessage = {
-    role: 'system',
-    content: PROCUREMENT_ASSISTANT_SYSTEM_PROMPT + (context ? `
-
-User Context:
+  let contextStr = '';
+  if (context) {
+    contextStr += `\nUser Context:
 - Role: ${context.userRole || 'buyer'}
 - Current page: ${context.currentPage || 'dashboard'}
 - Recent meetings: ${context.recentMeetings?.join(', ') || 'none'}
-- Interested categories: ${context.interestedCategories?.join(', ') || 'general'}` : ''),
+- Interested categories: ${context.interestedCategories?.join(', ') || 'general'}`;
+
+    // RAG 增强：注入检索到的相关工厂数据
+    if (context.relevantFactories && context.relevantFactories.length > 0) {
+      contextStr += `\n\nRelevant Factories in Platform (use these for specific recommendations):`;
+      context.relevantFactories.forEach(f => {
+        contextStr += `\n- [VIEW_FACTORY:${f.id}] ${f.name} (${f.category}, Score: ${f.score}/5)`;
+      });
+    }
+
+    // RAG 增强：注入检索到的相关产品数据
+    if (context.relevantProducts && context.relevantProducts.length > 0) {
+      contextStr += `\n\nRelevant Products in Platform:`;
+      context.relevantProducts.forEach(p => {
+        contextStr += `\n- [REQUEST_SAMPLE:${p.id}] ${p.name} by ${p.factoryName}${p.price ? ` (~${p.price})` : ''}`;
+      });
+    }
+  }
+
+  const systemMessage: ChatMessage = {
+    role: 'system',
+    content: PROCUREMENT_ASSISTANT_SYSTEM_PROMPT + contextStr,
   };
 
   const fullMessages: ChatMessage[] = [systemMessage, ...messages];
+
+  aiLog('info', 'ProcurementChat', 'Processing chat message', {
+    messageCount: messages.length,
+    hasRAGContext: !!(context?.relevantFactories?.length || context?.relevantProducts?.length),
+  });
 
   try {
     const response = await callAI(fullMessages, {
@@ -329,25 +413,30 @@ User Context:
     // 清理响应文本（移除 action 标记）
     const cleanContent = response.replace(/\[(VIEW_FACTORY|REQUEST_SAMPLE|SEND_INQUIRY|SCHEDULE_MEETING):\w+\]/g, '').trim();
 
+    aiLog('info', 'ProcurementChat', 'Response generated', {
+      contentLength: cleanContent.length,
+      suggestedActions: suggestedActions.length,
+    });
+
     return {
       content: cleanContent,
       suggestedActions: suggestedActions.length > 0 ? suggestedActions : undefined,
     };
   } catch (error) {
-    console.error('❌ Procurement assistant error:', error);
+    aiLog('error', 'ProcurementChat', 'Chat failed', { error: (error as Error).message });
     return {
       content: 'I apologize, I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
     };
   }
 }
 
-// ── P1.3: Meeting Reel 关键时刻识别 ──────────────────────────────────────────
+// ── Meeting Reel 关键时刻识别 ─────────────────────────────────────────────────
 
 export interface ReelHighlight {
-  startTime: string;   // "00:02:30"
-  endTime: string;     // "00:03:15"
-  title: string;       // "Price Negotiation Highlight"
-  description: string; // 简短描述
+  startTime: string;
+  endTime: string;
+  title: string;
+  description: string;
   importance: 'high' | 'medium' | 'low';
   category: 'price' | 'product' | 'quality' | 'logistics' | 'general';
 }
@@ -377,6 +466,7 @@ export async function identifyReelHighlights(
   targetDurationSeconds: number = 45
 ): Promise<ReelHighlight[]> {
   if (!transcripts || transcripts.length < 3) {
+    aiLog('warn', 'ReelHighlights', 'Insufficient transcripts for highlight identification');
     return [];
   }
 
@@ -390,6 +480,11 @@ ${transcriptText.slice(0, 6000)}
 Target reel duration: ~${targetDurationSeconds} seconds
 Identify 3-5 highlight moments. Return JSON array.`;
 
+  aiLog('info', 'ReelHighlights', 'Identifying highlights', {
+    transcriptSegments: transcripts.length,
+    targetDuration: targetDurationSeconds,
+  });
+
   try {
     const response = await callAI(
       [
@@ -400,12 +495,18 @@ Identify 3-5 highlight moments. Return JSON array.`;
     );
 
     const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
+    if (!jsonMatch) {
+      aiLog('warn', 'ReelHighlights', 'No JSON array found in response');
+      return [];
+    }
 
     const highlights = JSON.parse(jsonMatch[0]) as ReelHighlight[];
-    return highlights.filter(h => h.startTime && h.endTime && h.title).slice(0, 5);
+    const valid = highlights.filter(h => h.startTime && h.endTime && h.title).slice(0, 5);
+
+    aiLog('info', 'ReelHighlights', `Identified ${valid.length} highlights`);
+    return valid;
   } catch (error) {
-    console.error('❌ Failed to identify reel highlights:', error);
+    aiLog('error', 'ReelHighlights', 'Failed to identify highlights', { error: (error as Error).message });
     return [];
   }
 }
