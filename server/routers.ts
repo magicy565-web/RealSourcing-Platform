@@ -88,6 +88,7 @@ import { extractSourcingDemand, isExtractionError } from "./_core/sourcingDemand
 import { transformToManufacturingParams, isTransformationError } from "./_core/manufacturingParamsService";
 import { ossUploadFromUrl, ossHealthCheck } from "./_core/ossStorageService";
 import { generateRenderImage, isRenderImageError } from "./_core/renderImageService";
+import { searchProductKnowledge } from "./_core/productKnowledgeService";
 import {
   generateEmbedding, buildEmbeddingText, findSimilarDemands, isEmbeddingError
 } from "./_core/vectorSearchService";
@@ -350,6 +351,25 @@ export const appRouter = router({
           console.warn('⚠️ [RAG] Context retrieval failed:', (ragError as Error).message);
         }
 
+        // ── 知识库增强：检索产品类目专业知识 ──────────────────────────────────────
+        let knowledgeContext = '';
+        try {
+          const lastUserMsg = [...input.messages].reverse().find(m => m.role === 'user');
+          if (lastUserMsg && lastUserMsg.content.length > 2) {
+            const knowledgeResult = await searchProductKnowledge(lastUserMsg.content, {
+              maxItems: 6,
+              usedInContext: 'procurement_chat',
+              userId: ctx.user.id,
+            });
+            if (knowledgeResult.items.length > 0) {
+              knowledgeContext = knowledgeResult.formattedContext;
+              console.log(`✅ [Knowledge RAG] 检索到 ${knowledgeResult.items.length} 条知识条目`);
+            }
+          }
+        } catch (knowledgeError) {
+          console.warn('⚠️ [Knowledge RAG] 知识库检索失败:', (knowledgeError as Error).message);
+        }
+
         const response = await aiService.chatWithProcurementAssistant(
           input.messages as any,
           {
@@ -359,6 +379,7 @@ export const appRouter = router({
             interestedCategories: input.context?.interestedCategories,
             relevantFactories,
             relevantProducts,
+            knowledgeContext,
           }
         );
         return response;
@@ -2193,6 +2214,122 @@ ${transcriptSample}
           queryModel: queryEmbedding.model,
           totalSearched: demandsWithVectors.length,
         };
+      }),
+  }),
+
+  // ─── Knowledge Base Management API ──────────────────────────────────────────
+  knowledge: router({
+
+    // 搜索知识库（公开，供 AI 助理调用）
+    search: publicProcedure
+      .input(z.object({
+        query: z.string().min(1).max(200),
+        maxItems: z.number().min(1).max(20).optional().default(8),
+        knowledgeTypes: z.array(z.string()).optional(),
+        targetMarket: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const result = await searchProductKnowledge(input.query, {
+          maxItems: input.maxItems,
+          knowledgeTypes: input.knowledgeTypes as any,
+          targetMarket: input.targetMarket,
+          usedInContext: 'procurement_chat',
+        });
+        return {
+          items: result.items,
+          totalFound: result.totalFound,
+          formattedContext: result.formattedContext,
+        };
+      }),
+
+    // 获取所有产品类目（公开）
+    getCategories: publicProcedure
+      .query(async () => {
+        const { createConnection } = await import('mysql2/promise');
+        const conn = await createConnection({
+          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          port: 3306,
+          user: process.env.DB_USER || 'magicyang',
+          password: process.env.DB_PASSWORD || 'Wysk1214',
+          database: process.env.DB_NAME || 'realsourcing',
+        });
+        const [rows] = await conn.execute<any[]>(
+          'SELECT slug, name, nameEn, parentSlug, level, description FROM product_categories WHERE isActive=1 ORDER BY level, name'
+        );
+        await conn.end();
+        return rows;
+      }),
+
+    // 获取知识库统计（需登录）
+    getStats: protectedProcedure
+      .query(async () => {
+        const { createConnection } = await import('mysql2/promise');
+        const conn = await createConnection({
+          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          port: 3306,
+          user: process.env.DB_USER || 'magicyang',
+          password: process.env.DB_PASSWORD || 'Wysk1214',
+          database: process.env.DB_NAME || 'realsourcing',
+        });
+        const [rows] = await conn.execute<any[]>(
+          `SELECT
+             (SELECT COUNT(*) FROM product_categories WHERE isActive=1) as totalCategories,
+             (SELECT COUNT(*) FROM product_knowledge WHERE isActive=1) as totalKnowledge,
+             (SELECT COUNT(*) FROM product_knowledge WHERE isActive=1 AND embeddingVector IS NOT NULL) as vectorized,
+             (SELECT COUNT(DISTINCT knowledgeType) FROM product_knowledge WHERE isActive=1) as knowledgeTypes,
+             (SELECT COALESCE(SUM(viewCount),0) FROM product_knowledge) as totalViews`
+        );
+        await conn.end();
+        return rows[0];
+      }),
+
+    // 新增知识条目（需登录，管理员功能）
+    createEntry: protectedProcedure
+      .input(z.object({
+        categorySlug: z.string(),
+        knowledgeType: z.enum(['certification','material','process','pricing','moq','lead_time','packaging','quality_standard','market_trend','sourcing_tip']),
+        title: z.string().min(2).max(200),
+        content: z.string().min(10).max(5000),
+        structuredData: z.record(z.unknown()).optional(),
+        targetMarkets: z.array(z.string()).optional(),
+        confidence: z.number().min(0).max(100).optional().default(80),
+        source: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { createKnowledgeEntry } = await import('./_core/productKnowledgeService');
+        const id = await createKnowledgeEntry(input);
+        return { id, success: true };
+      }),
+
+    // 获取热门知识条目（按引用次数）
+    getTopKnowledge: publicProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(50).optional().default(10),
+        categorySlug: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { createConnection } = await import('mysql2/promise');
+        const conn = await createConnection({
+          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          port: 3306,
+          user: process.env.DB_USER || 'magicyang',
+          password: process.env.DB_PASSWORD || 'Wysk1214',
+          database: process.env.DB_NAME || 'realsourcing',
+        });
+        const categoryFilter = input.categorySlug ? 'AND categorySlug = ?' : '';
+        const params: any[] = input.categorySlug
+          ? [input.categorySlug, input.limit]
+          : [input.limit];
+        const [rows] = await conn.execute<any[]>(
+          `SELECT id, categorySlug, knowledgeType, title, content, confidence, viewCount
+           FROM product_knowledge
+           WHERE isActive=1 ${categoryFilter}
+           ORDER BY viewCount DESC, confidence DESC
+           LIMIT ?`,
+          params
+        );
+        await conn.end();
+        return rows;
       }),
   }),
 });

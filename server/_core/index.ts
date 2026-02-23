@@ -8,6 +8,7 @@ import { registerAgoraWebhookRoute } from "./agoraWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initBrowserWorker, shutdownBrowserWorker } from "./browserWorker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 端口管理：强制锁定，防止漂移
@@ -151,6 +152,12 @@ async function startServer() {
 
   // 第二道防线：注册优雅退出处理，确保进程退出时端口被彻底释放
   setupGracefulShutdown(server, port);
+
+  // 初始化 Browser Worker（云端 AI 浏览器自动化）
+  initBrowserWorker();
+
+  // 优雅关闭时同时关闭浏览器
+  process.on('exit', () => { shutdownBrowserWorker().catch(() => {}); });
 
   server.listen(port, () => {
     console.log(`[Server] Running on http://localhost:${port}/`);

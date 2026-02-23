@@ -612,3 +612,53 @@ export const manufacturingParameters = mysqlTable("manufacturing_parameters", {
 });
 export type ManufacturingParameters = typeof manufacturingParameters.$inferSelect;
 export type InsertManufacturingParameters = typeof manufacturingParameters.$inferInsert;
+
+// ─── Product Knowledge Base ────────────────────────────────────────────────────
+
+export const productCategories = mysqlTable("product_categories", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameEn: varchar("nameEn", { length: 100 }).notNull(),
+  parentSlug: varchar("parentSlug", { length: 100 }),
+  level: int("level").default(1),
+  description: text("description"),
+  iconUrl: varchar("iconUrl", { length: 500 }),
+  isActive: tinyint("isActive").default(1),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
+});
+
+export type ProductCategory = typeof productCategories.$inferSelect;
+export type NewProductCategory = typeof productCategories.$inferInsert;
+
+export const productKnowledge = mysqlTable("product_knowledge", {
+  id: int("id").autoincrement().primaryKey(),
+  categorySlug: varchar("categorySlug", { length: 100 }).notNull(),
+  knowledgeType: varchar("knowledgeType", { length: 50 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  structuredData: json("structuredData"),
+  targetMarkets: json("targetMarkets"),
+  confidence: int("confidence").default(80),
+  source: varchar("source", { length: 200 }),
+  embeddingVector: longtext("embeddingVector"),
+  embeddingModel: varchar("embeddingModel", { length: 100 }),
+  embeddingAt: datetime("embeddingAt", { mode: "date", fsp: 3 }),
+  viewCount: int("viewCount").default(0),
+  isActive: tinyint("isActive").default(1),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
+});
+
+export type ProductKnowledgeRow = typeof productKnowledge.$inferSelect;
+export type NewProductKnowledge = typeof productKnowledge.$inferInsert;
+
+export const knowledgeUsageLog = mysqlTable("knowledge_usage_log", {
+  id: int("id").autoincrement().primaryKey(),
+  knowledgeId: int("knowledgeId").notNull(),
+  usedInContext: varchar("usedInContext", { length: 50 }),
+  demandId: int("demandId"),
+  userId: int("userId"),
+  relevanceScore: float("relevanceScore"),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
+});

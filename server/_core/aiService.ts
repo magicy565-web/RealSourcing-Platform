@@ -358,6 +358,8 @@ export async function chatWithProcurementAssistant(
     // RAG 增强：注入相关工厂/产品数据
     relevantFactories?: Array<{ id: number; name: string; category: string; score: number }>;
     relevantProducts?: Array<{ id: number; name: string; factoryName: string; price?: string }>;
+    // 知识库增强：产品类目专业知识
+    knowledgeContext?: string;
   }
 ): Promise<ProcurementChatResponse> {
   let contextStr = '';
@@ -383,6 +385,11 @@ export async function chatWithProcurementAssistant(
         contextStr += `\n- [REQUEST_SAMPLE:${p.id}] ${p.name} by ${p.factoryName}${p.price ? ` (~${p.price})` : ''}`;
       });
     }
+
+    // 知识库增强：注入产品类目专业知识
+    if (context.knowledgeContext && context.knowledgeContext.length > 0) {
+      contextStr += `\n\n${context.knowledgeContext}`;
+    }
   }
 
   const systemMessage: ChatMessage = {
@@ -394,7 +401,7 @@ export async function chatWithProcurementAssistant(
 
   aiLog('info', 'ProcurementChat', 'Processing chat message', {
     messageCount: messages.length,
-    hasRAGContext: !!(context?.relevantFactories?.length || context?.relevantProducts?.length),
+    hasRAGContext: !!(context?.relevantFactories?.length || context?.relevantProducts?.length || context?.knowledgeContext?.length),
   });
 
   try {
