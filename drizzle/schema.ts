@@ -578,6 +578,10 @@ export const sourcingDemands = mysqlTable("sourcing_demands", {
   extractedData:       json("extractedData"),
   processingError:     text("processingError"),
   isPublished:         tinyint("isPublished").notNull().default(0),
+  // 语义向量（1536 维，JSON 格式存储）
+  embeddingVector:     longtext("embeddingVector"),
+  embeddingModel:      varchar("embeddingModel", { length: 100 }),
+  embeddingAt:         datetime("embeddingAt", { mode: "date", fsp: 3 }),
   createdAt:           datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:           datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
