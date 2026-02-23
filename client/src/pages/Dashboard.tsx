@@ -1,28 +1,35 @@
 import { useState } from "react";
+import type React from "react";
 import { motion } from "framer-motion";
+import { Icon as SolarIcon } from "@iconify/react";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import {
-  Radio,
-  Calendar,
-  Buildings as Building2,
-  FileText,
-  TrendUp as TrendingUp,
-  Bell,
-  User,
-  PaperPlaneTilt as Send,
-  Clock,
-  Package,
-  ArrowRight,
-  Sparkle as Sparkles,
-  VideoCamera as Video,
-  CaretRight as ChevronRight,
-  Lightning as Zap,
-  Globe,
-  ChartBar as BarChart3
-} from "@phosphor-icons/react";
+
+// Solar Icons Duotone 图标组件封装
+const SIcon = ({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) => (
+  <SolarIcon icon={`solar:${name}`} className={className} style={style} />
+);
+
+// 图标别名（对应 lucide 的命名）
+const Radio = (p: any) => <SIcon name="radio-bold-duotone" {...p} />;
+const Calendar = (p: any) => <SIcon name="calendar-bold-duotone" {...p} />;
+const Building2 = (p: any) => <SIcon name="buildings-2-bold-duotone" {...p} />;
+const FileText = (p: any) => <SIcon name="file-text-bold-duotone" {...p} />;
+const TrendingUp = (p: any) => <SIcon name="graph-up-bold-duotone" {...p} />;
+const Bell = (p: any) => <SIcon name="bell-bing-bold-duotone" {...p} />;
+const User = (p: any) => <SIcon name="user-circle-bold-duotone" {...p} />;
+const Send = (p: any) => <SIcon name="send-square-bold-duotone" {...p} />;
+const Clock = (p: any) => <SIcon name="clock-circle-bold-duotone" {...p} />;
+const Package = (p: any) => <SIcon name="delivery-bold-duotone" {...p} />;
+const ArrowRight = (p: any) => <SIcon name="arrow-right-bold-duotone" {...p} />;
+const Sparkles = (p: any) => <SIcon name="magic-stick-2-bold-duotone" {...p} />;
+const Video = (p: any) => <SIcon name="videocamera-bold-duotone" {...p} />;
+const ChevronRight = (p: any) => <SIcon name="alt-arrow-right-bold-duotone" {...p} />;
+const Zap = (p: any) => <SIcon name="bolt-bold-duotone" {...p} />;
+const Globe = (p: any) => <SIcon name="globe-bold-duotone" {...p} />;
+const BarChart3 = (p: any) => <SIcon name="chart-2-bold-duotone" {...p} />;
 import { NumberTicker } from "@/components/magicui/number-ticker";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
@@ -280,7 +287,7 @@ export default function Dashboard() {
                     <button onClick={() => setLocation("/webinars")}
                       className="text-sm font-medium flex items-center gap-1 transition-colors"
                       style={{ color: "#a78bfa" }}>
-                      查看全部 <ArrowRight weight="bold" className="w-3.5 h-3.5" />
+                      查看全部 <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -329,7 +336,7 @@ export default function Dashboard() {
                                   {webinar.description || "精选工厂直播选品"}
                                 </p>
                                 <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                                  <Clock weight="duotone" className="w-3 h-3" />
+                                  <Clock className="w-3 h-3" />
                                   {formatScheduledAt(webinar.scheduledAt)}
                                 </div>
                               </div>
@@ -387,7 +394,7 @@ export default function Dashboard() {
                       <div className="flex gap-2.5">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                           style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                          <Sparkles weight="duotone" className="w-3.5 h-3.5 text-white" />
+                          <Sparkles className="w-3.5 h-3.5 text-white" />
                         </div>
                         <div className="flex-1 rounded-xl p-3 text-sm"
                           style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)", color: "rgba(255,255,255,0.70)" }}>
@@ -401,7 +408,7 @@ export default function Dashboard() {
                         <div className="flex gap-2.5">
                           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                             style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                            <Sparkles weight="duotone" className="w-3.5 h-3.5 text-white" />
+                            <Sparkles className="w-3.5 h-3.5 text-white" />
                           </div>
                           <div className="flex-1 rounded-xl p-3"
                             style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)" }}>
@@ -497,7 +504,7 @@ export default function Dashboard() {
                   <button onClick={() => setLocation("/meetings")}
                     className="text-sm font-medium flex items-center gap-1"
                     style={{ color: "#a78bfa" }}>
-                    查看全部 <ArrowRight weight="bold" className="w-3.5 h-3.5" />
+                    查看全部 <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -526,7 +533,7 @@ export default function Dashboard() {
                         <h3 className="font-semibold text-sm text-white truncate mb-1.5">{meeting.title}</h3>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                            <Clock weight="duotone" className="w-3 h-3" />
+                            <Clock className="w-3 h-3" />
                             {formatScheduledAt(meeting.scheduledAt)}
                           </div>
                           <span className="text-xs px-2 py-0.5 rounded-full"
