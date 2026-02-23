@@ -8,13 +8,6 @@ import {
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 
-// ── Magic UI 组件（精准增强，不改变布局）──────────────────────────────────
-import { Particles } from "@/components/magicui/particles";
-import { NumberTicker } from "@/components/magicui/number-ticker";
-import { BorderBeam } from "@/components/magicui/border-beam";
-import { ShimmerButton } from "@/components/magicui/shimmer-button";
-import { BlurFade } from "@/components/magicui/blur-fade";
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +16,29 @@ const GRID_BG = `
   linear-gradient(rgba(124, 58, 237, 0.04) 1px, transparent 1px),
   linear-gradient(90deg, rgba(124, 58, 237, 0.04) 1px, transparent 1px)
 `;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animated Counter
+// ─────────────────────────────────────────────────────────────────────────────
+function AnimatedNumber({ target, suffix = "" }: { target: number; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true });
+
+  useEffect(() => {
+    if (!inView) return;
+    let start = 0;
+    const step = target / 60;
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [inView, target]);
+
+  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Glassmorphism Stat Card
@@ -46,8 +62,7 @@ function StatPill({ value, suffix, label, accent }: {
       <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
         style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
       <div className="text-4xl font-black text-white mb-1">
-        <NumberTicker value={value} className="text-white text-4xl font-black" />
-        {suffix && <span className="text-white">{suffix}</span>}
+        <AnimatedNumber target={value} suffix={suffix} />
       </div>
       <div className="text-white/40 text-sm">{label}</div>
     </motion.div>
@@ -58,11 +73,10 @@ function StatPill({ value, suffix, label, accent }: {
 // Bento Feature Card
 // ─────────────────────────────────────────────────────────────────────────────
 function BentoCard({
-  icon: Icon, title, description, badge, accent, glow, className, children, withBeam = false
+  icon: Icon, title, description, badge, accent, glow, className, children
 }: {
   icon: any; title: string; description: string; badge?: string;
   accent: string; glow: string; className?: string; children?: React.ReactNode;
-  withBeam?: boolean;
 }) {
   return (
     <motion.div
@@ -99,9 +113,6 @@ function BentoCard({
       <h3 className="text-white font-bold text-base mb-2">{title}</h3>
       <p className="text-white/45 text-sm leading-relaxed">{description}</p>
       {children}
-      {withBeam && (
-        <BorderBeam size={120} duration={8} colorFrom={accent} colorTo={`${accent}40`} borderWidth={1} />
-      )}
     </motion.div>
   );
 }
@@ -315,15 +326,6 @@ export default function Home() {
 
       {/* ── Hero Section ── */}
       <section className="relative pt-36 pb-28 overflow-hidden">
-        {/* Magic UI: Particles 背景 */}
-        <Particles
-          className="absolute inset-0 pointer-events-none"
-          quantity={80}
-          color="#a78bfa"
-          size={0.5}
-          staticity={60}
-        />
-
         {/* Glow orbs */}
         <div className="absolute top-20 right-[8%] w-[700px] h-[700px] rounded-full pointer-events-none"
           style={{ background: "radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)" }} />
@@ -347,31 +349,33 @@ export default function Home() {
               <span className="text-violet-300 text-xs font-semibold tracking-wide">PRD 3.1 · AI-Powered B2B Sourcing</span>
             </motion.div>
 
-            {/* Headline — BlurFade 入场动画 */}
-            <BlurFade delay={0.1} inView>
-              <h1
-                className="text-5xl md:text-7xl font-black mb-6 leading-[1.08] tracking-tight text-white"
-              >
-                告别中间商<br />
-                <span style={{
-                  background: "linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #67e8f9 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}>
-                  直连真实工厂
-                </span>
-              </h1>
-            </BlurFade>
+            {/* Headline */}
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-5xl md:text-7xl font-black mb-6 leading-[1.08] tracking-tight text-white"
+            >
+              告别中间商<br />
+              <span style={{
+                background: "linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #67e8f9 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}>
+                直连真实工厂
+              </span>
+            </motion.h1>
 
-            {/* Subheadline — BlurFade 入场动画 */}
-            <BlurFade delay={0.2} inView>
-              <p
-                className="text-lg md:text-xl text-white/45 mb-10 max-w-2xl mx-auto leading-relaxed"
-              >
-                AI 智能匹配 · 视频实时谈判 · 自动录制存档<br />
-                让全球采购商在 48 小时内找到并验证理想工厂
-              </p>
-            </BlurFade>
+            {/* Subheadline */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-lg md:text-xl text-white/45 mb-10 max-w-2xl mx-auto leading-relaxed"
+            >
+              AI 智能匹配 · 视频实时谈判 · 自动录制存档<br />
+              让全球采购商在 48 小时内找到并验证理想工厂
+            </motion.p>
 
             {/* CTA Buttons */}
             <motion.div
@@ -381,16 +385,17 @@ export default function Home() {
               className="flex flex-col sm:flex-row gap-4 justify-center mb-20"
             >
               <Link href="/register">
-                {/* Magic UI: ShimmerButton 替换主 CTA */}
-                <ShimmerButton
-                  shimmerColor="#c4b5fd"
-                  background="linear-gradient(135deg, #7c3aed, #4f46e5)"
-                  borderRadius="12px"
-                  className="flex items-center gap-2 px-8 py-4 text-white font-bold text-base"
-                  style={{ boxShadow: "0 8px 32px rgba(124,58,237,0.40)" }}
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-2 px-8 py-4 rounded-xl text-white font-bold text-base"
+                  style={{
+                    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                    boxShadow: "0 8px 32px rgba(124,58,237,0.40)",
+                  }}
                 >
                   免费开始采购 <ArrowRight className="w-4 h-4" />
-                </ShimmerButton>
+                </motion.button>
               </Link>
               <Link href="/webinars">
                 <motion.button
@@ -408,7 +413,7 @@ export default function Home() {
               </Link>
             </motion.div>
 
-            {/* Stats Row — NumberTicker 替换 AnimatedNumber */}
+            {/* Stats Row */}
             <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
               <StatPill value={500} suffix="+" label="认证工厂" accent="#a78bfa" />
               <StatPill value={2000} suffix="+" label="全球采购商" accent="#67e8f9" />
@@ -450,7 +455,7 @@ export default function Home() {
           {/* Bento Grid */}
           <div className="grid grid-cols-12 gap-4">
 
-            {/* 大卡片 - TikTok 风格直播 — BorderBeam 增强 */}
+            {/* 大卡片 - TikTok 风格直播 */}
             <BentoCard
               icon={Flame}
               title="TikTok 风格 Webinar 直播间"
@@ -459,7 +464,6 @@ export default function Home() {
               accent="#f472b6"
               glow="rgba(244,114,182,0.08)"
               className="col-span-12 md:col-span-7"
-              withBeam={true}
             >
               <div className="mt-5 grid grid-cols-3 gap-3">
                 {[
@@ -507,7 +511,7 @@ export default function Home() {
               className="col-span-12 md:col-span-4"
             />
 
-            {/* AI 采购助理 — BorderBeam 增强 (badge="NEW") */}
+            {/* AI 采购助理 */}
             <BentoCard
               icon={Zap}
               title="AI 采购助理"
@@ -516,7 +520,6 @@ export default function Home() {
               accent="#fb923c"
               glow="rgba(251,146,60,0.08)"
               className="col-span-12 md:col-span-4"
-              withBeam={true}
             />
 
             {/* 私密谈判室 */}
