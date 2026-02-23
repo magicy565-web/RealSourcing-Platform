@@ -6,6 +6,9 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Search, Filter, Calendar, Users, Bell, User, Radio, Loader2, ArrowRight, Play } from "lucide-react";
 import { useLocation } from "wouter";
+import { NumberTicker } from "@/components/magicui/number-ticker";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { BlurFade } from "@/components/magicui/blur-fade";
 
 const GRID_BG = `
   linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
@@ -103,35 +106,42 @@ export default function Webinars() {
           {/* Stats Row */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { icon: Radio, value: liveCount, label: "场直播中", accent: "#f87171" },
-              { icon: Calendar, value: upcomingCount, label: "场即将开始", accent: "#a78bfa" },
-              { icon: Users, value: webinars.length, label: "场总计", accent: "#4ade80" },
+              { icon: Radio, value: liveCount, label: "场直播中", accent: "#f87171", isLive: true },
+              { icon: Calendar, value: upcomingCount, label: "场即将开始", accent: "#a78bfa", isLive: false },
+              { icon: Users, value: webinars.length, label: "场总计", accent: "#4ade80", isLive: false },
             ].map((stat, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08 }}
-                className="rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden"
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${stat.accent}18`,
-                  backdropFilter: "blur(20px)",
-                }}
-              >
-                <div className="absolute top-0 left-0 right-0 h-0.5"
-                  style={{ background: `linear-gradient(90deg, ${stat.accent}, transparent)` }} />
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: `${stat.accent}15` }}>
-                  <stat.icon className="w-5 h-5" style={{ color: stat.accent }} />
-                </div>
-                <div>
-                  <div className="text-3xl font-black text-white">
-                    {isLoading ? <span className="w-7 h-6 block rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} /> : stat.value}
+              <BlurFade key={i} delay={0.05 + i * 0.08} inView>
+                <div
+                  className="rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: `1px solid ${stat.accent}18`,
+                    backdropFilter: "blur(20px)",
+                  }}
+                >
+                  {/* LIVE 卡片添加 BorderBeam */}
+                  {stat.isLive && stat.value > 0 && (
+                    <BorderBeam size={100} duration={5} colorFrom="#f87171" colorTo="#f8717130" />
+                  )}
+                  <div className="absolute top-0 left-0 right-0 h-0.5"
+                    style={{ background: `linear-gradient(90deg, ${stat.accent}, transparent)` }} />
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${stat.accent}15` }}>
+                    <stat.icon className="w-5 h-5" style={{ color: stat.accent }} />
                   </div>
-                  <div className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{stat.label}</div>
+                  <div>
+                    <div className="text-3xl font-black text-white">
+                      {isLoading
+                        ? <span className="w-7 h-6 block rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)" }} />
+                        : stat.value > 0
+                          ? <NumberTicker value={stat.value} className="text-3xl font-black text-white" />
+                          : <span>0</span>
+                      }
+                    </div>
+                    <div className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{stat.label}</div>
+                  </div>
                 </div>
-              </motion.div>
+              </BlurFade>
             ))}
           </div>
 
@@ -192,21 +202,21 @@ export default function Webinars() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredWebinars.map((webinar, i) => {
                   const st = getStatusStyle(webinar.status);
+                  const isLive = webinar.status === "live";
                   return (
+                    <BlurFade key={webinar.id} delay={0.1 + i * 0.06} inView>
                     <motion.div
-                      key={webinar.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.06 }}
                       whileHover={{ y: -4 }}
-                      className="rounded-2xl overflow-hidden cursor-pointer group"
+                      className="rounded-2xl overflow-hidden cursor-pointer group relative"
                       style={{
                         background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        border: isLive ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(255,255,255,0.07)",
                         backdropFilter: "blur(20px)",
                       }}
                       onClick={() => setLocation(`/webinar/${webinar.id}`)}
                     >
+                      {/* LIVE 卡片 BorderBeam */}
+                      {isLive && <BorderBeam size={120} duration={6} colorFrom="#f87171" colorTo="#f8717120" />}
                       {/* Image */}
                       <div className="relative overflow-hidden" style={{ height: "11rem" }}>
                         <img
@@ -284,6 +294,7 @@ export default function Webinars() {
                         </div>
                       </div>
                     </motion.div>
+                    </BlurFade>
                   );
                 })}
               </div>

@@ -9,6 +9,8 @@ import { FactoryStats } from "@/components/factories/FactoryStats";
 import { FactoryFilters } from "@/components/factories/FactoryFilters";
 import { FactoryGrid } from "@/components/factories/FactoryGrid";
 import { FactoryLoading } from "@/components/factories/FactoryLoading";
+import { BlurFade } from "@/components/magicui/blur-fade";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
 
 const GRID_BG = `
   linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
@@ -97,35 +99,41 @@ export default function Factories() {
 
         {/* Content */}
         <div className="p-8 max-w-7xl mx-auto">
-          <FactoryStats
-            totalFactories={enrichedFactoriesWithData.length}
-            totalCategories={categories.length}
-            filteredCount={enrichedFactoriesWithData.length}
-            avgScore={avgScore}
-            isLoading={isLoading}
-          />
-          <FactoryFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            categoryFilter={categoryFilter}
-            onCategoryChange={setCategoryFilter}
-            categories={categories}
-            onAIRecommend={handleAIRecommend}
-          />
-          {isLoading ? (
-            <FactoryLoading />
-          ) : (
-            <FactoryGrid
-              factories={enrichedFactoriesWithData}
-              onViewDetails={handleViewDetails}
-              onToggleFavorite={handleToggleFavorite}
-              isFavoritePending={isFavoritePending}
-              onVideoCall={handleStartVideoCall}
-              onScheduleMeeting={handleScheduleMeeting}
-              onRequestSample={handleRequestSample}
-              favoritedFactoryIds={[]}
+          <BlurFade delay={0.05} inView>
+            <FactoryStats
+              totalFactories={enrichedFactoriesWithData.length}
+              totalCategories={categories.length}
+              filteredCount={enrichedFactoriesWithData.length}
+              avgScore={avgScore}
+              isLoading={isLoading}
             />
-          )}
+          </BlurFade>
+          <BlurFade delay={0.1} inView>
+            <FactoryFilters
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              categoryFilter={categoryFilter}
+              onCategoryChange={setCategoryFilter}
+              categories={categories}
+              onAIRecommend={handleAIRecommend}
+            />
+          </BlurFade>
+          <BlurFade delay={0.15} inView>
+            {isLoading ? (
+              <FactoryLoading />
+            ) : (
+              <FactoryGrid
+                factories={enrichedFactoriesWithData}
+                onViewDetails={handleViewDetails}
+                onToggleFavorite={handleToggleFavorite}
+                isFavoritePending={isFavoritePending}
+                onVideoCall={handleStartVideoCall}
+                onScheduleMeeting={handleScheduleMeeting}
+                onRequestSample={handleRequestSample}
+                favoritedFactoryIds={[]}
+              />
+            )}
+          </BlurFade>
         </div>
       </div>
     </div>

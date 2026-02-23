@@ -9,6 +9,10 @@ import {
   RefreshCw, Copy, ExternalLink, Zap, Globe, Shield, Loader2,
   Bot, User, ChevronRight, DollarSign
 } from "lucide-react";
+import { Particles } from "@/components/magicui/particles";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
+import { BlurFade } from "@/components/magicui/blur-fade";
 
 interface Message {
   id: number;
@@ -134,14 +138,24 @@ export default function AIAssistant() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(160deg, #050310 0%, #080820 50%, #050310 100%)" }}>
       <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: GRID_BG, backgroundSize: "40px 40px" }} />
+      {/* Particles 背景 — 极低密度，营造 AI 科技感 */}
+      <Particles
+        className="fixed inset-0 pointer-events-none z-0"
+        quantity={25}
+        color="#7c3aed"
+        ease={80}
+        size={0.5}
+      />
 
       {/* ── 左侧边栏 ── */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="w-64 flex flex-col relative z-10"
+        className="w-64 flex flex-col relative z-10 overflow-hidden"
         style={{ borderRight: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", backdropFilter: "blur(20px)" }}
       >
+        {/* 侧边栏 BorderBeam */}
+        <BorderBeam size={200} duration={12} colorFrom="#7c3aed" colorTo="#a78bfa20" />
         {/* Header */}
         <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-2.5 mb-3">
@@ -157,14 +171,15 @@ export default function AIAssistant() {
               </p>
             </div>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+          <ShimmerButton
             onClick={handleReset}
-            className="w-full h-9 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-            style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.30)", color: "#c4b5fd" }}
+            className="w-full h-9 text-sm font-medium justify-center"
+            shimmerColor="#c4b5fd"
+            background="rgba(124,58,237,0.15)"
+            borderRadius="0.75rem"
           >
-            <RefreshCw className="w-3.5 h-3.5" />New Conversation
-          </motion.button>
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />New Conversation
+          </ShimmerButton>
         </div>
 
         {/* Quick Actions */}
@@ -236,15 +251,15 @@ export default function AIAssistant() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
           <AnimatePresence initial={false}>
-            {messages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`flex gap-3 group ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-              >
+            {messages.map((msg, idx) => (
+              <BlurFade key={msg.id} delay={idx === 0 ? 0.1 : 0} inView>
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`flex gap-3 group ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                >
                 {/* Avatar */}
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 self-start mt-0.5"
                   style={{
@@ -353,6 +368,7 @@ export default function AIAssistant() {
                   )}
                 </div>
               </motion.div>
+              </BlurFade>
             ))}
           </AnimatePresence>
           <div ref={messagesEndRef} />
@@ -377,15 +393,16 @@ export default function AIAssistant() {
                 rows={1}
                 disabled={chatMutation.isPending}
               />
-              <motion.button
-                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              <ShimmerButton
                 onClick={() => handleSend()}
                 disabled={!input.trim() || chatMutation.isPending}
-                className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                className="h-9 w-9 flex-shrink-0 disabled:opacity-40"
+                shimmerColor="#c4b5fd"
+                background="linear-gradient(135deg, #7c3aed, #4f46e5)"
+                borderRadius="0.75rem"
               >
                 {chatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Send className="w-4 h-4 text-white" />}
-              </motion.button>
+              </ShimmerButton>
             </div>
             <p className="text-center text-xs mt-2" style={{ color: "rgba(255,255,255,0.18)" }}>
               Powered by Alibaba DashScope (Qwen Plus) · Responses may not be 100% accurate
