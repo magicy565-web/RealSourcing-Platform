@@ -5,10 +5,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
-  Radio, Calendar, Building2, FileText, TrendingUp, Bell, User,
-  Send, Clock, Package, ArrowRight, Sparkles, Video, ChevronRight,
-  Zap, Globe, BarChart3
-} from "lucide-react";
+  Radio,
+  Calendar,
+  Buildings as Building2,
+  FileText,
+  TrendUp as TrendingUp,
+  Bell,
+  User,
+  PaperPlaneTilt as Send,
+  Clock,
+  Package,
+  ArrowRight,
+  Sparkle as Sparkles,
+  VideoCamera as Video,
+  CaretRight as ChevronRight,
+  Lightning as Zap,
+  Globe,
+  ChartBar as BarChart3
+} from "@phosphor-icons/react";
 import { NumberTicker } from "@/components/magicui/number-ticker";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
@@ -266,7 +280,7 @@ export default function Dashboard() {
                     <button onClick={() => setLocation("/webinars")}
                       className="text-sm font-medium flex items-center gap-1 transition-colors"
                       style={{ color: "#a78bfa" }}>
-                      查看全部 <ArrowRight className="w-3.5 h-3.5" />
+                      查看全部 <ArrowRight weight="bold" className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -315,7 +329,7 @@ export default function Dashboard() {
                                   {webinar.description || "精选工厂直播选品"}
                                 </p>
                                 <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                                  <Clock className="w-3 h-3" />
+                                  <Clock weight="duotone" className="w-3 h-3" />
                                   {formatScheduledAt(webinar.scheduledAt)}
                                 </div>
                               </div>
@@ -373,7 +387,7 @@ export default function Dashboard() {
                       <div className="flex gap-2.5">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                           style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                          <Sparkles className="w-3.5 h-3.5 text-white" />
+                          <Sparkles weight="duotone" className="w-3.5 h-3.5 text-white" />
                         </div>
                         <div className="flex-1 rounded-xl p-3 text-sm"
                           style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)", color: "rgba(255,255,255,0.70)" }}>
@@ -387,7 +401,7 @@ export default function Dashboard() {
                         <div className="flex gap-2.5">
                           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                             style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                            <Sparkles className="w-3.5 h-3.5 text-white" />
+                            <Sparkles weight="duotone" className="w-3.5 h-3.5 text-white" />
                           </div>
                           <div className="flex-1 rounded-xl p-3"
                             style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.15)" }}>
@@ -483,7 +497,7 @@ export default function Dashboard() {
                   <button onClick={() => setLocation("/meetings")}
                     className="text-sm font-medium flex items-center gap-1"
                     style={{ color: "#a78bfa" }}>
-                    查看全部 <ArrowRight className="w-3.5 h-3.5" />
+                    查看全部 <ArrowRight weight="bold" className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -512,7 +526,7 @@ export default function Dashboard() {
                         <h3 className="font-semibold text-sm text-white truncate mb-1.5">{meeting.title}</h3>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                            <Clock className="w-3 h-3" />
+                            <Clock weight="duotone" className="w-3 h-3" />
                             {formatScheduledAt(meeting.scheduledAt)}
                           </div>
                           <span className="text-xs px-2 py-0.5 rounded-full"
