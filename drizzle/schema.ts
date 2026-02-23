@@ -558,3 +558,53 @@ export const aiRecommendationFeedback = mysqlTable("ai_recommendation_feedback",
 });
 export type AIRecommendationFeedback = typeof aiRecommendationFeedback.$inferSelect;
 export type InsertAIRecommendationFeedback = typeof aiRecommendationFeedback.$inferInsert;
+
+// ─── Sourcing Demands (Phase 3: Agentic AI 多模态采购需求) ─────────────────────
+// 存储从 URL/视频/PDF 中提取的结构化采购需求
+export const sourcingDemands = mysqlTable("sourcing_demands", {
+  id:                  int("id").primaryKey().autoincrement(),
+  userId:              int("userId").notNull(),
+  sourceType:          varchar("sourceType", { length: 20 }).notNull().default("text"),
+  sourceUri:           varchar("sourceUri", { length: 1024 }),
+  status:              varchar("status", { length: 20 }).notNull().default("pending"),
+  productName:         varchar("productName", { length: 255 }),
+  productDescription:  text("productDescription"),
+  keyFeatures:         json("keyFeatures"),
+  targetAudience:      varchar("targetAudience", { length: 255 }),
+  visualReferences:    json("visualReferences"),
+  estimatedQuantity:   varchar("estimatedQuantity", { length: 100 }),
+  targetPrice:         varchar("targetPrice", { length: 100 }),
+  customizationNotes:  text("customizationNotes"),
+  extractedData:       json("extractedData"),
+  processingError:     text("processingError"),
+  isPublished:         tinyint("isPublished").notNull().default(0),
+  createdAt:           datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:           datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type SourcingDemand = typeof sourcingDemands.$inferSelect;
+export type InsertSourcingDemand = typeof sourcingDemands.$inferInsert;
+
+// ─── Manufacturing Parameters (Phase 3: 工厂生产参数) ─────────────────────────
+// 由 AI 从采购需求转化的工厂可读生产技术参数
+export const manufacturingParameters = mysqlTable("manufacturing_parameters", {
+  id:                      int("id").primaryKey().autoincrement(),
+  demandId:                int("demandId").notNull().unique(),
+  moq:                     int("moq"),
+  materials:               json("materials"),
+  dimensions:              varchar("dimensions", { length: 255 }),
+  weight:                  varchar("weight", { length: 50 }),
+  colorRequirements:       json("colorRequirements"),
+  packagingRequirements:   text("packagingRequirements"),
+  certificationsRequired:  json("certificationsRequired"),
+  estimatedUnitCost:       decimal("estimatedUnitCost", { precision: 10, scale: 4 }),
+  toolingCost:             decimal("toolingCost", { precision: 12, scale: 2 }),
+  leadTimeDays:            int("leadTimeDays"),
+  renderImageUrl:          varchar("renderImageUrl", { length: 1024 }),
+  technicalDrawingUrl:     varchar("technicalDrawingUrl", { length: 1024 }),
+  productionCategory:      varchar("productionCategory", { length: 100 }),
+  suggestedFactoryTypes:   json("suggestedFactoryTypes"),
+  createdAt:               datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:               datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type ManufacturingParameters = typeof manufacturingParameters.$inferSelect;
+export type InsertManufacturingParameters = typeof manufacturingParameters.$inferInsert;

@@ -24,4 +24,10 @@ export const ENV = {
   dashscopeModel: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
   // 备用 AI：Google Gemini
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  // 阿里云 OSS 配置（用于存储用户上传文件、AI 渲染图等媒体资产）
+  ossRegion: process.env.OSS_REGION ?? "oss-cn-hangzhou",
+  ossAccessKeyId: process.env.OSS_ACCESS_KEY_ID ?? "",
+  ossAccessKeySecret: process.env.OSS_ACCESS_KEY_SECRET ?? "",
+  ossBucket: process.env.OSS_BUCKET ?? "demand-os-discord",
+  ossEndpoint: process.env.OSS_ENDPOINT ?? "oss-cn-hangzhou.aliyuncs.com",
 };

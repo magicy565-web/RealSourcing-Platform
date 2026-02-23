@@ -988,3 +988,104 @@ export async function getAIRecommendationFeedbackStats(factoryId: number) {
   const total = rows.length;
   return { helpful, notHelpful: total - helpful, total, helpfulRate: total > 0 ? Math.round((helpful / total) * 100) : null };
 }
+
+// ─── Sourcing Demands CRUD (Phase 3 Agentic AI) ───────────────────────────────
+
+export async function createSourcingDemand(data: {
+  userId: number;
+  sourceType: string;
+  sourceUri?: string;
+  status?: string;
+}) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.sourcingDemands).values({
+    userId: data.userId,
+    sourceType: data.sourceType,
+    sourceUri: data.sourceUri ?? null,
+    status: data.status ?? 'pending',
+  });
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function updateSourcingDemand(
+  id: number,
+  data: Partial<typeof schema.sourcingDemands.$inferInsert>
+) {
+  const database = await dbPromise;
+  await database.update(schema.sourcingDemands)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(schema.sourcingDemands.id, id));
+  return { success: true };
+}
+
+export async function getSourcingDemandById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.sourcingDemands)
+    .where(eq(schema.sourcingDemands.id, id));
+  return rows[0] ?? null;
+}
+
+export async function getSourcingDemandsByUser(userId: number) {
+  const database = await dbPromise;
+  return database.select().from(schema.sourcingDemands)
+    .where(eq(schema.sourcingDemands.userId, userId))
+    .orderBy(desc(schema.sourcingDemands.createdAt));
+}
+
+export async function getPublishedSourcingDemands(options?: {
+  productCategory?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const database = await dbPromise;
+  let query = database.select().from(schema.sourcingDemands)
+    .where(eq(schema.sourcingDemands.isPublished, 1))
+    .$dynamic();
+  return query.orderBy(desc(schema.sourcingDemands.createdAt))
+    .limit(options?.limit ?? 20)
+    .offset(options?.offset ?? 0);
+}
+
+// ─── Manufacturing Parameters CRUD ────────────────────────────────────────────
+
+export async function upsertManufacturingParameters(
+  demandId: number,
+  data: Partial<typeof schema.manufacturingParameters.$inferInsert>
+) {
+  const database = await dbPromise;
+  const existing = await database.select().from(schema.manufacturingParameters)
+    .where(eq(schema.manufacturingParameters.demandId, demandId))
+    .then(r => r[0]);
+
+  if (existing) {
+    await database.update(schema.manufacturingParameters)
+      .set({ ...data, updatedAt: new Date() } as any)
+      .where(eq(schema.manufacturingParameters.demandId, demandId));
+    return { id: existing.id, created: false };
+  } else {
+    const result = await database.insert(schema.manufacturingParameters)
+      .values({ demandId, ...data } as any);
+    const id = (result as any)[0]?.insertId ?? 0;
+    return { id, created: true };
+  }
+}
+
+export async function getManufacturingParametersByDemandId(demandId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.manufacturingParameters)
+    .where(eq(schema.manufacturingParameters.demandId, demandId));
+  return rows[0] ?? null;
+}
+
+export async function getDemandWithParameters(demandId: number) {
+  const database = await dbPromise;
+  const demand = await database.select().from(schema.sourcingDemands)
+    .where(eq(schema.sourcingDemands.id, demandId))
+    .then(r => r[0]);
+  if (!demand) return null;
+  const params = await database.select().from(schema.manufacturingParameters)
+    .where(eq(schema.manufacturingParameters.demandId, demandId))
+    .then(r => r[0] ?? null);
+  return { demand, params };
+}

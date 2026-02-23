@@ -74,10 +74,19 @@ import {
   updateWebinarLeadStatus, getWebinarLeadCountByWebinarId,
   // AI Recommendation Feedback
   createAIRecommendationFeedback, getAIRecommendationFeedbackStats,
+  // Phase 3: Sourcing Demands & Manufacturing Parameters
+  createSourcingDemand, updateSourcingDemand, getSourcingDemandById,
+  getSourcingDemandsByUser, getPublishedSourcingDemands,
+  upsertManufacturingParameters, getManufacturingParametersByDemandId,
+  getDemandWithParameters,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
 import { ENV } from "./_core/env";
+import { ingestContent, isIngestionError } from "./_core/multimodalIngestionService";
+import { extractSourcingDemand, isExtractionError } from "./_core/sourcingDemandService";
+import { transformToManufacturingParams, isTransformationError } from "./_core/manufacturingParamsService";
+import { ossUploadFromUrl, ossHealthCheck } from "./_core/ossStorageService";
 
 export const appRouter = router({
   system: systemRouter,
@@ -1844,6 +1853,179 @@ ${transcriptSample}
           link: `/factory-dashboard`,
         });
         return { success: true };
+      }),
+  }),
+
+  // ── Phase 3: Agentic AI Sourcing Demands ─────────────────────────────────────
+  demands: router({
+
+    /**
+     * 核心工作流：提交内容 → 摄取 → 提取 → 转化 → 存储
+     * 支持 URL / 视频 / PDF / 纯文本
+     */
+    submitAndProcess: protectedProcedure
+      .input(z.object({
+        sourceType: z.enum(['url', 'video', 'pdf', 'text']),
+        sourceUri: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Step 1: 创建需求记录（状态: processing）
+        const { id: demandId } = await createSourcingDemand({
+          userId: ctx.user.id,
+          sourceType: input.sourceType,
+          sourceUri: input.sourceUri,
+          status: 'processing',
+        });
+
+        console.log(`🚀 [Demands] Processing demand #${demandId} | Type: ${input.sourceType} | User: ${ctx.user.id}`);
+
+        try {
+          // Step 2: 内容摄取
+          const ingested = await ingestContent(input.sourceType, input.sourceUri);
+          if (isIngestionError(ingested)) {
+            await updateSourcingDemand(demandId, { status: 'failed', processingError: ingested.error });
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `内容摄取失败: ${ingested.error}` });
+          }
+
+          // Step 3: 信息提取 → SourcingDemand
+          const extracted = await extractSourcingDemand(ingested);
+          if (isExtractionError(extracted)) {
+            await updateSourcingDemand(demandId, { status: 'failed', processingError: extracted.error });
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `信息提取失败: ${extracted.error}` });
+          }
+
+          // Step 4: 转存视觉参考图片到 OSS
+          const ossImageUrls: string[] = [];
+          for (const imgUrl of extracted.visualReferences.slice(0, 5)) {
+            if (imgUrl.startsWith('http')) {
+              const ossResult = await ossUploadFromUrl(imgUrl, 'references');
+              if (!('error' in ossResult)) ossImageUrls.push(ossResult.url);
+            }
+          }
+
+          // Step 5: 更新需求记录（状态: extracted）
+          await updateSourcingDemand(demandId, {
+            status: 'extracted',
+            productName: extracted.productName,
+            productDescription: extracted.productDescription,
+            keyFeatures: extracted.keyFeatures,
+            targetAudience: extracted.targetAudience,
+            visualReferences: ossImageUrls.length > 0 ? ossImageUrls : extracted.visualReferences,
+            estimatedQuantity: extracted.estimatedQuantity,
+            targetPrice: extracted.targetPrice,
+            customizationNotes: extracted.customizationNotes,
+            extractedData: extracted.extractedData,
+          });
+
+          // Step 6: 转化为工厂生产参数
+          const params = await transformToManufacturingParams(extracted);
+          if (isTransformationError(params)) {
+            await updateSourcingDemand(demandId, { status: 'failed', processingError: params.error });
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `参数转化失败: ${params.error}` });
+          }
+
+          // Step 7: 存储生产参数
+          await upsertManufacturingParameters(demandId, {
+            moq: params.moq ?? undefined,
+            materials: params.materials,
+            dimensions: params.dimensions,
+            weight: params.weight,
+            colorRequirements: params.colorRequirements,
+            packagingRequirements: params.packagingRequirements,
+            certificationsRequired: params.certificationsRequired,
+            estimatedUnitCost: params.estimatedUnitCost ? String(params.estimatedUnitCost) : undefined,
+            toolingCost: params.toolingCost ? String(params.toolingCost) : undefined,
+            leadTimeDays: params.leadTimeDays ?? undefined,
+            productionCategory: params.productionCategory,
+            suggestedFactoryTypes: params.suggestedFactoryTypes,
+          });
+
+          // Step 8: 更新需求状态为 transformed
+          await updateSourcingDemand(demandId, { status: 'transformed' });
+
+          console.log(`✅ [Demands] Demand #${demandId} fully processed: "${extracted.productName}"`);
+
+          return {
+            demandId,
+            status: 'transformed',
+            productName: extracted.productName,
+            moq: params.moq,
+            estimatedUnitCost: params.estimatedUnitCost,
+            leadTimeDays: params.leadTimeDays,
+            productionCategory: params.productionCategory,
+          };
+        } catch (err) {
+          if (err instanceof TRPCError) throw err;
+          await updateSourcingDemand(demandId, { status: 'failed', processingError: String(err) });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '需求处理失败，请稍后重试' });
+        }
+      }),
+
+    /** 发布需求到公开需求池（供供应商 AI 发现） */
+    publish: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const demand = await getSourcingDemandById(input.demandId);
+        if (!demand) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
+        if (demand.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        if (demand.status !== 'transformed') throw new TRPCError({ code: 'BAD_REQUEST', message: '需求尚未完成处理，无法发布' });
+        await updateSourcingDemand(input.demandId, { status: 'published', isPublished: 1 });
+        console.log(`📢 [Demands] Demand #${input.demandId} published by user ${ctx.user.id}`);
+        return { success: true, demandId: input.demandId };
+      }),
+
+    /** 获取当前用户的所有需求 */
+    myDemands: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getSourcingDemandsByUser(ctx.user.id);
+      }),
+
+    /** 获取需求详情（含生产参数） */
+    getById: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const result = await getDemandWithParameters(input.demandId);
+        if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
+        if (result.demand.userId !== ctx.user.id && !result.demand.isPublished) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此需求' });
+        }
+        return result;
+      }),
+
+    /**
+     * 公开需求池：供应商 AI Agent 发现需求
+     * 这是 AI 可发现性的核心接口
+     */
+    discoverPublished: publicProcedure
+      .input(z.object({
+        productCategory: z.string().optional(),
+        limit: z.number().min(1).max(50).default(20),
+        offset: z.number().min(0).default(0),
+      }))
+      .query(async ({ input }) => {
+        const demands = await getPublishedSourcingDemands({
+          productCategory: input.productCategory,
+          limit: input.limit,
+          offset: input.offset,
+        });
+        // 返回脱敏的公开信息（不暴露用户 ID 等敏感字段）
+        return demands.map(d => ({
+          id: d.id,
+          productName: d.productName,
+          productDescription: d.productDescription,
+          keyFeatures: d.keyFeatures,
+          estimatedQuantity: d.estimatedQuantity,
+          targetPrice: d.targetPrice,
+          customizationNotes: d.customizationNotes,
+          visualReferences: d.visualReferences,
+          createdAt: d.createdAt,
+        }));
+      }),
+
+    /** OSS 健康检查 */
+    ossHealth: publicProcedure
+      .query(async () => {
+        return ossHealthCheck();
       }),
   }),
 });
