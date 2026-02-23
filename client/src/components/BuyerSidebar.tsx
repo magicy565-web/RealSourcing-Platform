@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface SidebarProps {
   userRole?: "buyer" | "factory" | "user" | "admin";
@@ -78,6 +78,16 @@ export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
 
   const displayName = user?.name || "User";
   const displayEmail = user?.email || "";
+
+  // Deterministic avatar selection based on user id or name
+  const avatarIndex = useMemo(() => {
+    const seed = user?.id || user?.name || "default";
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 31 + seed.charCodeAt(i)) & 0xffff;
+    }
+    return (hash % 5) + 1;
+  }, [user?.id, user?.name]);
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
@@ -86,8 +96,8 @@ export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
       <div className="px-5 py-5 border-b border-white/8">
         <Link href="/dashboard">
           <div className="flex items-center gap-3 cursor-pointer group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:shadow-purple-600/50 transition-all">
-              <Zap className="w-4.5 h-4.5 text-white" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden shadow-lg shadow-purple-600/30 group-hover:shadow-purple-600/50 transition-all flex-shrink-0">
+              <img src="/images/logo-mark.svg" alt="RealSourcing" className="w-full h-full" />
             </div>
             <div>
               <span className="text-base font-bold text-white">RealSourcing</span>
@@ -179,8 +189,21 @@ export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
       {/* User Profile */}
       <div className="px-3 py-3 border-t border-white/8">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-            {initials}
+          <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0">
+            <img
+              src={`/images/avatar-${avatarIndex}.svg`}
+              alt={displayName}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.classList.add('bg-gradient-to-br', 'from-purple-600', 'to-purple-400', 'flex', 'items-center', 'justify-center', 'text-sm', 'font-bold', 'text-white');
+                  parent.textContent = initials;
+                }
+              }}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{displayName}</p>

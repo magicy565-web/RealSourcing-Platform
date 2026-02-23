@@ -48,9 +48,8 @@ export default function Layout({ children }: LayoutProps) {
         <div className="container flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/">
-            <a className="flex items-center space-x-2 font-bold text-xl text-primary hover:opacity-80 transition-opacity">
-              <Building2 className="h-6 w-6" />
-              <span>RealSourcing</span>
+            <a className="flex items-center hover:opacity-80 transition-opacity">
+              <img src="/images/logo-full.svg" alt="RealSourcing" className="h-8 w-auto" />
             </a>
           </Link>
 
