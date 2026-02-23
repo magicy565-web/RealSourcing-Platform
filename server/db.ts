@@ -15,7 +15,7 @@ async function initDb() {
 }
 
 const dbPromise = initDb();
-export { db };
+export { db, dbPromise };
 
 // ─── User Operations ──────────────────────────────────────────────────────────
 

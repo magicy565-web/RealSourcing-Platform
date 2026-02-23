@@ -5,7 +5,7 @@
  */
 import {
   mysqlTable, int, varchar, text, json, decimal,
-  datetime, tinyint, boolean,
+  datetime, tinyint, boolean, longtext,
 } from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
 
@@ -659,6 +659,6 @@ export const knowledgeUsageLog = mysqlTable("knowledge_usage_log", {
   usedInContext: varchar("usedInContext", { length: 50 }),
   demandId: int("demandId"),
   userId: int("userId"),
-  relevanceScore: float("relevanceScore"),
+  relevanceScore: decimal("relevanceScore", { precision: 5, scale: 4 }),
   createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
 });

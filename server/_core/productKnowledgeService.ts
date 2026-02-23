@@ -18,7 +18,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { getDbConnection } from "../db";
+import { dbPromise } from "../db";
 import { generateEmbedding, cosineSimilarity } from "./vectorSearchService";
 
 // ─── 类型定义 ──────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export async function searchProductKnowledge(
     userId,
   } = options;
 
-  const db = await getDbConnection();
+  const db = await dbPromise;
   const queryLower = query.toLowerCase();
 
   // Step 1: 关键词匹配，找到相关类目 slug
@@ -317,7 +317,7 @@ async function logKnowledgeUsage(
   userId?: number
 ): Promise<void> {
   try {
-    const db = await getDbConnection();
+    const db = await dbPromise;
     for (const item of items) {
       await db.query(
         `INSERT INTO knowledge_usage_log (knowledgeId, usedInContext, demandId, userId, relevanceScore)
@@ -351,7 +351,7 @@ export interface CreateKnowledgeInput {
 export async function createKnowledgeEntry(
   input: CreateKnowledgeInput
 ): Promise<number> {
-  const db = await getDbConnection();
+  const db = await dbPromise;
   const [result] = await db.query<any>(
     `INSERT INTO product_knowledge
        (categorySlug, knowledgeType, title, content, structuredData, targetMarkets, confidence, source)
@@ -383,7 +383,7 @@ export async function createCategoryEntry(input: {
   level?: number;
   description?: string;
 }): Promise<void> {
-  const db = await getDbConnection();
+  const db = await dbPromise;
   await db.query(
     `INSERT IGNORE INTO product_categories (slug, name, nameEn, parentSlug, level, description)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -404,7 +404,7 @@ async function generateAndSaveEmbedding(id: number, text: string): Promise<void>
   try {
     const result = await generateEmbedding(text);
     if (!isEmbeddingError(result)) {
-      const db = await getDbConnection();
+      const db = await dbPromise;
       await db.query(
         `UPDATE product_knowledge
          SET embeddingVector = ?, embeddingModel = ?, embeddingAt = NOW(3)
@@ -427,7 +427,7 @@ export async function semanticSearchKnowledge(
     const embResult = await generateEmbedding(query);
     if (isEmbeddingError(embResult)) return [];
 
-    const db = await getDbConnection();
+    const db = await dbPromise;
     const rows = await db.query<any[]>(
       `SELECT id, categorySlug, knowledgeType, title, content, structuredData,
               targetMarkets, confidence, source, viewCount, embeddingVector
@@ -466,7 +466,7 @@ export async function semanticSearchKnowledge(
 // ─── 辅助：获取类目列表 ───────────────────────────────────────────────────────
 
 export async function getProductCategories(level?: number) {
-  const db = await getDbConnection();
+  const db = await dbPromise;
   const levelFilter = level !== undefined ? `WHERE level = ${level} AND isActive = 1` : "WHERE isActive = 1";
   return db.query<any[]>(
     `SELECT id, slug, name, nameEn, parentSlug, level, description, sortOrder
@@ -476,7 +476,7 @@ export async function getProductCategories(level?: number) {
 }
 
 export async function getKnowledgeStats() {
-  const db = await getDbConnection();
+  const db = await dbPromise;
   const [stats] = await db.query<any[]>(
     `SELECT
        COUNT(*) as totalEntries,
