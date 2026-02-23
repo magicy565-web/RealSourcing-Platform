@@ -72,6 +72,8 @@ import {
   // Webinar Leads
   createWebinarLead, getWebinarLeadsByWebinarId, getWebinarLeadsByHostId,
   updateWebinarLeadStatus, getWebinarLeadCountByWebinarId,
+  // AI Recommendation Feedback
+  createAIRecommendationFeedback, getAIRecommendationFeedbackStats,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
@@ -834,7 +836,7 @@ ${transcriptSample}
         }
       }),
 
-    // P1-2: AI 推荐用户反馈
+    // P1-2: AI 推荐用户反馈（已对接真实数据库）
     submitAIRecommendationFeedback: protectedProcedure
       .input(z.object({
         factoryId: z.number(),
@@ -843,20 +845,25 @@ ${transcriptSample}
         recommendationMainReason: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // 记录反馈日志（后续可写入专用反馈表）
-        console.log(`📊 [AI Feedback] User ${ctx.user.id} rated factory ${input.factoryId} recommendation: ${input.isHelpful ? '👍 Helpful' : '👎 Not helpful'}${input.feedbackText ? ` | Note: ${input.feedbackText}` : ''}`);
+        // 写入数据库
+        const result = await createAIRecommendationFeedback({
+          userId: ctx.user.id,
+          factoryId: input.factoryId,
+          isHelpful: input.isHelpful,
+          feedbackText: input.feedbackText,
+          recommendationMainReason: input.recommendationMainReason,
+        });
 
-        // TODO: 将反馈写入数据库（需要新建 ai_recommendation_feedback 表）
-        // await db.insert(schema.aiRecommendationFeedback).values({
-        //   userId: ctx.user.id,
-        //   factoryId: input.factoryId,
-        //   isHelpful: input.isHelpful,
-        //   feedbackText: input.feedbackText,
-        //   recommendationMainReason: input.recommendationMainReason,
-        //   createdAt: new Date(),
-        // });
+        console.log(`📊 [AI Feedback] Saved #${result.id} | User ${ctx.user.id} → Factory ${input.factoryId} | ${input.isHelpful ? '👍 Helpful' : '👎 Not helpful'}`);
 
-        return { success: true, message: '感谢您的反馈！' };
+        return { success: true, feedbackId: result.id, message: '感谢您的反馈！' };
+      }),
+
+    // P1-2: 获取工厂 AI 推荐反馈统计
+    getAIRecommendationFeedbackStats: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        return await getAIRecommendationFeedbackStats(input.factoryId);
       }),
   }),
 

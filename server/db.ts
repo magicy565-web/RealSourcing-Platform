@@ -955,3 +955,36 @@ export async function getWebinarLeadCountByWebinarId(webinarId: number) {
     .where(eq(schema.webinarLeads.webinarId, webinarId));
   return { count: rows.length };
 }
+
+// ─── AI Recommendation Feedback CRUD ─────────────────────────────────────────
+export async function createAIRecommendationFeedback(data: {
+  userId: number;
+  factoryId: number;
+  isHelpful: boolean;
+  feedbackText?: string;
+  recommendationMainReason?: string;
+  model?: string;
+}) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.aiRecommendationFeedback).values({
+    userId: data.userId,
+    factoryId: data.factoryId,
+    isHelpful: data.isHelpful ? 1 : 0,
+    feedbackText: data.feedbackText ?? null,
+    recommendationMainReason: data.recommendationMainReason ?? null,
+    model: data.model ?? 'gpt-4.1-mini',
+  });
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getAIRecommendationFeedbackStats(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database
+    .select()
+    .from(schema.aiRecommendationFeedback)
+    .where(eq(schema.aiRecommendationFeedback.factoryId, factoryId));
+  const helpful = rows.filter(r => r.isHelpful === 1).length;
+  const total = rows.length;
+  return { helpful, notHelpful: total - helpful, total, helpfulRate: total > 0 ? Math.round((helpful / total) * 100) : null };
+}

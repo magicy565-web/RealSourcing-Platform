@@ -542,3 +542,19 @@ export const webinarLeads = mysqlTable("webinar_leads", {
 });
 export type WebinarLead = typeof webinarLeads.$inferSelect;
 export type InsertWebinarLead = typeof webinarLeads.$inferInsert;
+
+
+// ─── AI Recommendation Feedback (AI 推荐反馈) ─────────────────────────────────
+// 记录用户对 AI 工厂推荐的 👍/👎 反馈，用于持续优化推荐质量
+export const aiRecommendationFeedback = mysqlTable("ai_recommendation_feedback", {
+  id:                       int("id").primaryKey().autoincrement(),
+  userId:                   int("userId").notNull(),
+  factoryId:                int("factoryId").notNull(),
+  isHelpful:                tinyint("isHelpful").notNull(),
+  feedbackText:             varchar("feedbackText", { length: 500 }),
+  recommendationMainReason: varchar("recommendationMainReason", { length: 500 }),
+  model:                    varchar("model", { length: 100 }).notNull().default("gpt-4.1-mini"),
+  createdAt:                datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type AIRecommendationFeedback = typeof aiRecommendationFeedback.$inferSelect;
+export type InsertAIRecommendationFeedback = typeof aiRecommendationFeedback.$inferInsert;
