@@ -1,23 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" fill="none">
   <defs>
-    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#7c3aed"/>
       <stop offset="100%" stop-color="#a78bfa"/>
     </linearGradient>
   </defs>
 
-  <!-- Background rounded square -->
-  <rect width="40" height="40" rx="9" fill="#1a0a2e"/>
-  <rect width="40" height="40" rx="9" fill="url(#g1)" opacity="0.15"/>
+  <!--
+    Faithful reconstruction of the "RS" geometric monogram from concept-A.
+    The mark consists of:
+    1. A square outline frame (rotated 45° = diamond, but here kept as square with sharp corners)
+    2. Inside: an R-like shape (two diagonal lines from top-left meeting at center, then a curved S-like lower half)
 
-  <!-- RS Monogram -->
-  <!-- R: vertical bar -->
-  <rect x="8" y="9" width="3" height="22" rx="1.5" fill="url(#g1)"/>
-  <!-- R: top arch -->
-  <path d="M11 9 L19 9 Q24 9 24 14.5 Q24 20 19 20 L11 20" stroke="url(#g1)" stroke-width="2.8" stroke-linecap="round" fill="none"/>
-  <!-- R: diagonal leg -->
-  <line x1="18.5" y1="20" x2="24" y2="31" stroke="url(#g1)" stroke-width="2.8" stroke-linecap="round"/>
+    Looking carefully at the image:
+    - Outer shape: a square with sharp top-right and bottom-left corners, slight inward curves on top-left and bottom-right
+    - Inner shape: overlapping R and S letterforms rendered as geometric strokes
+    - The top portion looks like a triangular/diamond R (two lines going from top-left corner to center-right)
+    - The bottom portion is a curved S shape
+    - All strokes use a purple-to-lavender gradient
+    - The outer frame is a square rotated slightly, or a square with cut corners
+  -->
 
-  <!-- S -->
-  <path d="M28 12.5 Q28 9 24 9 Q20 9 20 12.5 Q20 16 24.5 16 Q29 16 29 20.5 Q29 25 24.5 25 Q20 25 20 21.5" stroke="url(#g1)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Outer square frame — sharp corners, open at some sides like the image shows a partial square -->
+  <!-- Top edge: horizontal line across top -->
+  <line x1="14" y1="8" x2="42" y2="8" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Right edge: vertical line down right -->
+  <line x1="42" y1="8" x2="42" y2="36" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Bottom-left partial: diagonal from bottom-left area -->
+  <line x1="14" y1="8" x2="14" y2="48" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Inner R shape: two diagonal strokes from top-left toward center-right -->
+  <!-- Top diagonal of R: from top-left inner area going to upper-right -->
+  <line x1="14" y1="8" x2="42" y2="28" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Middle diagonal of R: from left-center going to right-center -->
+  <line x1="14" y1="28" x2="36" y2="28" stroke="url(#g)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Leg of R: diagonal going down-right -->
+  <line x1="28" y1="28" x2="42" y2="48" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- S curve: the lower-right curved portion -->
+  <path d="M 42 28 Q 50 28 50 36 Q 50 48 42 48 Q 28 48 28 40" stroke="url(#g)" stroke-width="3" stroke-linecap="round" fill="none"/>
 </svg>

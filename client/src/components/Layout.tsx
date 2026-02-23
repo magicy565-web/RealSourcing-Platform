@@ -49,7 +49,7 @@ export default function Layout({ children }: LayoutProps) {
           {/* Logo */}
           <Link href="/">
             <a className="flex items-center hover:opacity-80 transition-opacity">
-              <img src="/images/logo-full.svg" alt="RealSourcing" className="h-8 w-auto" />
+              <img src="/images/logo-full.png" alt="RealSourcing" className="h-8 w-auto" />
             </a>
           </Link>
 

@@ -97,7 +97,7 @@ export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
         <Link href="/dashboard">
           <div className="flex items-center gap-3 cursor-pointer group">
             <div className="w-9 h-9 rounded-xl overflow-hidden shadow-lg shadow-purple-600/30 group-hover:shadow-purple-600/50 transition-all flex-shrink-0">
-              <img src="/images/logo-mark.svg" alt="RealSourcing" className="w-full h-full" />
+              <img src="/images/logo-mark.png" alt="RealSourcing" className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="text-base font-bold text-white">RealSourcing</span>
