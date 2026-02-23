@@ -1,663 +1,1734 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, useInView, AnimatePresence } from "framer-motion";
-import {
-  ArrowRight, Play, Check, X, ChevronRight,
-  Users, TrendingUp, Zap, Shield, Video,
-  Languages, Star, Globe2, Bot,
-  ChevronLeft, ChevronDown, Factory, Sparkles,
-} from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "wouter";
-import { cn } from "@/lib/utils";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useInView,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+} from "framer-motion";
+import {
+  ArrowRight,
+  Play,
+  Star,
+  Check,
+  X,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  MessageSquare,
+  Users,
+  Globe,
+  Shield,
+  Zap,
+  TrendingUp,
+  Award,
+  Clock,
+  BarChart3,
+  Sparkles,
+  Bot,
+  Send,
+  Package,
+  FileText,
+  CheckCircle2,
+} from "lucide-react";
 
-const T = {
-  bg: "#0A0A0A",
-  surface: "#111111",
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg: "#09090b",          // zinc-950
+  surface: "#18181b",     // zinc-900
+  surfaceHover: "#27272a",// zinc-800
   border: "rgba(255,255,255,0.08)",
-  borderHover: "rgba(255,255,255,0.15)",
-  text: "#FFFFFF",
-  textMuted: "rgba(255,255,255,0.45)",
-  textSubtle: "rgba(255,255,255,0.25)",
-  accent: "#5E6AD2",
-  accentGlow: "rgba(94,106,210,0.15)",
-  green: "#4ADE80",
-  amber: "#FBBF24",
-  red: "#F87171",
+  borderHover: "rgba(255,255,255,0.16)",
+  text: "#fafafa",        // zinc-50
+  textMuted: "#a1a1aa",   // zinc-400
+  textSubtle: "#52525b",  // zinc-600
+  accent: "#6366f1",      // indigo-500
+  accentHover: "#818cf8", // indigo-400
+  accentDim: "rgba(99,102,241,0.12)",
+  green: "#22c55e",
+  greenDim: "rgba(34,197,94,0.12)",
+  amber: "#f59e0b",
+  red: "#ef4444",
 };
 
-function FadeIn({ children, delay = 0, y = 16, className = "" }: {
-  children: React.ReactNode; delay?: number; y?: number; className?: string;
+// ─── Fade-in wrapper ─────────────────────────────────────────────────────────
+function FadeIn({
+  children,
+  delay = 0,
+  y = 24,
+  className = "",
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  y?: number;
+  className?: string;
 }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
   return (
-    <motion.div ref={ref}
+    <motion.div
+      ref={ref}
       initial={{ opacity: 0, y }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay, ease: [0.25, 0.4, 0.25, 1] }}
+      transition={{ duration: 0.6, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
       className={className}
-    >{children}</motion.div>
+    >
+      {children}
+    </motion.div>
   );
 }
 
-function Counter({ target, suffix = "" }: { target: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
+// ─── Animated counter ────────────────────────────────────────────────────────
+function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
+  const [val, setVal] = useState(0);
   useEffect(() => {
     if (!inView) return;
     let start = 0;
-    const step = target / 50;
+    const step = Math.ceil(to / 60);
     const timer = setInterval(() => {
       start += step;
-      if (start >= target) { setCount(target); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 20);
+      if (start >= to) { setVal(to); clearInterval(timer); }
+      else setVal(start);
+    }, 16);
     return () => clearInterval(timer);
-  }, [inView, target]);
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
+  }, [inView, to]);
+  return (
+    <span ref={ref}>
+      {val.toLocaleString()}{suffix}
+    </span>
+  );
 }
 
+// ─── Live Activity Ticker ─────────────────────────────────────────────────────
 const ACTIVITIES = [
-  { flag: "🇦🇪", name: "Ahmed Al-Rashid", action: "booked a factory inspection in Guangzhou", time: "2m ago" },
-  { flag: "🇺🇸", name: "Sarah Johnson", action: "closed a $120K deal via live webinar", time: "5m ago" },
-  { flag: "🇩🇪", name: "Klaus Weber", action: "received AI-translated quotation from 3 factories", time: "8m ago" },
-  { flag: "🇬🇧", name: "Emma Clarke", action: "started a video negotiation with Shenzhen supplier", time: "12m ago" },
-  { flag: "🇫🇷", name: "Pierre Dubois", action: "matched with 5 certified LED factories", time: "15m ago" },
-  { flag: "🇯🇵", name: "Tanaka Hiroshi", action: "completed sample verification via live stream", time: "18m ago" },
+  { flag: "🇦🇪", name: "Ahmed Al-Maktoum", city: "Dubai", action: "booked a factory tour", item: "LED Lighting Factory · Guangzhou", time: "2m ago" },
+  { flag: "🇬🇧", name: "Sarah Jenkins", city: "London", action: "confirmed sample order", item: "Skincare OEM · Shenzhen", time: "5m ago" },
+  { flag: "🇺🇸", name: "Michael Chen", city: "New York", action: "started a video negotiation", item: "Electronics Factory · Dongguan", time: "8m ago" },
+  { flag: "🇩🇪", name: "Klaus Weber", city: "Munich", action: "received AI meeting summary", item: "Auto Parts Supplier · Tianjin", time: "11m ago" },
+  { flag: "🇮🇳", name: "Priya Sharma", city: "Mumbai", action: "matched with 3 factories", item: "Textile Manufacturer · Hangzhou", time: "14m ago" },
+  { flag: "🇫🇷", name: "Marie Dubois", city: "Paris", action: "signed NDA with factory", item: "Cosmetics OEM · Shanghai", time: "17m ago" },
+  { flag: "🇸🇦", name: "Khalid Al-Rashid", city: "Riyadh", action: "placed first order", item: "Furniture Factory · Foshan", time: "20m ago" },
+  { flag: "🇦🇺", name: "James Wilson", city: "Sydney", action: "completed factory verification", item: "Sporting Goods · Xiamen", time: "23m ago" },
 ];
 
-function ActivityTicker() {
+function LiveTicker() {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setIdx(i => (i + 1) % ACTIVITIES.length), 3500);
+    const t = setInterval(() => setIdx(i => (i + 1) % ACTIVITIES.length), 3000);
     return () => clearInterval(t);
   }, []);
-  const item = ACTIVITIES[idx];
+
   return (
-    <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-full text-sm"
-      style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-      <span className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse" style={{ background: T.green }} />
-      <AnimatePresence mode="wait">
-        <motion.span key={idx}
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
-          className="truncate max-w-xs" style={{ color: T.textMuted }}>
-          <span style={{ color: T.text }}>{item.flag} {item.name}</span>
-          {" "}{item.action}
-          <span className="ml-2 text-xs" style={{ color: T.textSubtle }}>{item.time}</span>
-        </motion.span>
-      </AnimatePresence>
+    <div
+      style={{
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+        padding: "12px 0",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", gap: 16 }}>
+        {/* Live badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%", background: C.green,
+            boxShadow: `0 0 8px ${C.green}`,
+            animation: "pulse 2s infinite",
+          }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            LIVE
+          </span>
+        </div>
+        <div style={{ width: 1, height: 16, background: C.border }} />
+        {/* Animated activity */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+            style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textMuted, flex: 1 }}
+          >
+            <span style={{ fontSize: 16 }}>{ACTIVITIES[idx].flag}</span>
+            <span style={{ color: C.text, fontWeight: 500 }}>{ACTIVITIES[idx].name}</span>
+            <span>from {ACTIVITIES[idx].city}</span>
+            <span style={{ color: C.textSubtle }}>·</span>
+            <span>{ACTIVITIES[idx].action}:</span>
+            <span style={{ color: C.accentHover, fontWeight: 500 }}>{ACTIVITIES[idx].item}</span>
+            <span style={{ marginLeft: "auto", color: C.textSubtle, fontSize: 12 }}>{ACTIVITIES[idx].time}</span>
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
+
+// ─── Webinar Mock UI (Hero Right Panel) ──────────────────────────────────────
+const TRANSLATION_MSGS = [
+  { zh: "请展示模组的生产线", en: "Please show the production line for the module" },
+  { zh: "我们每天可以生产 5000 件", en: "We can produce 5,000 units per day" },
+  { zh: "最小起订量是多少？", en: "What is the minimum order quantity?" },
+  { zh: "MOQ 是 500 件，样品 3-5 天", en: "MOQ is 500 units, samples in 3-5 days" },
+];
 
 function WebinarMockUI() {
   const [msgIdx, setMsgIdx] = useState(0);
-  const [translating, setTranslating] = useState(false);
-  const messages = [
-    { from: "buyer", text: "Can you show me the production line for the LED module?" },
-    { from: "ai", text: "🤖 AI: 请展示LED模组的生产线" },
-    { from: "factory", text: "当然，请看这里 — 我们每天可以生产50,000个单位。" },
-    { from: "ai", text: "🤖 AI: Of course — we can produce 50,000 units per day." },
-  ];
+  const [micOn, setMicOn] = useState(true);
+  const [vidOn, setVidOn] = useState(true);
+  const [participants] = useState(47);
+
   useEffect(() => {
-    const t = setInterval(() => {
-      setTranslating(true);
-      setTimeout(() => { setMsgIdx(i => (i + 1) % messages.length); setTranslating(false); }, 600);
-    }, 2800);
+    const t = setInterval(() => setMsgIdx(i => (i + 1) % TRANSLATION_MSGS.length), 2800);
     return () => clearInterval(t);
   }, []);
 
   return (
-    <div className="rounded-2xl overflow-hidden w-full"
-      style={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full" style={{ background: "#FF5F57" }} />
-          <div className="w-3 h-3 rounded-full" style={{ background: "#FFBD2E" }} />
-          <div className="w-3 h-3 rounded-full" style={{ background: "#28CA41" }} />
+    <div style={{
+      background: "#0d0d0f",
+      border: `1px solid ${C.border}`,
+      borderRadius: 16,
+      overflow: "hidden",
+      width: "100%",
+      maxWidth: 520,
+      boxShadow: "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)",
+    }}>
+      {/* Title bar */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 16px",
+        background: "#111113",
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
+            <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c }} />
+          ))}
         </div>
-        <div className="flex-1 text-center text-xs" style={{ color: T.textSubtle }}>RealSourcing — Live Webinar</div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: T.red }} />
-          <span className="text-xs" style={{ color: T.red }}>LIVE</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%", background: C.red,
+            boxShadow: `0 0 6px ${C.red}`,
+          }} />
+          <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>LIVE · Webinar Room #2847</span>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 p-3">
-        <div className="rounded-xl aspect-video relative overflow-hidden" style={{ background: "#1a1a2e" }}>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Factory className="w-8 h-8" style={{ color: T.textSubtle }} />
-          </div>
-          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md"
-            style={{ background: "rgba(0,0,0,0.7)" }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: T.green }} />
-            <span className="text-xs text-white">Shenzhen Factory</span>
-          </div>
-        </div>
-        <div className="rounded-xl aspect-video relative overflow-hidden" style={{ background: "#1a2e1a" }}>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Users className="w-8 h-8" style={{ color: T.textSubtle }} />
-          </div>
-          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md"
-            style={{ background: "rgba(0,0,0,0.7)" }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: T.green }} />
-            <span className="text-xs text-white">Ahmed · Dubai</span>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: C.textMuted, fontSize: 12 }}>
+          <Users size={12} />
+          <span>{participants}</span>
         </div>
       </div>
-      <div className="mx-3 mb-3 rounded-xl p-3" style={{ background: T.bg, border: `1px solid ${T.border}` }}>
-        <div className="flex items-center gap-2 mb-2">
-          <Languages className="w-3.5 h-3.5" style={{ color: T.accent }} />
-          <span className="text-xs font-medium" style={{ color: T.accent }}>AI Real-time Translation</span>
-          {translating && (
-            <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 0.6, repeat: Infinity }}
-              className="flex gap-0.5 ml-auto">
-              {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: T.accent }} />)}
-            </motion.div>
-          )}
+
+      {/* Video grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, padding: 2 }}>
+        {/* Factory video */}
+        <div style={{
+          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+          borderRadius: 8,
+          padding: 12,
+          aspectRatio: "16/9",
+          position: "relative",
+          display: "flex", flexDirection: "column", justifyContent: "space-between",
+        }}>
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: 8,
+            background: "linear-gradient(135deg, #0f3460 0%, #16213e 50%, #0d1117 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            {/* Factory silhouette */}
+            <div style={{ textAlign: "center", opacity: 0.6 }}>
+              <div style={{ fontSize: 28 }}>🏭</div>
+            </div>
+          </div>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <span style={{
+              background: "rgba(0,0,0,0.7)", color: C.text, fontSize: 10,
+              padding: "2px 6px", borderRadius: 4, fontWeight: 500,
+            }}>
+              Guangzhou LED Factory
+            </span>
+          </div>
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
+            <span style={{ fontSize: 10, color: C.textMuted }}>HD · 1080p</span>
+          </div>
+        </div>
+
+        {/* Buyer video */}
+        <div style={{
+          background: "linear-gradient(135deg, #1a0a2e 0%, #2d1b69 100%)",
+          borderRadius: 8,
+          padding: 12,
+          aspectRatio: "16/9",
+          position: "relative",
+          display: "flex", flexDirection: "column", justifyContent: "space-between",
+        }}>
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: 8,
+            background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{ textAlign: "center", opacity: 0.6 }}>
+              <div style={{ fontSize: 28 }}>👤</div>
+            </div>
+          </div>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <span style={{
+              background: "rgba(0,0,0,0.7)", color: C.text, fontSize: 10,
+              padding: "2px 6px", borderRadius: 4, fontWeight: 500,
+            }}>
+              🇦🇪 Ahmed · Dubai Retail
+            </span>
+          </div>
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
+            <span style={{ fontSize: 10, color: C.textMuted }}>Connected</span>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Translation panel */}
+      <div style={{
+        margin: "8px 8px 0",
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 8,
+        padding: "10px 12px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <Sparkles size={12} style={{ color: C.accent }} />
+          <span style={{ fontSize: 11, color: C.accent, fontWeight: 600, letterSpacing: "0.06em" }}>
+            AI REAL-TIME TRANSLATION
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
+            {[0, 1, 2].map(i => (
+              <motion.div
+                key={i}
+                style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }}
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, delay: i * 0.2, repeat: Infinity }}
+              />
+            ))}
+          </div>
         </div>
         <AnimatePresence mode="wait">
-          <motion.p key={msgIdx}
-            initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 6 }}
+          <motion.div
+            key={msgIdx}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 8 }}
             transition={{ duration: 0.25 }}
-            className="text-xs leading-relaxed"
-            style={{ color: messages[msgIdx].from === "ai" ? T.accent : T.textMuted }}>
-            {messages[msgIdx].text}
-          </motion.p>
+          >
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>
+              🇨🇳 {TRANSLATION_MSGS[msgIdx].zh}
+            </div>
+            <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>
+              🇬🇧 {TRANSLATION_MSGS[msgIdx].en}
+            </div>
+          </motion.div>
         </AnimatePresence>
       </div>
-      <div className="px-3 pb-3 flex items-center justify-between">
-        <div className="flex -space-x-2">
-          {["🇦🇪","🇨🇳","🇺🇸","🇩🇪"].map((flag, i) => (
-            <div key={i} className="w-7 h-7 rounded-full flex items-center justify-center text-sm border-2"
-              style={{ background: T.surface, borderColor: T.bg }}>{flag}</div>
-          ))}
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs border-2"
-            style={{ background: T.accentGlow, borderColor: T.bg, color: T.accent }}>+12</div>
-        </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
-          style={{ background: T.accentGlow, color: T.accent }}>
-          <Sparkles className="w-3 h-3" />AI Summary Active
+
+      {/* Controls */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        gap: 8, padding: "10px 16px 12px",
+      }}>
+        {[
+          { icon: micOn ? <Mic size={14} /> : <MicOff size={14} />, active: micOn, onClick: () => setMicOn(v => !v) },
+          { icon: vidOn ? <Video size={14} /> : <VideoOff size={14} />, active: vidOn, onClick: () => setVidOn(v => !v) },
+          { icon: <MessageSquare size={14} />, active: true, onClick: () => {} },
+        ].map((btn, i) => (
+          <button
+            key={i}
+            onClick={btn.onClick}
+            style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: btn.active ? C.surfaceHover : C.red + "33",
+              border: `1px solid ${btn.active ? C.border : C.red + "66"}`,
+              color: btn.active ? C.text : C.red,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            {btn.icon}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {/* AI Summary badge */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 5,
+          background: C.accentDim,
+          border: `1px solid ${C.accent}44`,
+          borderRadius: 20, padding: "4px 10px",
+        }}>
+          <Bot size={11} style={{ color: C.accent }} />
+          <span style={{ fontSize: 11, color: C.accent, fontWeight: 600 }}>AI Summary Ready</span>
         </div>
       </div>
     </div>
   );
 }
 
+// ─── AI Demo Chat ─────────────────────────────────────────────────────────────
+const AI_CHAT_FLOW = [
+  { role: "user", text: "我需要采购 LED 灯具，月需求 5000 件，预算 $8/件，需要 CE 认证" },
+  { role: "ai", text: "已收到您的需求。正在从 500+ 认证工厂中为您匹配..." },
+  { role: "ai", text: "✅ 为您找到 3 家高度匹配的工厂：\n\n**1. 广州明亮照明** — 评分 4.9 ⭐ · CE+RoHS · $6.8/件\n**2. 深圳光华电子** — 评分 4.8 ⭐ · CE+UL · $7.2/件\n**3. 东莞星辉科技** — 评分 4.7 ⭐ · CE · $7.5/件" },
+  { role: "user", text: "帮我预约广州明亮照明的视频会议" },
+  { role: "ai", text: "✅ 已为您创建 Webinar 直播间 #2847\n📅 明天 10:00 AM (GMT+8)\n🔗 已发送邀请链接至您的邮箱\n\n会议将自动录制，AI 实时翻译已开启。" },
+];
+
+function AIDemoSection() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-100px" });
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [typing, setTyping] = useState(false);
+
+  useEffect(() => {
+    if (!inView) return;
+    let i = 0;
+    const show = () => {
+      if (i >= AI_CHAT_FLOW.length) return;
+      setTyping(true);
+      setTimeout(() => {
+        setTyping(false);
+        setVisibleCount(c => c + 1);
+        i++;
+        if (i < AI_CHAT_FLOW.length) setTimeout(show, 800);
+      }, AI_CHAT_FLOW[i].role === "ai" ? 1200 : 400);
+    };
+    setTimeout(show, 600);
+  }, [inView]);
+
+  return (
+    <section ref={ref} style={{ padding: "120px 24px", background: C.bg }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+          {/* Left: text */}
+          <FadeIn>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: C.accentDim, border: `1px solid ${C.accent}44`,
+              borderRadius: 20, padding: "4px 12px", marginBottom: 24,
+            }}>
+              <Bot size={14} style={{ color: C.accent }} />
+              <span style={{ fontSize: 12, color: C.accent, fontWeight: 600, letterSpacing: "0.06em" }}>
+                AI SOURCING ASSISTANT
+              </span>
+            </div>
+            <h2 style={{
+              fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700,
+              color: C.text, lineHeight: 1.15, marginBottom: 20,
+              letterSpacing: "-0.02em",
+            }}>
+              描述需求，<br />
+              <span style={{ color: C.accent }}>AI 完成剩下的一切</span>
+            </h2>
+            <p style={{ fontSize: 17, color: C.textMuted, lineHeight: 1.7, marginBottom: 32 }}>
+              输入您的采购需求，AI 助理自动从 500+ 认证工厂中精准匹配，
+              生成询盘，预约视频会议，全程中英双语。
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                "自然语言描述需求，无需填写复杂表单",
+                "AI 实时分析工厂评分、价格、认证资质",
+                "一键预约视频会议，自动发送邀请",
+                "会议结束后自动生成 AI 摘要与行动清单",
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <CheckCircle2 size={18} style={{ color: C.green, flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 15, color: C.textMuted }}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </FadeIn>
+
+          {/* Right: chat UI */}
+          <FadeIn delay={0.15}>
+            <div style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 16,
+              overflow: "hidden",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.4)",
+            }}>
+              {/* Chat header */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "14px 16px",
+                borderBottom: `1px solid ${C.border}`,
+                background: "#111113",
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${C.accent}, #8b5cf6)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Bot size={16} style={{ color: "#fff" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>RealSourcing AI</div>
+                  <div style={{ fontSize: 11, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block" }} />
+                    在线 · 平均响应 &lt;2s
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12, minHeight: 320 }}>
+                <AnimatePresence>
+                  {AI_CHAT_FLOW.slice(0, visibleCount).map((msg, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      style={{
+                        display: "flex",
+                        justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                      }}
+                    >
+                      <div style={{
+                        maxWidth: "85%",
+                        background: msg.role === "user"
+                          ? `linear-gradient(135deg, ${C.accent}, #7c3aed)`
+                          : C.surfaceHover,
+                        border: msg.role === "ai" ? `1px solid ${C.border}` : "none",
+                        borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        padding: "10px 14px",
+                        fontSize: 13,
+                        color: C.text,
+                        lineHeight: 1.6,
+                        whiteSpace: "pre-line",
+                      }}>
+                        {msg.text}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {/* Typing indicator */}
+                {typing && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    style={{ display: "flex", gap: 4, padding: "8px 14px", alignItems: "center" }}
+                  >
+                    {[0, 1, 2].map(i => (
+                      <motion.div
+                        key={i}
+                        style={{ width: 6, height: 6, borderRadius: "50%", background: C.accent }}
+                        animate={{ y: [0, -4, 0] }}
+                        transition={{ duration: 0.6, delay: i * 0.15, repeat: Infinity }}
+                      />
+                    ))}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Input bar */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "12px 16px",
+                borderTop: `1px solid ${C.border}`,
+                background: "#111113",
+              }}>
+                <div style={{
+                  flex: 1, background: C.surfaceHover,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: "8px 12px",
+                  fontSize: 13, color: C.textSubtle,
+                }}>
+                  描述您的采购需求...
+                </div>
+                <button style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: C.accent, border: "none",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer",
+                }}>
+                  <Send size={15} style={{ color: "#fff" }} />
+                </button>
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Factory Card ─────────────────────────────────────────────────────────────
 const FACTORIES = [
-  { name: "Shenzhen TechMold Co.", category: "Electronics Manufacturing", location: "Shenzhen, China",
-    rating: 4.9, reviews: 312, moq: "500 pcs", certs: ["ISO 9001","CE","RoHS"], response: "< 2h", badge: "Top Rated" },
-  { name: "Guangzhou Apparel Group", category: "Textile & Apparel", location: "Guangzhou, China",
-    rating: 4.8, reviews: 489, moq: "200 pcs", certs: ["OEKO-TEX","GOTS"], response: "< 1h", badge: "Fast Response" },
-  { name: "Yiwu Packaging Solutions", category: "Packaging & Printing", location: "Yiwu, China",
-    rating: 4.7, reviews: 256, moq: "1000 pcs", certs: ["FSC","ISO 14001"], response: "< 3h", badge: "Eco Certified" },
-  { name: "Dongguan Furniture Works", category: "Furniture & Home Decor", location: "Dongguan, China",
-    rating: 4.9, reviews: 178, moq: "50 pcs", certs: ["CARB","FSC"], response: "< 2h", badge: "Premium" },
+  {
+    name: "广州明亮照明科技",
+    nameEn: "Guangzhou Bright Lighting",
+    category: "LED & Lighting",
+    rating: 4.9,
+    reviews: 312,
+    moq: "500 units",
+    leadTime: "15-20 days",
+    tags: ["CE", "RoHS", "ISO 9001"],
+    badge: "Top Supplier",
+    badgeColor: C.amber,
+    price: "$6.8–$12/unit",
+    location: "Guangzhou, GD",
+    emoji: "💡",
+  },
+  {
+    name: "深圳光华电子有限公司",
+    nameEn: "Shenzhen Guanghua Electronics",
+    category: "Consumer Electronics",
+    rating: 4.8,
+    reviews: 287,
+    moq: "1,000 units",
+    leadTime: "20-25 days",
+    tags: ["CE", "UL", "FCC", "ISO 9001"],
+    badge: "Verified",
+    badgeColor: C.green,
+    price: "$3.2–$8/unit",
+    location: "Shenzhen, GD",
+    emoji: "📱",
+  },
+  {
+    name: "东莞星辉纺织品公司",
+    nameEn: "Dongguan Xinghui Textiles",
+    category: "Apparel & Textiles",
+    rating: 4.7,
+    reviews: 198,
+    moq: "200 units",
+    leadTime: "10-15 days",
+    tags: ["OEKO-TEX", "ISO 9001"],
+    badge: "Fast Response",
+    badgeColor: C.accent,
+    price: "$4.5–$15/unit",
+    location: "Dongguan, GD",
+    emoji: "👗",
+  },
+  {
+    name: "佛山家居家具制造",
+    nameEn: "Foshan Home Furniture Mfg",
+    category: "Furniture & Home",
+    rating: 4.8,
+    reviews: 156,
+    moq: "50 units",
+    leadTime: "25-35 days",
+    tags: ["FSC", "ISO 14001", "CE"],
+    badge: "New",
+    badgeColor: "#8b5cf6",
+    price: "$45–$280/unit",
+    location: "Foshan, GD",
+    emoji: "🪑",
+  },
+  {
+    name: "杭州美妆护肤OEM",
+    nameEn: "Hangzhou Beauty OEM",
+    category: "Cosmetics & Skincare",
+    rating: 4.9,
+    reviews: 421,
+    moq: "1,000 units",
+    leadTime: "30-45 days",
+    tags: ["GMP", "ISO 22716", "FDA"],
+    badge: "Top Supplier",
+    badgeColor: C.amber,
+    price: "$1.2–$6/unit",
+    location: "Hangzhou, ZJ",
+    emoji: "💄",
+  },
 ];
 
 function FactoryCard({ factory }: { factory: typeof FACTORIES[0] }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}
-      className="rounded-xl p-5 flex-shrink-0 w-72"
-      style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="text-sm font-semibold text-white mb-0.5">{factory.name}</div>
-          <div className="text-xs" style={{ color: T.textMuted }}>{factory.category}</div>
+    <motion.div
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      animate={{ y: hovered ? -4 : 0 }}
+      transition={{ duration: 0.2 }}
+      style={{
+        background: C.surface,
+        border: `1px solid ${hovered ? C.borderHover : C.border}`,
+        borderRadius: 12,
+        padding: 20,
+        minWidth: 260,
+        maxWidth: 280,
+        flexShrink: 0,
+        cursor: "pointer",
+        transition: "border-color 0.2s",
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 10,
+          background: C.surfaceHover,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 22,
+        }}>
+          {factory.emoji}
         </div>
-        <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ background: T.accentGlow, color: T.accent }}>{factory.badge}</span>
+        <span style={{
+          fontSize: 11, fontWeight: 600,
+          color: factory.badgeColor,
+          background: factory.badgeColor + "22",
+          border: `1px solid ${factory.badgeColor}44`,
+          borderRadius: 20, padding: "2px 8px",
+        }}>
+          {factory.badge}
+        </span>
       </div>
-      <div className="flex items-center gap-1 mb-3">
-        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-        <span className="text-sm font-medium text-white">{factory.rating}</span>
-        <span className="text-xs" style={{ color: T.textSubtle }}>({factory.reviews})</span>
-        <span className="mx-1.5 text-xs" style={{ color: T.textSubtle }}>·</span>
-        <Globe2 className="w-3 h-3" style={{ color: T.textSubtle }} />
-        <span className="text-xs" style={{ color: T.textMuted }}>{factory.location}</span>
+
+      <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{factory.name}</div>
+      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>{factory.category} · {factory.location}</div>
+
+      {/* Rating */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 2 }}>
+          {[1,2,3,4,5].map(s => (
+            <Star key={s} size={12} style={{
+              fill: s <= Math.floor(factory.rating) ? C.amber : "transparent",
+              color: s <= Math.floor(factory.rating) ? C.amber : C.textSubtle,
+            }} />
+          ))}
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{factory.rating}</span>
+        <span style={{ fontSize: 12, color: C.textMuted }}>({factory.reviews})</span>
       </div>
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {factory.certs.map(c => (
-          <span key={c} className="text-xs px-2 py-0.5 rounded-md"
-            style={{ background: "rgba(255,255,255,0.05)", color: T.textMuted, border: `1px solid ${T.border}` }}>{c}</span>
+
+      {/* Tags */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+        {factory.tags.map(tag => (
+          <span key={tag} style={{
+            fontSize: 10, fontWeight: 600,
+            color: C.textMuted,
+            background: C.surfaceHover,
+            border: `1px solid ${C.border}`,
+            borderRadius: 4, padding: "2px 6px",
+          }}>
+            {tag}
+          </span>
         ))}
       </div>
-      <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="text-xs" style={{ color: T.textMuted }}>MOQ: <span className="text-white">{factory.moq}</span></div>
-        <div className="text-xs" style={{ color: T.textMuted }}>Response: <span style={{ color: T.green }}>{factory.response}</span></div>
+
+      {/* Meta */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+        <div>
+          <div style={{ color: C.textSubtle, marginBottom: 2 }}>MOQ</div>
+          <div style={{ color: C.text, fontWeight: 500 }}>{factory.moq}</div>
+        </div>
+        <div>
+          <div style={{ color: C.textSubtle, marginBottom: 2 }}>Lead Time</div>
+          <div style={{ color: C.text, fontWeight: 500 }}>{factory.leadTime}</div>
+        </div>
+        <div>
+          <div style={{ color: C.textSubtle, marginBottom: 2 }}>Price</div>
+          <div style={{ color: C.green, fontWeight: 600 }}>{factory.price}</div>
+        </div>
       </div>
     </motion.div>
   );
 }
 
-const AI_CONVERSATION = [
-  { role: "user", text: "I need 5,000 units of wireless earbuds, budget $8/unit, delivery in 6 weeks." },
-  { role: "ai", text: "Analyzing 500+ certified factories... Found 12 matches with verified production capacity." },
-  { role: "ai", text: "Top match: Shenzhen AudioTech Co. — ISO 9001, 4.9★, MOQ 1,000 units, can deliver in 4 weeks at $7.2/unit." },
-  { role: "user", text: "Can you schedule a live inspection for next Tuesday?" },
-  { role: "ai", text: "✓ Webinar booked: Tuesday 10:00 AM (Dubai time). AI translator enabled. Recording will be auto-generated." },
-];
+function FactoryCarousel() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(true);
 
-function AIDemo() {
-  const [visibleCount, setVisibleCount] = useState(1);
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true });
-  useEffect(() => {
-    if (!inView) return;
-    const t = setInterval(() => {
-      setVisibleCount(c => { if (c >= AI_CONVERSATION.length) { clearInterval(t); return c; } return c + 1; });
-    }, 1200);
-    return () => clearInterval(t);
-  }, [inView]);
-  return (
-    <div ref={ref} className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
-        <Bot className="w-4 h-4" style={{ color: T.accent }} />
-        <span className="text-sm font-medium text-white">AI Sourcing Assistant</span>
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: T.accentGlow, color: T.accent }}>Online</span>
-      </div>
-      <div className="p-4 space-y-3 min-h-[240px]">
-        {AI_CONVERSATION.slice(0, visibleCount).map((msg, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-            className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-            <div className="max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed"
-              style={msg.role === "user"
-                ? { background: T.accent, color: "#fff" }
-                : { background: T.bg, color: T.textMuted, border: `1px solid ${T.border}` }}>
-              {msg.text}
-            </div>
-          </motion.div>
-        ))}
-        {visibleCount < AI_CONVERSATION.length && (
-          <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} className="flex gap-1 pl-1">
-            {[0,1,2].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: T.textSubtle }} />)}
-          </motion.div>
-        )}
-      </div>
-    </div>
-  );
-}
+  const scroll = (dir: "left" | "right") => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
+  };
 
-const TESTIMONIALS = [
-  { quote: "RealSourcing cut our sourcing cycle from 3 months to 1 week. The live webinar format with AI translation is a game-changer.", name: "Ahmed Al-Maktoum", role: "Procurement Director", company: "Dubai Retail Group", flag: "🇦🇪", rating: 5 },
-  { quote: "We verified 3 factories in a single afternoon via live video. The AI summary saved us hours of note-taking.", name: "Sarah Jenkins", role: "Brand Founder", company: "London Beauty Co.", flag: "🇬🇧", rating: 5 },
-  { quote: "The FOMO mechanism in the webinar room is incredible. We locked in 30 samples during a live session.", name: "Priya Sharma", role: "E-commerce Director", company: "Mumbai Brands", flag: "🇮🇳", rating: 5 },
-  { quote: "Best B2B sourcing tool I have used. The factory verification system gives us full confidence before placing orders.", name: "Klaus Weber", role: "Head of Sourcing", company: "Berlin Goods GmbH", flag: "🇩🇪", rating: 5 },
-];
-
-const COMPARISON = [
-  { feature: "直连工厂，零中间商", rs: true, alibaba: false, traditional: false },
-  { feature: "实时视频谈判", rs: true, alibaba: false, traditional: false },
-  { feature: "AI 实时翻译", rs: true, alibaba: false, traditional: false },
-  { feature: "自动录制 & AI 摘要", rs: true, alibaba: false, traditional: false },
-  { feature: "三重工厂认证", rs: true, alibaba: "partial", traditional: false },
-  { feature: "48h 采购周期", rs: true, alibaba: false, traditional: false },
-  { feature: "样品追踪", rs: true, alibaba: "partial", traditional: true },
-  { feature: "零平台佣金", rs: true, alibaba: false, traditional: false },
-];
-
-export default function Home() {
-  const [scrolled, setScrolled] = useState(false);
-  const [faqOpen, setFaqOpen] = useState<number | null>(null);
-  const [testimonialIdx, setTestimonialIdx] = useState(0);
-  const factoryScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 5000);
-    return () => clearInterval(t);
-  }, []);
-
-  const scrollFactories = (dir: "left" | "right") => {
-    if (!factoryScrollRef.current) return;
-    factoryScrollRef.current.scrollBy({ left: dir === "right" ? 300 : -300, behavior: "smooth" });
+  const onScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanLeft(scrollLeft > 0);
+    setCanRight(scrollLeft < scrollWidth - clientWidth - 4);
   };
 
   return (
-    <div style={{ background: T.bg, color: T.text, fontFamily: "'Inter', -apple-system, sans-serif", minHeight: "100vh" }}>
+    <section style={{ padding: "120px 0", background: C.surface, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px" }}>
+        <FadeIn>
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 48 }}>
+            <div>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: C.greenDim, border: `1px solid ${C.green}44`,
+                borderRadius: 20, padding: "4px 12px", marginBottom: 16,
+              }}>
+                <Award size={14} style={{ color: C.green }} />
+                <span style={{ fontSize: 12, color: C.green, fontWeight: 600, letterSpacing: "0.06em" }}>
+                  VERIFIED FACTORIES
+                </span>
+              </div>
+              <h2 style={{
+                fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+                color: C.text, letterSpacing: "-0.02em", lineHeight: 1.2,
+              }}>
+                500+ 认证工厂，等待您的询盘
+              </h2>
+              <p style={{ fontSize: 16, color: C.textMuted, marginTop: 12 }}>
+                每家工厂均经过三重认证：营业执照 + 生产资质 + 实地视频验证
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ dir: "left" as const, can: canLeft }, { dir: "right" as const, can: canRight }].map(({ dir, can }) => (
+                <button
+                  key={dir}
+                  onClick={() => scroll(dir)}
+                  style={{
+                    width: 40, height: 40, borderRadius: "50%",
+                    background: can ? C.surfaceHover : "transparent",
+                    border: `1px solid ${can ? C.border : C.textSubtle}`,
+                    color: can ? C.text : C.textSubtle,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: can ? "pointer" : "default",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {dir === "left" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
 
-      <motion.nav className="fixed top-0 left-0 right-0 z-50"
-        style={{
-          background: scrolled ? "rgba(10,10,10,0.9)" : "transparent",
-          backdropFilter: scrolled ? "blur(20px)" : "none",
-          borderBottom: scrolled ? `1px solid ${T.border}` : "1px solid transparent",
-          transition: "all 0.3s ease",
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          style={{
+            display: "flex", gap: 16, overflowX: "auto",
+            scrollbarWidth: "none", paddingBottom: 4,
+          }}
+        >
+          {FACTORIES.map((f, i) => (
+            <FadeIn key={i} delay={i * 0.08}>
+              <FactoryCard factory={f} />
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Global Sourcing Map (SVG) ────────────────────────────────────────────────
+const MAP_FACTORIES = [
+  { x: 72, y: 38, label: "Shanghai", count: 120 },
+  { x: 70, y: 40, label: "Guangzhou", count: 95 },
+  { x: 71, y: 37, label: "Shenzhen", count: 88 },
+  { x: 69, y: 33, label: "Beijing", count: 45 },
+  { x: 75, y: 42, label: "Vietnam", count: 32 },
+  { x: 68, y: 45, label: "India", count: 28 },
+];
+const MAP_BUYERS = [
+  { x: 22, y: 28, label: "New York", flag: "🇺🇸" },
+  { x: 48, y: 26, label: "London", flag: "🇬🇧" },
+  { x: 50, y: 24, label: "Munich", flag: "🇩🇪" },
+  { x: 57, y: 35, label: "Dubai", flag: "🇦🇪" },
+  { x: 65, y: 45, label: "Mumbai", flag: "🇮🇳" },
+  { x: 48, y: 28, label: "Paris", flag: "🇫🇷" },
+  { x: 85, y: 65, label: "Sydney", flag: "🇦🇺" },
+];
+
+function GlobalMap() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-100px" });
+  const [activeLines, setActiveLines] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!inView) return;
+    const show = (i: number) => {
+      if (i >= MAP_BUYERS.length) return;
+      setTimeout(() => {
+        setActiveLines(prev => [...prev, i]);
+        show(i + 1);
+      }, i * 300);
+    };
+    show(0);
+  }, [inView]);
+
+  // Use Guangzhou as the factory hub
+  const hub = MAP_FACTORIES[1];
+
+  return (
+    <section ref={ref} style={{ padding: "120px 24px", background: C.bg }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <FadeIn style={{ textAlign: "center", marginBottom: 64 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: C.accentDim, border: `1px solid ${C.accent}44`,
+            borderRadius: 20, padding: "4px 12px", marginBottom: 20,
+          }}>
+            <Globe size={14} style={{ color: C.accent }} />
+            <span style={{ fontSize: 12, color: C.accent, fontWeight: 600, letterSpacing: "0.06em" }}>
+              GLOBAL NETWORK
+            </span>
+          </div>
+          <h2 style={{
+            fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+            color: C.text, letterSpacing: "-0.02em",
+          }}>
+            连接全球买家与中国工厂
+          </h2>
+          <p style={{ fontSize: 16, color: C.textMuted, marginTop: 12 }}>
+            实时撮合来自 60+ 国家的采购商与中国制造商
+          </p>
+        </FadeIn>
+
+        {/* Map container */}
+        <div style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          overflow: "hidden",
+          position: "relative",
         }}>
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <svg
+            viewBox="0 0 100 60"
+            style={{ width: "100%", display: "block" }}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* Background */}
+            <rect width="100" height="60" fill="#0d0d0f" />
+
+            {/* Grid lines */}
+            {[10, 20, 30, 40, 50, 60, 70, 80, 90].map(x => (
+              <line key={x} x1={x} y1="0" x2={x} y2="60" stroke="rgba(255,255,255,0.03)" strokeWidth="0.3" />
+            ))}
+            {[10, 20, 30, 40, 50].map(y => (
+              <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="rgba(255,255,255,0.03)" strokeWidth="0.3" />
+            ))}
+
+            {/* Connection lines from buyers to hub */}
+            {MAP_BUYERS.map((buyer, i) => (
+              <motion.line
+                key={i}
+                x1={buyer.x} y1={buyer.y}
+                x2={hub.x} y2={hub.y}
+                stroke={C.accent}
+                strokeWidth="0.4"
+                strokeDasharray="1 1"
+                initial={{ opacity: 0, pathLength: 0 }}
+                animate={activeLines.includes(i) ? { opacity: 0.5, pathLength: 1 } : {}}
+                transition={{ duration: 1.2, ease: "easeOut" }}
+              />
+            ))}
+
+            {/* Factory dots */}
+            {MAP_FACTORIES.map((f, i) => (
+              <g key={i}>
+                <motion.circle
+                  cx={f.x} cy={f.y} r="1.2"
+                  fill={C.green}
+                  initial={{ scale: 0 }}
+                  animate={inView ? { scale: 1 } : {}}
+                  transition={{ delay: 0.3 + i * 0.1 }}
+                />
+                <motion.circle
+                  cx={f.x} cy={f.y} r="2.5"
+                  fill="none"
+                  stroke={C.green}
+                  strokeWidth="0.3"
+                  initial={{ opacity: 0 }}
+                  animate={inView ? { opacity: [0, 0.4, 0] } : {}}
+                  transition={{ duration: 2, delay: i * 0.2, repeat: Infinity }}
+                />
+              </g>
+            ))}
+
+            {/* Buyer dots */}
+            {MAP_BUYERS.map((b, i) => (
+              <motion.circle
+                key={i}
+                cx={b.x} cy={b.y} r="1"
+                fill={C.accent}
+                initial={{ scale: 0 }}
+                animate={activeLines.includes(i) ? { scale: 1 } : {}}
+                transition={{ duration: 0.3 }}
+              />
+            ))}
+          </svg>
+
+          {/* Legend */}
+          <div style={{
+            display: "flex", justifyContent: "center", gap: 32,
+            padding: "16px 24px",
+            borderTop: `1px solid ${C.border}`,
+          }}>
+            {[
+              { color: C.green, label: "认证工厂 (500+)" },
+              { color: C.accent, label: "活跃买家 (60+ 国家)" },
+              { color: C.accent, label: "实时连接", dashed: true },
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {item.dashed ? (
+                  <div style={{ width: 20, height: 2, borderTop: `2px dashed ${item.color}`, opacity: 0.6 }} />
+                ) : (
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.color }} />
+                )}
+                <span style={{ fontSize: 12, color: C.textMuted }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Comparison Table ─────────────────────────────────────────────────────────
+const COMPARE_ROWS = [
+  { feature: "视频实时谈判", rs: true, ali: false, trad: false },
+  { feature: "AI 实时翻译", rs: true, ali: false, trad: false },
+  { feature: "会议自动录制 + AI 摘要", rs: true, ali: false, trad: false },
+  { feature: "三重工厂认证", rs: true, ali: "部分", trad: false },
+  { feature: "AI 智能工厂匹配", rs: true, ali: false, trad: false },
+  { feature: "样品追踪", rs: true, ali: "部分", trad: false },
+  { feature: "私密谈判室 (L1)", rs: true, ali: false, trad: false },
+  { feature: "直接联系工厂", rs: true, ali: false, trad: true },
+];
+
+function CompareTable() {
+  return (
+    <section style={{ padding: "120px 24px", background: C.surface, borderTop: `1px solid ${C.border}` }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <FadeIn style={{ textAlign: "center", marginBottom: 56 }}>
+          <h2 style={{
+            fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+            color: C.text, letterSpacing: "-0.02em", marginBottom: 16,
+          }}>
+            为什么选择 RealSourcing？
+          </h2>
+          <p style={{ fontSize: 16, color: C.textMuted }}>
+            我们不是另一个 B2B 目录，我们是视频优先的采购平台
+          </p>
+        </FadeIn>
+
+        <FadeIn delay={0.1}>
+          <div style={{
+            background: C.bg,
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            overflow: "hidden",
+          }}>
+            {/* Header */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+              background: "#111113",
+              borderBottom: `1px solid ${C.border}`,
+            }}>
+              {["功能", "RealSourcing", "阿里巴巴", "传统模式"].map((h, i) => (
+                <div key={i} style={{
+                  padding: "14px 20px",
+                  fontSize: 13, fontWeight: 600,
+                  color: i === 1 ? C.accent : C.textMuted,
+                  textAlign: i === 0 ? "left" : "center",
+                  borderRight: i < 3 ? `1px solid ${C.border}` : "none",
+                }}>
+                  {i === 1 && (
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      background: C.accentDim, border: `1px solid ${C.accent}44`,
+                      borderRadius: 20, padding: "2px 8px",
+                    }}>
+                      <Sparkles size={11} style={{ color: C.accent }} />
+                      {h}
+                    </div>
+                  )}
+                  {i !== 1 && h}
+                </div>
+              ))}
+            </div>
+
+            {/* Rows */}
+            {COMPARE_ROWS.map((row, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                  background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
+                  borderBottom: i < COMPARE_ROWS.length - 1 ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <div style={{ padding: "14px 20px", fontSize: 14, color: C.textMuted, borderRight: `1px solid ${C.border}` }}>
+                  {row.feature}
+                </div>
+                {[row.rs, row.ali, row.trad].map((val, j) => (
+                  <div key={j} style={{
+                    padding: "14px 20px", textAlign: "center",
+                    borderRight: j < 2 ? `1px solid ${C.border}` : "none",
+                    background: j === 0 ? C.accentDim : "transparent",
+                  }}>
+                    {val === true && <Check size={16} style={{ color: C.green, margin: "0 auto" }} />}
+                    {val === false && <X size={16} style={{ color: C.textSubtle, margin: "0 auto" }} />}
+                    {typeof val === "string" && (
+                      <span style={{ fontSize: 12, color: C.amber }}>{val}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
+
+// ─── Testimonials ─────────────────────────────────────────────────────────────
+const TESTIMONIALS = [
+  {
+    quote: "RealSourcing 彻底改变了我们的采购方式。Webinar 直播间让我在 30 分钟内就锁定了 3 家优质工厂，AI 翻译非常流畅，感觉就像在和中国工厂面对面谈判。",
+    name: "Ahmed Al-Maktoum",
+    role: "采购总监",
+    company: "Dubai Retail Group",
+    flag: "🇦🇪",
+    rating: 5,
+    avatar: "A",
+    avatarColor: "#f59e0b",
+  },
+  {
+    quote: "以前找工厂要花 2-3 个月，现在用 RealSourcing 一周就完成了样品确认。工厂认证体系让我非常放心，再也不用担心被骗了。",
+    name: "Sarah Jenkins",
+    role: "品牌创始人",
+    company: "London Beauty Co.",
+    flag: "🇬🇧",
+    rating: 5,
+    avatar: "S",
+    avatarColor: "#ec4899",
+  },
+  {
+    quote: "Webinar 直播间的 FOMO 机制太厉害了，我们在直播中直接锁定了 30 件样品，比传统询盘快了 10 倍。AI 摘要功能让我们的团队协作效率大幅提升。",
+    name: "Priya Sharma",
+    role: "电商运营总监",
+    company: "Mumbai Brands",
+    flag: "🇮🇳",
+    rating: 5,
+    avatar: "P",
+    avatarColor: "#8b5cf6",
+  },
+  {
+    quote: "作为一个不懂中文的欧洲买家，以前和中国工厂沟通是噩梦。RealSourcing 的 AI 实时翻译让语言障碍完全消失，我现在每周都在平台上谈生意。",
+    name: "Klaus Weber",
+    role: "采购经理",
+    company: "Munich Industrial GmbH",
+    flag: "🇩🇪",
+    rating: 5,
+    avatar: "K",
+    avatarColor: "#06b6d4",
+  },
+];
+
+function Testimonials() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % TESTIMONIALS.length), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const t = TESTIMONIALS[idx];
+  return (
+    <section style={{ padding: "120px 24px", background: C.bg }}>
+      <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
+        <FadeIn>
+          <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 48 }}>
+            全球买家的真实评价
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.4 }}
+            >
+              {/* Stars */}
+              <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: 24 }}>
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} size={18} style={{ fill: C.amber, color: C.amber }} />
+                ))}
+              </div>
+
+              {/* Quote */}
+              <blockquote style={{
+                fontSize: "clamp(16px, 2vw, 20px)",
+                color: C.text,
+                lineHeight: 1.7,
+                fontStyle: "italic",
+                marginBottom: 32,
+                letterSpacing: "-0.01em",
+              }}>
+                "{t.quote}"
+              </blockquote>
+
+              {/* Author */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: "50%",
+                  background: t.avatarColor,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, fontWeight: 700, color: "#fff",
+                }}>
+                  {t.avatar}
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                    {t.flag} {t.name}
+                  </div>
+                  <div style={{ fontSize: 13, color: C.textMuted }}>
+                    {t.role} · {t.company}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Dots */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 40 }}>
+            {TESTIMONIALS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                style={{
+                  width: i === idx ? 24 : 8,
+                  height: 8, borderRadius: 4,
+                  background: i === idx ? C.accent : C.textSubtle,
+                  border: "none", cursor: "pointer",
+                  transition: "all 0.3s",
+                }}
+              />
+            ))}
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
+
+// ─── Pricing ──────────────────────────────────────────────────────────────────
+const PLANS = [
+  {
+    name: "免费版",
+    price: "$0",
+    period: "/月",
+    desc: "适合初次探索的采购商",
+    features: ["5 次视频会议/月", "基础工厂搜索", "AI 翻译（有限次数）", "社区支持"],
+    cta: "免费开始",
+    ctaStyle: "outline",
+    highlight: false,
+  },
+  {
+    name: "专业版",
+    price: "$99",
+    period: "/月",
+    desc: "适合活跃采购商和中小品牌",
+    features: ["无限视频会议", "AI 摘要 & 录制", "Meeting Reel 生成", "优先工厂匹配", "专属客户成功经理"],
+    cta: "立即升级",
+    ctaStyle: "filled",
+    highlight: true,
+  },
+  {
+    name: "企业版",
+    price: "定制",
+    period: "",
+    desc: "适合大型品牌和采购团队",
+    features: ["多账号团队协作", "私有化部署选项", "API 集成", "专属谈判顾问", "SLA 保障"],
+    cta: "联系销售团队",
+    ctaStyle: "outline",
+    highlight: false,
+  },
+];
+
+function Pricing() {
+  return (
+    <section style={{ padding: "120px 24px", background: C.surface, borderTop: `1px solid ${C.border}` }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <FadeIn style={{ textAlign: "center", marginBottom: 64 }}>
+          <h2 style={{
+            fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+            color: C.text, letterSpacing: "-0.02em", marginBottom: 16,
+          }}>
+            简单透明的定价
+          </h2>
+          <p style={{ fontSize: 16, color: C.textMuted }}>
+            从免费版开始，随业务增长升级
+          </p>
+        </FadeIn>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          {PLANS.map((plan, i) => (
+            <FadeIn key={i} delay={i * 0.1}>
+              <div style={{
+                background: plan.highlight ? `linear-gradient(180deg, ${C.accentDim} 0%, ${C.bg} 100%)` : C.bg,
+                border: `1px solid ${plan.highlight ? C.accent + "66" : C.border}`,
+                borderRadius: 16,
+                padding: 28,
+                position: "relative",
+                height: "100%",
+              }}>
+                {plan.highlight && (
+                  <div style={{
+                    position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)",
+                    background: C.accent, color: "#fff",
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+                    padding: "3px 12px", borderRadius: 20,
+                  }}>
+                    最受欢迎
+                  </div>
+                )}
+                <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 6 }}>{plan.name}</div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>{plan.desc}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 24 }}>
+                  <span style={{ fontSize: 40, fontWeight: 700, color: C.text, letterSpacing: "-0.02em" }}>{plan.price}</span>
+                  <span style={{ fontSize: 14, color: C.textMuted }}>{plan.period}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                  {plan.features.map((f, j) => (
+                    <div key={j} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Check size={15} style={{ color: plan.highlight ? C.accent : C.green, flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, color: C.textMuted }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/register">
+                  <button style={{
+                    width: "100%", padding: "12px 0",
+                    borderRadius: 8, fontSize: 14, fontWeight: 600,
+                    cursor: "pointer", transition: "all 0.2s",
+                    background: plan.ctaStyle === "filled" ? C.accent : "transparent",
+                    border: `1px solid ${plan.ctaStyle === "filled" ? C.accent : C.border}`,
+                    color: plan.ctaStyle === "filled" ? "#fff" : C.textMuted,
+                  }}>
+                    {plan.cta}
+                  </button>
+                </Link>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+const FAQS = [
+  {
+    q: "RealSourcing 与阿里巴巴有什么区别？",
+    a: "阿里巴巴是 B2B 目录，您只能发消息询价，无法实时视频沟通。RealSourcing 是视频优先的采购平台，支持实时视频谈判、AI 翻译、自动录制和 AI 摘要，让采购决策更快、更安全。",
+  },
+  {
+    q: "如何确保工厂的真实性？",
+    a: "每家工厂都经过三重认证：① 营业执照核验（工商局数据） ② 生产资质审核（行业认证文件） ③ 实地视频验证（我们的团队现场录制生产线）。未通过认证的工厂无法在平台上接单。",
+  },
+  {
+    q: "视频会议支持哪些语言翻译？",
+    a: "目前支持中英双向实时翻译，延迟低于 2 秒。阿拉伯语、德语、法语、印地语翻译正在开发中，预计 2025 Q2 上线。",
+  },
+  {
+    q: "样品费用如何结算？",
+    a: "样品费用由买家和工厂直接协商，平台不收取额外手续费。我们提供安全的第三方支付通道（Stripe/PayPal），样品确认后费用才会释放给工厂。",
+  },
+  {
+    q: "工厂注册需要费用吗？",
+    a: "工厂基础注册完全免费。通过认证后，工厂可以免费接受买家的视频会议邀请。平台仅在成功成交后收取小额服务费（2.5%），无成交不收费。",
+  },
+];
+
+function FAQ() {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <section style={{ padding: "120px 24px", background: C.bg }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <FadeIn style={{ textAlign: "center", marginBottom: 56 }}>
+          <h2 style={{
+            fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+            color: C.text, letterSpacing: "-0.02em",
+          }}>
+            常见问题
+          </h2>
+        </FadeIn>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {FAQS.map((faq, i) => (
+            <FadeIn key={i} delay={i * 0.05}>
+              <div style={{
+                background: open === i ? C.surface : "transparent",
+                border: `1px solid ${open === i ? C.border : "transparent"}`,
+                borderRadius: 10,
+                overflow: "hidden",
+                transition: "all 0.2s",
+              }}>
+                <button
+                  onClick={() => setOpen(open === i ? null : i)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "18px 20px",
+                    background: "transparent", border: "none",
+                    cursor: "pointer", textAlign: "left",
+                    borderBottom: open === i ? `1px solid ${C.border}` : "none",
+                  }}
+                >
+                  <span style={{ fontSize: 15, fontWeight: 500, color: C.text }}>{faq.q}</span>
+                  <motion.div
+                    animate={{ rotate: open === i ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronDown size={18} style={{ color: C.textMuted, flexShrink: 0 }} />
+                  </motion.div>
+                </button>
+                <AnimatePresence>
+                  {open === i && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <div style={{ padding: "16px 20px 20px", fontSize: 14, color: C.textMuted, lineHeight: 1.7 }}>
+                        {faq.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Main Home Component ──────────────────────────────────────────────────────
+export default function Home() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif" }}>
+
+      {/* ── Navbar ── */}
+      <motion.nav
+        style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+          padding: "0 24px",
+          borderBottom: `1px solid ${scrolled ? C.border : "transparent"}`,
+          background: scrolled ? "rgba(9,9,11,0.85)" : "transparent",
+          backdropFilter: scrolled ? "blur(20px)" : "none",
+          transition: "all 0.3s",
+        }}
+      >
+        <div style={{
+          maxWidth: 1200, margin: "0 auto",
+          display: "flex", alignItems: "center", height: 60, gap: 32,
+        }}>
           <Link href="/">
-            <div className="flex items-center gap-2.5 cursor-pointer">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black text-white"
-                style={{ background: T.accent }}>RS</div>
-              <span className="font-semibold text-white">RealSourcing</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 7,
+                background: `linear-gradient(135deg, ${C.accent}, #7c3aed)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 800, color: "#fff",
+              }}>
+                RS
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>RealSourcing</span>
             </div>
           </Link>
-          <div className="hidden md:flex items-center gap-7">
-            {[["Webinar","/webinars"],["工厂库","/factories"],["功能","#features"],["定价","#pricing"]].map(([label, href]) => (
-              <Link key={label} href={href as string}>
-                <span className="text-sm cursor-pointer transition-colors" style={{ color: T.textMuted }}
-                  onMouseEnter={e => (e.currentTarget.style.color = T.text)}
-                  onMouseLeave={e => (e.currentTarget.style.color = T.textMuted)}>{label}</span>
+
+          <div style={{ display: "flex", gap: 4, flex: 1 }}>
+            {[
+              { label: "Webinar", href: "/webinars" },
+              { label: "工厂库", href: "/factories" },
+              { label: "功能", href: "#features" },
+              { label: "定价", href: "#pricing" },
+            ].map(item => (
+              <Link key={item.label} href={item.href}>
+                <button style={{
+                  background: "transparent", border: "none",
+                  padding: "6px 12px", borderRadius: 6,
+                  fontSize: 14, color: C.textMuted, cursor: "pointer",
+                  transition: "color 0.2s",
+                }}>
+                  {item.label}
+                </button>
               </Link>
             ))}
           </div>
-          <div className="flex items-center gap-3">
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/login">
-              <button className="text-sm px-4 py-2 rounded-lg transition-colors" style={{ color: T.textMuted }}
-                onMouseEnter={e => (e.currentTarget.style.color = T.text)}
-                onMouseLeave={e => (e.currentTarget.style.color = T.textMuted)}>登录</button>
+              <button style={{
+                background: "transparent", border: "none",
+                padding: "6px 14px", borderRadius: 6,
+                fontSize: 14, color: C.textMuted, cursor: "pointer",
+              }}>
+                登录
+              </button>
             </Link>
             <Link href="/register">
-              <button className="text-sm px-4 py-2 rounded-lg font-medium transition-all"
-                style={{ background: T.text, color: T.bg }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = "0.9")}
-                onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>免费开始</button>
+              <button style={{
+                background: C.text, border: "none",
+                padding: "7px 16px", borderRadius: 7,
+                fontSize: 14, fontWeight: 600, color: C.bg, cursor: "pointer",
+                transition: "opacity 0.2s",
+              }}>
+                免费开始
+              </button>
             </Link>
           </div>
         </div>
       </motion.nav>
 
-      <section className="relative pt-28 pb-20 overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: `linear-gradient(${T.border} 1px, transparent 1px), linear-gradient(90deg, ${T.border} 1px, transparent 1px)`,
-          backgroundSize: "80px 80px",
-          maskImage: "radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%)",
-        }} />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none"
-          style={{ background: "radial-gradient(ellipse, rgba(94,106,210,0.12) 0%, transparent 70%)" }} />
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+      {/* ── Hero ── */}
+      <section style={{ padding: "140px 24px 80px", minHeight: "100vh", display: "flex", alignItems: "center" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+
+            {/* Left: copy */}
             <div>
-              <FadeIn delay={0}>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs mb-8"
-                  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMuted }}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: T.accent }} />
+              {/* Badge */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  background: C.accentDim, border: `1px solid ${C.accent}44`,
+                  borderRadius: 20, padding: "5px 14px", marginBottom: 28,
+                }}
+              >
+                <Sparkles size={13} style={{ color: C.accent }} />
+                <span style={{ fontSize: 12, color: C.accent, fontWeight: 600, letterSpacing: "0.06em" }}>
                   PRD 3.1 · AI-Powered B2B Sourcing
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </div>
-              </FadeIn>
-              <FadeIn delay={0.08}>
-                <h1 className="text-5xl lg:text-6xl font-black leading-[1.06] tracking-tight mb-6">
-                  告别中间商<br />
-                  <span style={{ color: T.accent }}>直连真实工厂</span>
-                </h1>
-              </FadeIn>
-              <FadeIn delay={0.14}>
-                <p className="text-lg leading-relaxed mb-8 max-w-lg" style={{ color: T.textMuted }}>
-                  AI 智能匹配 · 视频实时谈判 · 自动录制存档<br />
-                  让全球采购商在 <strong className="text-white">48 小时</strong>内找到并验证理想工厂
-                </p>
-              </FadeIn>
-              <FadeIn delay={0.2}>
-                <div className="flex flex-col sm:flex-row gap-3 mb-10">
-                  <Link href="/register">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm"
-                      style={{ background: T.text, color: T.bg }}>
-                      免费开始采购 <ArrowRight className="w-4 h-4" />
-                    </motion.button>
-                  </Link>
-                  <Link href="/webinars">
-                    <motion.button whileHover={{ borderColor: T.borderHover }}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm transition-colors"
-                      style={{ border: `1px solid ${T.border}`, color: T.textMuted }}>
-                      <Play className="w-4 h-4" /> 观看 Demo
-                    </motion.button>
-                  </Link>
-                </div>
-              </FadeIn>
-              <FadeIn delay={0.26}><ActivityTicker /></FadeIn>
+                </span>
+              </motion.div>
+
+              {/* Headline */}
+              <motion.h1
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1, ease: [0.21, 0.47, 0.32, 0.98] }}
+                style={{
+                  fontSize: "clamp(40px, 5.5vw, 72px)",
+                  fontWeight: 800,
+                  color: C.text,
+                  lineHeight: 1.08,
+                  letterSpacing: "-0.03em",
+                  marginBottom: 20,
+                }}
+              >
+                告别中间商<br />
+                <span style={{
+                  background: `linear-gradient(135deg, ${C.accent} 0%, #a78bfa 100%)`,
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}>
+                  直连真实工厂
+                </span>
+              </motion.h1>
+
+              {/* Subheadline */}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                style={{
+                  fontSize: 18, color: C.textMuted, lineHeight: 1.65,
+                  marginBottom: 36, maxWidth: 440,
+                }}
+              >
+                AI 智能匹配 · 视频实时谈判 · 自动录制存档<br />
+                让全球采购商在 <strong style={{ color: C.text }}>48 小时</strong>内找到并验证理想工厂
+              </motion.p>
+
+              {/* CTA buttons */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                style={{ display: "flex", gap: 12, marginBottom: 48 }}
+              >
+                <Link href="/register">
+                  <button style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: C.text, border: "none",
+                    padding: "13px 24px", borderRadius: 9,
+                    fontSize: 15, fontWeight: 700, color: C.bg,
+                    cursor: "pointer", transition: "opacity 0.2s",
+                  }}>
+                    免费开始采购
+                    <ArrowRight size={16} />
+                  </button>
+                </Link>
+                <Link href="/webinars">
+                  <button style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: "transparent",
+                    border: `1px solid ${C.border}`,
+                    padding: "13px 24px", borderRadius: 9,
+                    fontSize: 15, fontWeight: 600, color: C.textMuted,
+                    cursor: "pointer", transition: "all 0.2s",
+                  }}>
+                    <Play size={15} />
+                    观看 Demo
+                  </button>
+                </Link>
+              </motion.div>
+
+              {/* Stats */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+                style={{ display: "flex", gap: 32 }}
+              >
+                {[
+                  { value: 500, suffix: "+", label: "认证工厂" },
+                  { value: 2000, suffix: "+", label: "全球采购商" },
+                  { value: 98, suffix: "%", label: "满意度" },
+                ].map((stat, i) => (
+                  <div key={i}>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>
+                      <Counter to={stat.value} suffix={stat.suffix} />
+                    </div>
+                    <div style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>{stat.label}</div>
+                  </div>
+                ))}
+              </motion.div>
             </div>
-            <FadeIn delay={0.15} y={24} className="relative">
+
+            {/* Right: Webinar Mock UI */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, ease: [0.21, 0.47, 0.32, 0.98] }}
+              style={{ display: "flex", justifyContent: "center" }}
+            >
               <WebinarMockUI />
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6, duration: 0.5 }}
-                className="absolute -left-6 top-1/3 hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
-                style={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                <TrendingUp className="w-4 h-4" style={{ color: T.green }} />
-                <span className="text-white font-semibold">61.7%</span>
-                <span style={{ color: T.textMuted }}>转化率</span>
-              </motion.div>
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.75, duration: 0.5 }}
-                className="absolute -right-4 bottom-1/4 hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
-                style={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                <Shield className="w-4 h-4" style={{ color: T.accent }} />
-                <span className="text-white font-semibold">三重认证</span>
-              </motion.div>
-            </FadeIn>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      <section className="py-16" style={{ borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid grid-cols-3 gap-8">
-            {[{ value: 500, suffix: "+", label: "认证工厂" },{ value: 2000, suffix: "+", label: "全球采购商" },{ value: 98, suffix: "%", label: "满意度" }].map((stat, i) => (
-              <FadeIn key={i} delay={i * 0.1} className="text-center">
-                <div className="text-4xl font-black text-white mb-1"><Counter target={stat.value} suffix={stat.suffix} /></div>
-                <div className="text-sm" style={{ color: T.textMuted }}>{stat.label}</div>
-              </FadeIn>
+      {/* ── Live Ticker ── */}
+      <LiveTicker />
+
+      {/* ── Brand Trust ── */}
+      <section style={{
+        padding: "48px 24px",
+        borderBottom: `1px solid ${C.border}`,
+        background: C.bg,
+      }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", textAlign: "center" }}>
+          <p style={{ fontSize: 12, color: C.textSubtle, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 24 }}>
+            全球品牌采购商信任 REALSOURCING
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 40 }}>
+            {["Walmart", "Target", "ASOS", "Zalando", "Noon", "Carrefour", "Lulu"].map(brand => (
+              <span key={brand} style={{ fontSize: 15, fontWeight: 600, color: C.textSubtle, letterSpacing: "0.02em" }}>
+                {brand}
+              </span>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="py-12">
-        <div className="max-w-6xl mx-auto px-6">
-          <p className="text-center text-xs mb-8 tracking-widest uppercase" style={{ color: T.textSubtle }}>全球品牌采购商信任 RealSourcing</p>
-          <div className="flex flex-wrap justify-center items-center gap-10">
-            {["Walmart","Target","ASOS","Zalando","Noon","Carrefour","Lulu"].map(brand => (
-              <span key={brand} className="text-base font-bold" style={{ color: T.textSubtle }}>{brand}</span>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── AI Demo ── */}
+      <AIDemoSection />
 
-      <section id="features" className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <FadeIn>
-              <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>AI 采购助手</div>
-              <h2 className="text-4xl font-black mb-5 leading-tight">描述需求，AI 自动<br />匹配最优工厂</h2>
-              <p className="text-base mb-8 leading-relaxed" style={{ color: T.textMuted }}>
-                输入您的产品需求、预算和交期，AI 在 500+ 认证工厂中实时筛选，自动安排视频验厂，全程 AI 翻译与摘要。
-              </p>
-              <div className="space-y-3">
-                {["500+ 认证工厂实时匹配","AI 自动生成询盘与报价对比","一键预约视频验厂","全程 AI 翻译，无语言障碍"].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: T.accentGlow }}>
-                      <Check className="w-3 h-3" style={{ color: T.accent }} />
-                    </div>
-                    <span className="text-sm" style={{ color: T.textMuted }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </FadeIn>
-            <FadeIn delay={0.15}><AIDemo /></FadeIn>
-          </div>
-        </div>
-      </section>
+      {/* ── Factory Carousel ── */}
+      <FactoryCarousel />
 
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex items-end justify-between mb-10">
-            <FadeIn>
-              <div className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: T.accent }}>精选工厂</div>
-              <h2 className="text-4xl font-black leading-tight">500+ 认证工厂<br />等待您的询盘</h2>
-            </FadeIn>
-            <div className="hidden md:flex gap-2">
-              {(["left","right"] as const).map(dir => (
-                <button key={dir} onClick={() => scrollFactories(dir)}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                  style={{ border: `1px solid ${T.border}`, color: T.textMuted }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHover; e.currentTarget.style.color = T.text; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMuted; }}>
-                  {dir === "left" ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div ref={factoryScrollRef} className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
-            {FACTORIES.map((f, i) => (
-              <FadeIn key={i} delay={i * 0.08}><FactoryCard factory={f} /></FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── Global Map ── */}
+      <GlobalMap />
 
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-16">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>工作流程</div>
-            <h2 className="text-4xl font-black">三步完成采购</h2>
+      {/* ── Features Grid ── */}
+      <section id="features" style={{ padding: "120px 24px", background: C.surface, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <FadeIn style={{ textAlign: "center", marginBottom: 64 }}>
+            <h2 style={{
+              fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+              color: C.text, letterSpacing: "-0.02em", marginBottom: 16,
+            }}>
+              为现代采购而生的每一个功能
+            </h2>
+            <p style={{ fontSize: 16, color: C.textMuted }}>
+              从发现工厂到完成交易，全程在平台内完成
+            </p>
           </FadeIn>
-          <div className="grid md:grid-cols-3 gap-8">
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {[
-              { step: "01", icon: Zap, title: "发现认证工厂", desc: "AI 根据您的品类需求，从 500+ 认证工厂中精准匹配最优候选。" },
-              { step: "02", icon: Video, title: "视频实时谈判", desc: "发起视频会议，AI 实时翻译，自动录制，所有细节都有存档。" },
-              { step: "03", icon: TrendingUp, title: "锁定样品下单", desc: "在平台内完成样品申请，追踪物流，一键转正式订单。" },
-            ].map((item, i) => (
-              <FadeIn key={i} delay={i * 0.12}>
-                <div className="text-xs font-bold mb-5" style={{ color: T.textSubtle }}>{item.step}</div>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5" style={{ background: T.accentGlow }}>
-                  <item.icon className="w-5 h-5" style={{ color: T.accent }} />
-                </div>
-                <h3 className="text-lg font-bold mb-3 text-white">{item.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: T.textMuted }}>{item.desc}</p>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-4xl mx-auto px-6">
-          <FadeIn className="text-center mb-12">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>\u7adp品对比</div>
-            <h2 className="text-4xl font-black">为什么选择 RealSourcing</h2>
-          </FadeIn>
-          <FadeIn delay={0.1}>
-            <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-              <div className="grid grid-cols-4 px-6 py-4" style={{ background: T.surface, borderBottom: `1px solid ${T.border}` }}>
-                <div className="text-sm font-medium" style={{ color: T.textMuted }}>功能</div>
-                {["RealSourcing","阿里巴巴","传统模式"].map(h => (
-                  <div key={h} className="text-sm font-semibold text-center text-white">{h}</div>
-                ))}
-              </div>
-              {COMPARISON.map((row, i) => (
-                <div key={i} className="grid grid-cols-4 px-6 py-3.5 items-center"
-                  style={{ borderBottom: i < COMPARISON.length - 1 ? `1px solid ${T.border}` : "none",
-                    background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-                  <div className="text-sm" style={{ color: T.textMuted }}>{row.feature}</div>
-                  {[row.rs, row.alibaba, row.traditional].map((val, j) => (
-                    <div key={j} className="flex justify-center">
-                      {val === true ? <Check className="w-4 h-4" style={{ color: T.green }} />
-                        : val === "partial" ? <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(251,191,36,0.1)", color: T.amber }}>部分</span>
-                        : <X className="w-4 h-4" style={{ color: "rgba(255,255,255,0.2)" }} />}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-12">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>用户评价</div>
-            <h2 className="text-4xl font-black">全球买家的真实反馈</h2>
-          </FadeIn>
-          <div className="relative max-w-2xl mx-auto">
-            <AnimatePresence mode="wait">
-              <motion.div key={testimonialIdx}
-                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-                transition={{ duration: 0.4 }}
-                className="rounded-2xl p-8 text-center"
-                style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-                <div className="flex justify-center gap-0.5 mb-6">
-                  {Array(TESTIMONIALS[testimonialIdx].rating).fill(0).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-base leading-relaxed mb-6" style={{ color: T.textMuted }}>
-                  "{TESTIMONIALS[testimonialIdx].quote}"
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ background: T.bg }}>
-                    {TESTIMONIALS[testimonialIdx].flag}
+              { icon: <Video size={22} />, title: "TikTok 风格 Webinar 直播间", desc: "沉浸式选品直播，FOMO 引擎实时触发，买家在直播间内完成意向锁定，转化率高达 61.7%。", color: "#f59e0b", stats: [{ v: "24 min", l: "平均在线时长" }, { v: "61.7%", l: "意向转化率" }] },
+              { icon: <Sparkles size={22} />, title: "AI 实时翻译", desc: "中英双向实时字幕，延迟低于 2 秒，消除语言壁垒。", color: C.accent, stats: [] },
+              { icon: <Shield size={22} />, title: "三重工厂认证", desc: "营业执照 + 生产资质 + 实地视频验证，确保每家工厂真实可信。", color: C.green, stats: [] },
+              { icon: <Video size={22} />, title: "视频实时谈判", desc: "高清视频会议 + 自动录制 + AI 摘要，每一次沟通都有据可查。", color: "#06b6d4", stats: [] },
+              { icon: <Bot size={22} />, title: "AI 采购助理", desc: "智能匹配工厂，自动生成询盘，分析报价差异，让采购决策更快更准。", color: "#8b5cf6", stats: [], badge: "NEW" },
+              { icon: <Globe size={22} />, title: "500+ 认证工厂库", desc: "覆盖美妆、3C、家居、服装等主流品类，支持多维度筛选与对比。", color: C.green, stats: [] },
+            ].map((feat, i) => (
+              <FadeIn key={i} delay={i * 0.07}>
+                <div style={{
+                  background: C.bg,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  padding: 24,
+                  height: "100%",
+                }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 10,
+                    background: feat.color + "22",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: feat.color, marginBottom: 16,
+                  }}>
+                    {feat.icon}
                   </div>
-                  <div className="text-left">
-                    <div className="text-sm font-semibold text-white">{TESTIMONIALS[testimonialIdx].name}</div>
-                    <div className="text-xs" style={{ color: T.textMuted }}>{TESTIMONIALS[testimonialIdx].role} · {TESTIMONIALS[testimonialIdx].company}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{feat.title}</div>
+                    {feat.badge && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        background: "#8b5cf622", color: "#8b5cf6",
+                        border: "1px solid #8b5cf644",
+                        borderRadius: 4, padding: "1px 5px",
+                      }}>
+                        {feat.badge}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-            <div className="flex justify-center gap-2 mt-6">
-              {TESTIMONIALS.map((_, i) => (
-                <button key={i} onClick={() => setTestimonialIdx(i)}
-                  className="w-1.5 h-1.5 rounded-full transition-all"
-                  style={{ background: i === testimonialIdx ? T.text : T.textSubtle,
-                    transform: i === testimonialIdx ? "scale(1.3)" : "scale(1)" }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="pricing" className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-14">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>定价</div>
-            <h2 className="text-4xl font-black mb-4">简单透明的定价</h2>
-            <p className="text-base" style={{ color: T.textMuted }}>无隐藏费用，按需升级</p>
-          </FadeIn>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { name: "免费版", price: "$0", period: "/月", desc: "适合个人买家探索平台",
-                features: ["5 次视频会议/月","基础工厂搜索","AI 翻译（有限次数）","社区支持"], cta: "免费开始", highlight: false },
-              { name: "专业版", price: "$99", period: "/月", desc: "适合活跃采购团队",
-                features: ["无限视频会议","AI 摘要 & 录制","Meeting Reel 生成","优先工厂匹配","专属客户成功经理"], cta: "免费开始", highlight: true, badge: "最受欢迎" },
-              { name: "企业版", price: "定制", period: "", desc: "适合大型采购组织",
-                features: ["多账号团队协作","私有化部署选项","API 集成","专属谈判顾问","SLA 保障"], cta: "联系销售团队", highlight: false },
-            ].map((plan, i) => (
-              <FadeIn key={i} delay={i * 0.1}>
-                <div className="rounded-2xl p-7 h-full flex flex-col relative"
-                  style={{ background: plan.highlight ? T.accentGlow : T.surface,
-                    border: `1px solid ${plan.highlight ? T.accent : T.border}` }}>
-                  {plan.badge && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: T.accent, color: "#fff" }}>{plan.badge}</span>
+                  <p style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.6, marginBottom: feat.stats.length > 0 ? 16 : 0 }}>
+                    {feat.desc}
+                  </p>
+                  {feat.stats.length > 0 && (
+                    <div style={{ display: "flex", gap: 20 }}>
+                      {feat.stats.map((s, j) => (
+                        <div key={j}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: feat.color }}>{s.v}</div>
+                          <div style={{ fontSize: 11, color: C.textSubtle }}>{s.l}</div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <div className="mb-6">
-                    <div className="text-sm font-semibold text-white mb-1">{plan.name}</div>
-                    <div className="text-3xl font-black text-white mb-1">{plan.price}
-                      <span className="text-base font-normal" style={{ color: T.textMuted }}>{plan.period}</span></div>
-                    <div className="text-sm" style={{ color: T.textMuted }}>{plan.desc}</div>
-                  </div>
-                  <ul className="space-y-2.5 mb-8 flex-1">
-                    {plan.features.map((f, j) => (
-                      <li key={j} className="flex items-start gap-2.5 text-sm">
-                        <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: plan.highlight ? T.accent : T.green }} />
-                        <span style={{ color: T.textMuted }}>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href={plan.cta === "联系销售团队" ? "/contact" : "/register"}>
-                    <motion.button whileHover={{ opacity: 0.9 }} whileTap={{ scale: 0.98 }}
-                      className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-                      style={plan.highlight
-                        ? { background: T.accent, color: "#fff" }
-                        : { background: "transparent", color: T.textMuted, border: `1px solid ${T.border}` }}>
-                      {plan.cta}
-                    </motion.button>
-                  </Link>
                 </div>
               </FadeIn>
             ))}
@@ -665,38 +1736,46 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-3xl mx-auto px-6">
-          <FadeIn className="text-center mb-12">
-            <div className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: T.accent }}>常见问题</div>
-            <h2 className="text-4xl font-black">有疑问？我们来解答</h2>
+      {/* ── Compare Table ── */}
+      <CompareTable />
+
+      {/* ── 3-Step Workflow ── */}
+      <section style={{ padding: "120px 24px", background: C.bg }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <FadeIn style={{ textAlign: "center", marginBottom: 64 }}>
+            <h2 style={{
+              fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700,
+              color: C.text, letterSpacing: "-0.02em",
+            }}>
+              三步完成采购
+            </h2>
           </FadeIn>
-          <div className="space-y-2">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40 }}>
             {[
-              { q: "RealSourcing 与阿里巴巴有什么区别？", a: "阿里巴巴是一个目录式平台，买卖双方通过文字沟通。RealSourcing 提供实时视频谈判、AI 翻译和自动录制，让您像在工厂现场一样与供应商沟通。" },
-              { q: "如何确保工厂的真实性？", a: "所有工厂须通过三重认证：营业执照核验、生产资质审查、实地视频验证。我们的 AI 系统还会持续监控工厂的响应率和交付记录。" },
-              { q: "视频会议支持哪些语言翻译？", a: "目前支持中文、英语、阿拉伯语、法语、德语、日语、西班牙语等 12 种语言的实时 AI 翻译，延迟低于 2 秒。" },
-              { q: "样品费用如何结算？", a: "样品费用由工厂直接报价，通过平台担保支付。正式下单后，部分工厂会退还样品费用。" },
-              { q: "工厂注册需要费用吗？", a: "工厂基础注册完全免费。我们提供付费的认证工厂套餐，帮助工厂获得更多曝光和优先匹配机会。" },
-            ].map((item, i) => (
-              <FadeIn key={i} delay={i * 0.05}>
-                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-                  <button className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
-                    style={{ background: faqOpen === i ? T.surface : "transparent" }}
-                    onClick={() => setFaqOpen(faqOpen === i ? null : i)}>
-                    <span className="text-sm font-medium text-white">{item.q}</span>
-                    <motion.div animate={{ rotate: faqOpen === i ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                      <ChevronDown className="w-4 h-4 flex-shrink-0 ml-4" style={{ color: T.textMuted }} />
-                    </motion.div>
-                  </button>
-                  <AnimatePresence>
-                    {faqOpen === i && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }}>
-                        <div className="px-5 pb-4 text-sm leading-relaxed" style={{ color: T.textMuted }}>{item.a}</div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+              { num: "01", icon: <Package size={24} />, title: "发现认证工厂", desc: "AI 根据您的品类需求，从 500+ 认证工厂中精准匹配最优候选。", color: C.accent },
+              { num: "02", icon: <Video size={24} />, title: "视频实时谈判", desc: "发起视频会议，AI 实时翻译，自动录制，所有细节都有存档。", color: C.green },
+              { num: "03", icon: <FileText size={24} />, title: "锁定样品下单", desc: "在平台内完成样品申请，追踪物流，一键转正式订单。", color: C.amber },
+            ].map((step, i) => (
+              <FadeIn key={i} delay={i * 0.12}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{
+                    fontSize: 48, fontWeight: 800, color: step.color,
+                    opacity: 0.2, lineHeight: 1, marginBottom: 16,
+                    letterSpacing: "-0.04em",
+                  }}>
+                    {step.num}
+                  </div>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: 14,
+                    background: step.color + "22",
+                    border: `1px solid ${step.color}44`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: step.color, margin: "0 auto 20px",
+                  }}>
+                    {step.icon}
+                  </div>
+                  <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 10 }}>{step.title}</h3>
+                  <p style={{ fontSize: 14, color: C.textMuted, lineHeight: 1.65 }}>{step.desc}</p>
                 </div>
               </FadeIn>
             ))}
@@ -704,54 +1783,106 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-24" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <FadeIn>
-            <div className="rounded-2xl p-14" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-              <h2 className="text-4xl font-black mb-4">准备好开始了吗？</h2>
-              <p className="text-base mb-8" style={{ color: T.textMuted }}>加入 2,000+ 全球采购商，在 48 小时内找到您的理想工厂</p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/register">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-sm"
-                    style={{ background: T.text, color: T.bg }}>
-                    免费开始 <ArrowRight className="w-4 h-4" />
-                  </motion.button>
-                </Link>
-                <Link href="/factories">
-                  <motion.button whileHover={{ borderColor: T.borderHover }}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-medium text-sm"
-                    style={{ border: `1px solid ${T.border}`, color: T.textMuted }}>
-                    浏览工厂库
-                  </motion.button>
-                </Link>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
+      {/* ── Testimonials ── */}
+      <Testimonials />
+
+      {/* ── Pricing ── */}
+      <div id="pricing">
+        <Pricing />
+      </div>
+
+      {/* ── FAQ ── */}
+      <FAQ />
+
+      {/* ── Final CTA ── */}
+      <section style={{
+        padding: "120px 24px",
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        textAlign: "center",
+      }}>
+        <FadeIn>
+          <h2 style={{
+            fontSize: "clamp(32px, 4.5vw, 56px)", fontWeight: 800,
+            color: C.text, letterSpacing: "-0.03em", marginBottom: 20,
+          }}>
+            准备好开始了吗？
+          </h2>
+          <p style={{ fontSize: 18, color: C.textMuted, marginBottom: 40 }}>
+            加入 2,000+ 全球采购商，今天就找到您的理想工厂
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <Link href="/register">
+              <button style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: C.text, border: "none",
+                padding: "14px 28px", borderRadius: 9,
+                fontSize: 16, fontWeight: 700, color: C.bg,
+                cursor: "pointer",
+              }}>
+                免费开始
+                <ArrowRight size={18} />
+              </button>
+            </Link>
+            <Link href="/factories">
+              <button style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: "transparent",
+                border: `1px solid ${C.border}`,
+                padding: "14px 28px", borderRadius: 9,
+                fontSize: 16, fontWeight: 600, color: C.textMuted,
+                cursor: "pointer",
+              }}>
+                浏览工厂库
+              </button>
+            </Link>
+          </div>
+        </FadeIn>
       </section>
 
-      <footer className="py-12" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-black text-white"
-                style={{ background: T.accent }}>RS</div>
-              <span className="text-sm font-semibold text-white">RealSourcing</span>
+      {/* ── Footer ── */}
+      <footer style={{
+        padding: "40px 24px",
+        borderTop: `1px solid ${C.border}`,
+        background: C.bg,
+      }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 24, height: 24, borderRadius: 6,
+              background: `linear-gradient(135deg, ${C.accent}, #7c3aed)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 800, color: "#fff",
+            }}>
+              RS
             </div>
-            <div className="flex flex-wrap justify-center gap-6">
-              {[["Webinar","/webinars"],["工厂库","/factories"],["AI 采购助理","/ai-assistant"],["关于我们","/about"],["联系我们","/contact"],["隐私政策","/privacy"]].map(([label, href]) => (
-                <Link key={label} href={href as string}>
-                  <span className="text-xs cursor-pointer transition-colors" style={{ color: T.textSubtle }}
-                    onMouseEnter={e => (e.currentTarget.style.color = T.textMuted)}
-                    onMouseLeave={e => (e.currentTarget.style.color = T.textSubtle)}>{label}</span>
-                </Link>
-              ))}
-            </div>
-            <div className="text-xs" style={{ color: T.textSubtle }}>© 2026 RealSourcing</div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: C.textMuted }}>RealSourcing</span>
           </div>
+          <div style={{ display: "flex", gap: 24 }}>
+            {[
+              { label: "Webinar", href: "/webinars" },
+              { label: "工厂库", href: "/factories" },
+              { label: "AI 采购助理", href: "/dashboard" },
+              { label: "关于我们", href: "#" },
+              { label: "联系我们", href: "#" },
+              { label: "隐私政策", href: "#" },
+            ].map(item => (
+              <Link key={item.label} href={item.href}>
+                <span style={{ fontSize: 13, color: C.textSubtle, cursor: "pointer" }}>{item.label}</span>
+              </Link>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, color: C.textSubtle }}>© 2025 RealSourcing</span>
         </div>
       </footer>
+
+      {/* Pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }
