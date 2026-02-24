@@ -2008,6 +2008,13 @@ ${transcriptSample}
             userId: ctx.user.id,
             triggeredAt: new Date().toISOString(),
           });
+          
+          // 更新 matchStatus 为 queued，并记录 jobId
+          await updateSourcingDemand(input.demandId, {
+            matchStatus: 'queued',
+            matchJobId: result.jobId as any,
+          });
+
           return { mode: 'async', jobId: result.jobId, status: result.status };
         } catch {
           // Redis 不可用，降级为同步模式

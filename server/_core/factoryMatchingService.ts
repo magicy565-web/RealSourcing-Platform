@@ -135,8 +135,10 @@ export async function matchFactoriesForDemand(demandId: number) {
     const responsivenessScore = (onlineBonus * 0.7) + (responseRate * 0.3);
 
     // C. 可信度分 (0-1)
-    // 暂时用 0.8 作为基准
-    const trustScore = 0.8;
+    // 权重：AMR 综合分 (0.6) + 认证状态 (0.4)
+    const amrBaseScore = metrics?.amrTotalScore ? parseFloat(metrics.amrTotalScore.toString()) / 100 : 0.6;
+    const certBonus = factory.certificationStatus === 'verified' ? 1.0 : 0.5;
+    const trustScore = (amrBaseScore * 0.6) + (certBonus * 0.4);
 
     // 综合加权计算 (0-100)
     const finalScore = (

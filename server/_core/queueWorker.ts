@@ -39,10 +39,15 @@ export const factoryMatchingWorker = new Worker<FactoryMatchingJobData>(
 
     await job.updateProgress(90);
 
-    // 更新需求状态，通知前端匹配完成
+    // 更新需求状态及匹配元数据，通知前端匹配完成
     const db = await dbPromise;
     await db.update(schema.sourcingDemands)
-      .set({ status: 'matched' } as any)
+      .set({ 
+        status: 'matched',
+        matchStatus: 'completed',
+        matchedAt: new Date(),
+        matchCount: sql`matchCount + 1`
+      } as any)
       .where(eq(schema.sourcingDemands.id, demandId));
 
     await job.updateProgress(100);
