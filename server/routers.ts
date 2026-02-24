@@ -2501,7 +2501,7 @@ ${transcriptSample}
         return result;
       }),
 
-    // 获取热门知识条目（按引用次数）
+     // 获取热门知识条目（按引用次数）
     getTopKnowledge: publicProcedure
       .input(z.object({
         limit: z.number().min(1).max(50).optional().default(10),
@@ -2534,7 +2534,108 @@ ${transcriptSample}
         await conn.end();
         return rows;
       }),
+
+    // ─── Webinar 预约路由 ─────────────────────────────────────────────────────
+    createWebinarBooking: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        demandId: z.number().optional(),
+        inquiryId: z.number().optional(),
+        scheduledAt: z.string(),
+        durationMinutes: z.number().min(15).max(120).optional().default(30),
+        timezone: z.string().optional().default('UTC'),
+        buyerAgenda: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createWebinarBooking } = await import('./_core/webinarBookingService');
+        return createWebinarBooking({
+          buyerId: ctx.user.id,
+          factoryId: input.factoryId,
+          demandId: input.demandId,
+          inquiryId: input.inquiryId,
+          slot: {
+            scheduledAt: new Date(input.scheduledAt),
+            durationMinutes: input.durationMinutes,
+            timezone: input.timezone,
+          },
+          buyerAgenda: input.buyerAgenda,
+        });
+      }),
+    getMyWebinarBookings: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getBuyerBookings } = await import('./_core/webinarBookingService');
+        return getBuyerBookings(ctx.user.id);
+      }),
+    getFactoryWebinarBookings: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getFactoryBookings } = await import('./_core/webinarBookingService');
+        return getFactoryBookings(input.factoryId);
+      }),
+    confirmWebinarBooking: protectedProcedure
+      .input(z.object({
+        bookingId: z.number(),
+        factoryNotes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { confirmBooking } = await import('./_core/webinarBookingService');
+        await confirmBooking(input.bookingId, ctx.user.id, input.factoryNotes);
+        return { success: true };
+      }),
+    rejectWebinarBooking: protectedProcedure
+      .input(z.object({
+        bookingId: z.number(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { rejectBooking } = await import('./_core/webinarBookingService');
+        await rejectBooking(input.bookingId, ctx.user.id, input.reason);
+        return { success: true };
+      }),
+    cancelWebinarBooking: protectedProcedure
+      .input(z.object({
+        bookingId: z.number(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { cancelBooking } = await import('./_core/webinarBookingService');
+        await cancelBooking(input.bookingId, ctx.user.id, input.reason);
+        return { success: true };
+      }),
+    getFactoryAvailableSlots: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getFactoryAvailableSlots } = await import('./_core/webinarBookingService');
+        return getFactoryAvailableSlots(input.factoryId);
+      }),
+
+    // ─── AMR 评分路由 ─────────────────────────────────────────────────────────
+    getFactoryAMRScore: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { calculateFactoryAMR } = await import('./_core/amrService');
+        return calculateFactoryAMR(input.factoryId);
+      }),
+    refreshFactoryAMRScore: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { refreshFactoryAMR } = await import('./_core/amrService');
+        return refreshFactoryAMR(input.factoryId);
+      }),
+
+    // ─── 工厂知识库摄入路由 ───────────────────────────────────────────────────
+    ingestFactoryKnowledgeFile: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        fileUrl: z.string().url(),
+        fileName: z.string(),
+        fileType: z.enum(['product_catalog', 'pricing_sheet', 'faq', 'certification', 'factory_intro', 'other']),
+        mimeType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { ingestFactoryKnowledge } = await import('./_core/factoryKnowledgeIngestService');
+        return ingestFactoryKnowledge(input);
+      }),
   }),
 });
-
 export type AppRouter = typeof appRouter;
