@@ -49,6 +49,17 @@ export const factoryEmbeddingQueue = new Queue('factory-embedding', {
   },
 });
 
+/** 需求 AI 解析队列（submitAndProcess 异步化） */
+export const demandProcessingQueue = new Queue('demand-processing', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 100 },
+  },
+});
+
 /** 队列事件监听（用于前端轮询状态） */
 export const matchingQueueEvents = new QueueEvents('factory-matching', {
   connection: new IORedis(ENV.REDIS_URL || 'redis://localhost:6379', {
@@ -68,6 +79,14 @@ export interface FactoryMatchingJobData {
 export interface FactoryEmbeddingJobData {
   factoryId: number;
   reason: 'onboarding' | 'profile_update';
+}
+
+export interface DemandProcessingJobData {
+  demandId: number;
+  userId: number;
+  sourceType: 'url' | 'video' | 'pdf' | 'text';
+  sourceUri: string;
+  submittedAt: string;
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────────────────────
@@ -119,6 +138,33 @@ export async function getMatchingJobStatus(demandId: number) {
     jobId,
     status: state,
     progress: typeof progress === 'number' ? progress : 0,
+    failedReason: job.failedReason,
+    finishedOn: job.finishedOn,
+  };
+}
+
+/**
+ * 向需求解析队列添加任务
+ * 使用 demandId 作为 jobId，防止重复提交
+ */
+export async function enqueueDemandProcessing(data: DemandProcessingJobData) {
+  const jobId = `process-demand-${data.demandId}`;
+  const job = await demandProcessingQueue.add('process', data, { jobId });
+  return { jobId: job.id, status: 'queued' };
+}
+
+/**
+ * 查询需求解析任务状态
+ */
+export async function getDemandProcessingStatus(demandId: number) {
+  const jobId = `process-demand-${demandId}`;
+  const job = await demandProcessingQueue.getJob(jobId);
+  if (!job) return { status: 'not_found' };
+
+  const state = await job.getState();
+  return {
+    jobId,
+    status: state,
     failedReason: job.failedReason,
     finishedOn: job.finishedOn,
   };
