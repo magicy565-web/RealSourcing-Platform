@@ -9,6 +9,8 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initBrowserWorker, shutdownBrowserWorker } from "./browserWorker";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 端口管理：强制锁定，防止漂移
@@ -82,6 +84,34 @@ function setupGracefulShutdown(server: ReturnType<typeof createServer>, port: nu
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // ── Security Middleware ─────────────────────────────────────────────────────
+  // Helmet: sets secure HTTP headers (XSS, MIME sniffing, clickjacking, etc.)
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disabled to allow Vite HMR in dev
+    crossOriginEmbedderPolicy: false, // Disabled for Agora SDK compatibility
+  }));
+
+  // Global rate limiter: max 300 requests per minute per IP
+  const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' },
+  });
+  app.use('/api', globalLimiter);
+
+  // Strict rate limiter for Agora token endpoints: max 30 per minute per IP
+  // Prevents credential abuse and billing attacks on Agora account
+  const agoraLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Agora token rate limit exceeded.' },
+  });
+  app.use('/api/trpc/agora', agoraLimiter);
 
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));

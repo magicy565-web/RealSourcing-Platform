@@ -814,16 +814,36 @@ export async function completeUserOnboarding(userId: number) {
 export async function startMeetingWithFactory(buyerId: number, factoryId: number) {
   const database = await dbPromise;
   const factory = await getFactoryById(factoryId);
-  const title = factory ? `1:1 选品会 — ${factory.name}` : `Meeting with Factory #${factoryId}`;
-  const result = await database.insert(schema.meetings).values({
-    buyerId,
-    factoryId,
-    title,
-    status: "scheduled",
-    scheduledAt: new Date(),
+  if (!factory) throw new Error(`Factory #${factoryId} not found`);
+  const title = `1:1 选品会 — ${factory.name}`;
+
+  // 使用事务确保会议创建和通知发送的原子性
+  let meetingId = 0;
+  await database.transaction(async (tx) => {
+    const [result] = await tx.insert(schema.meetings).values({
+      buyerId,
+      factoryId,
+      title,
+      status: "scheduled",
+      scheduledAt: new Date(),
+    });
+    meetingId = (result as any).insertId ?? 0;
+
+    // 在事务内创建通知，确保会议创建失败时通知也不会发送
+    if (factory.userId) {
+      await tx.insert(schema.notifications).values({
+        userId: factory.userId,
+        type: 'meeting_request',
+        title: '新的选品会邀请',
+        message: `买家已发起与贵厂的 1:1 选品会，会议 ID: #${meetingId}`,
+        relatedId: meetingId,
+        relatedType: 'meeting',
+        isRead: 0,
+      } as any);
+    }
   });
-  const id = (result as any)[0]?.insertId ?? 0;
-  return { meetingId: id };
+
+  return { meetingId };
 }
 
 // ─── Sample Orders ─────────────────────────────────────────────────────────────

@@ -98,7 +98,7 @@ export const appRouter = router({
 
   // ── Agora RTC/RTM Token Generation ──────────────────────────────────────────
   agora: router({
-    getDualTokens: publicProcedure
+    getDualTokens: protectedProcedure
       .input(z.object({
         channel: z.string().min(1),
         uid: z.union([z.string(), z.number()]),
@@ -121,7 +121,7 @@ export const appRouter = router({
         }
       }),
 
-    getRtcToken: publicProcedure
+    getRtcToken: protectedProcedure
       .input(z.object({
         channel: z.string().min(1),
         uid: z.union([z.string(), z.number()]),
@@ -144,7 +144,7 @@ export const appRouter = router({
         }
       }),
 
-    startTranslation: publicProcedure
+    startTranslation: protectedProcedure
       .input(z.object({
         channelName: z.string().min(1),
         uid: z.union([z.string(), z.number()]),
@@ -169,7 +169,7 @@ export const appRouter = router({
         return result;
       }),
 
-    stopTranslation: publicProcedure
+    stopTranslation: protectedProcedure
       .input(z.object({
         taskId: z.string().min(1),
       }))
@@ -178,7 +178,7 @@ export const appRouter = router({
         return result;
       }),
 
-    startRecording: publicProcedure
+    startRecording: protectedProcedure
       .input(z.object({
         channelName: z.string().min(1),
         uid: z.union([z.string(), z.number()]),
@@ -201,7 +201,7 @@ export const appRouter = router({
         return result;
       }),
 
-    stopRecording: publicProcedure
+    stopRecording: protectedProcedure
       .input(z.object({
         resourceId: z.string().min(1),
         sid: z.string().min(1),
@@ -232,7 +232,7 @@ export const appRouter = router({
         return result;
       }),
 
-    getRecordingStatus: publicProcedure
+    getRecordingStatus: protectedProcedure
       .input(z.object({
         resourceId: z.string().min(1),
         sid: z.string().min(1),
@@ -242,12 +242,12 @@ export const appRouter = router({
         return result;
       }),
 
-    getActiveRecordings: publicProcedure
+    getActiveRecordings: protectedProcedure
       .query(() => {
         return agoraRecordingService.getActiveRecordings();
       }),
 
-    getActiveTasks: publicProcedure
+    getActiveTasks: protectedProcedure
       .query(() => {
         return agoraTranslationService.getActiveTasks();
       }),
@@ -2246,12 +2246,15 @@ ${transcriptSample}
     getCategories: publicProcedure
       .query(async () => {
         const { createConnection } = await import('mysql2/promise');
+        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing. Set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME environment variables.' });
+        }
         const conn = await createConnection({
-          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          host: process.env.DB_HOST,
           port: 3306,
-          user: process.env.DB_USER || 'magicyang',
-          password: process.env.DB_PASSWORD || 'Wysk1214',
-          database: process.env.DB_NAME || 'realsourcing',
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          database: process.env.DB_NAME,
         });
         const [rows] = await conn.execute<any[]>(
           'SELECT slug, name, nameEn, parentSlug, level, description FROM product_categories WHERE isActive=1 ORDER BY level, name'
@@ -2264,12 +2267,15 @@ ${transcriptSample}
     getStats: protectedProcedure
       .query(async () => {
         const { createConnection } = await import('mysql2/promise');
+        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing.' });
+        }
         const conn = await createConnection({
-          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          host: process.env.DB_HOST,
           port: 3306,
-          user: process.env.DB_USER || 'magicyang',
-          password: process.env.DB_PASSWORD || 'Wysk1214',
-          database: process.env.DB_NAME || 'realsourcing',
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          database: process.env.DB_NAME,
         });
         const [rows] = await conn.execute<any[]>(
           `SELECT
@@ -2338,12 +2344,15 @@ ${transcriptSample}
       }))
       .query(async ({ input }) => {
         const { createConnection } = await import('mysql2/promise');
+        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing.' });
+        }
         const conn = await createConnection({
-          host: process.env.DB_HOST || 'rm-bp1h4o9up7249uep3to.mysql.rds.aliyuncs.com',
+          host: process.env.DB_HOST,
           port: 3306,
-          user: process.env.DB_USER || 'magicyang',
-          password: process.env.DB_PASSWORD || 'Wysk1214',
-          database: process.env.DB_NAME || 'realsourcing',
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          database: process.env.DB_NAME,
         });
         const categoryFilter = input.categorySlug ? 'AND categorySlug = ?' : '';
         const params: any[] = input.categorySlug
