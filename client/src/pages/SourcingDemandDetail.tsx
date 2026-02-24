@@ -115,7 +115,7 @@ export default function SourcingDemandDetail() {
 
   const [isGeneratingRender, setIsGeneratingRender] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "params" | "render" | "search">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "params" | "render" | "match" | "search">("overview");
 
   // ── tRPC ──────────────────────────────────────────────────────────────────
 
@@ -154,6 +154,19 @@ export default function SourcingDemandDetail() {
     { query: searchQuery, topK: 8, minSimilarity: 0.45 },
     { enabled: hasSearched && searchQuery.length > 5 }
   );
+
+  const matchResults = trpc.demands.getMatchResults.useQuery(
+    { demandId },
+    { enabled: activeTab === "match" }
+  );
+
+  const triggerMatchMutation = trpc.demands.triggerMatch.useMutation({
+    onSuccess: () => {
+      toast.success("AI Matching complete! Found top matches.");
+      matchResults.refetch();
+    },
+    onError: (err) => toast.error("Match failed: " + err.message),
+  });
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -209,7 +222,8 @@ export default function SourcingDemandDetail() {
     { id: "overview" as const, label: "Overview",   icon: Eye },
     { id: "params"   as const, label: "Production", icon: Factory,    disabled: !isReady },
     { id: "render"   as const, label: "Render",     icon: Image,      disabled: !isReady },
-    { id: "search"   as const, label: "Match",      icon: Search,     disabled: !isPublished },
+    { id: "match"    as const, label: "Find Factories", icon: Zap,    disabled: !isReady },
+    { id: "search"   as const, label: "Similar Demands", icon: Search, disabled: !isPublished },
   ];
 
   return (
@@ -736,6 +750,121 @@ export default function SourcingDemandDetail() {
                   )}
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* Factory Matching Tab (4.0 Core) */}
+          {activeTab === "match" && (
+            <motion.div
+              key="match"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-400" />
+                    AI Factory Matching
+                  </h2>
+                  <p className="text-sm text-gray-500">Real-time matching based on your production parameters and factory availability</p>
+                </div>
+                <Button 
+                  onClick={() => triggerMatchMutation.mutate({ demandId })}
+                  disabled={triggerMatchMutation.isLoading}
+                  className="bg-amber-600 hover:bg-amber-500 text-white"
+                >
+                  {triggerMatchMutation.isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                  Refresh Matches
+                </Button>
+              </div>
+
+              {matchResults.isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-4" />
+                  <p className="text-gray-500 text-sm">Scanning 10,000+ verified factories...</p>
+                </div>
+              ) : !matchResults.data || matchResults.data.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 p-20 text-center">
+                  <Factory className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                  <p className="text-gray-400 mb-6">No matches yet. Trigger AI matching to find your perfect partner.</p>
+                  <Button 
+                    onClick={() => triggerMatchMutation.mutate({ demandId })}
+                    className="bg-purple-600 hover:bg-purple-500"
+                  >
+                    Start AI Matching
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {matchResults.data.map((result, i) => (
+                    <motion.div
+                      key={result.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="group relative rounded-2xl border border-white/8 bg-white/3 p-5 hover:bg-white/5 hover:border-amber-500/30 transition-all overflow-hidden"
+                    >
+                      {/* Match Score Badge */}
+                      <div className="absolute top-0 right-0 p-3">
+                        <div className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold">
+                          {Math.round(parseFloat(result.matchScore))} % Match
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {result.factoryLogo ? (
+                            <img src={result.factoryLogo} alt={result.factoryName} className="w-full h-full object-cover" />
+                          ) : (
+                            <Factory className="w-6 h-6 text-gray-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-base font-bold text-white mb-1 truncate group-hover:text-amber-400 transition-colors">
+                            {result.factoryName}
+                          </h4>
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="text-xs text-gray-500">{result.factoryCategory}</span>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-2 h-2 rounded-full ${result.isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+                              <span className={`text-[10px] font-medium uppercase tracking-wider ${result.isOnline ? 'text-green-400' : 'text-gray-600'}`}>
+                                {result.isOnline ? 'Online Now' : 'Offline'}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 leading-relaxed line-clamp-2 mb-4 italic">
+                            "{result.matchReason}"
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              className="h-8 text-[10px] border-white/10 hover:bg-white/5"
+                              onClick={() => setLocation(`/factories/${result.factoryId}`)}
+                            >
+                              View Profile
+                            </Button>
+                            <Button 
+                              className={`h-8 text-[10px] ${result.isOnline ? 'bg-green-600 hover:bg-green-500' : 'bg-purple-600 hover:bg-purple-500'} text-white`}
+                              onClick={() => {
+                                if (result.isOnline) {
+                                  toast.success("Connecting to factory agent...");
+                                  // TODO: 接入 30 分钟实时握手流程
+                                } else {
+                                  toast.info("Factory is offline. Sending offline inquiry...");
+                                }
+                              }}
+                            >
+                              {result.isOnline ? 'Start Live Chat' : 'Send Inquiry'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 

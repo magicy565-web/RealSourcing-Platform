@@ -662,3 +662,55 @@ export const knowledgeUsageLog = mysqlTable("knowledge_usage_log", {
   relevanceScore: decimal("relevanceScore", { precision: 5, scale: 4 }),
   createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`NOW(3)`),
 });
+
+// ─── Factory Capability Embeddings (4.0: 15-min Matching) ────────────────────
+// 存储工厂能力的语义向量，用于与采购需求进行快速语义匹配
+// 每家工厂可有多条记录（按产品类别分别建立向量）
+export const factoryCapabilityEmbeddings = mysqlTable("factory_capability_embeddings", {
+  id:               int("id").primaryKey().autoincrement(),
+  factoryId:        int("factoryId").notNull(),
+  // 能力描述文本（工厂名 + 品类 + 描述 + 主要产品 + 认证 + MOQ 等）
+  capabilityText:   text("capabilityText").notNull(),
+  // 语义向量（1536 维，JSON 格式，与 sourcingDemands.embeddingVector 同维度）
+  embeddingVector:  longtext("embeddingVector"),
+  embeddingModel:   varchar("embeddingModel", { length: 100 }),
+  embeddingAt:      datetime("embeddingAt", { mode: "date", fsp: 3 }),
+  // 快速过滤字段（避免全表向量计算）
+  primaryCategory:  varchar("primaryCategory", { length: 100 }),
+  moqMin:           int("moqMin").default(1),
+  leadTimeDaysMin:  int("leadTimeDaysMin").default(7),
+  isActive:         tinyint("isActive").notNull().default(1),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryCapabilityEmbedding = typeof factoryCapabilityEmbeddings.$inferSelect;
+export type InsertFactoryCapabilityEmbedding = typeof factoryCapabilityEmbeddings.$inferInsert;
+
+// ─── Demand Match Results (4.0: 15-min Matching) ─────────────────────────────
+// 存储每次匹配的结果快照，避免重复计算，支持用户查看历史匹配
+export const demandMatchResults = mysqlTable("demand_match_results", {
+  id:               int("id").primaryKey().autoincrement(),
+  demandId:         int("demandId").notNull(),
+  factoryId:        int("factoryId").notNull(),
+  // 综合匹配分（0-100），由语义相似度 + AMR 指标加权计算
+  matchScore:       decimal("matchScore", { precision: 5, scale: 2 }).notNull().default("0.00"),
+  // 语义相似度分（0-1）
+  semanticScore:    decimal("semanticScore", { precision: 5, scale: 4 }).default("0.0000"),
+  // 工厂响应速度分（基于 averageResponseTime 和 responseRate）
+  responsivenessScore: decimal("responsivenessScore", { precision: 5, scale: 2 }).default("0.00"),
+  // 工厂可信度分（基于 aiVerificationScore 和 certificationStatus）
+  trustScore:       decimal("trustScore", { precision: 5, scale: 2 }).default("0.00"),
+  // AI 生成的匹配理由（为什么推荐这家工厂）
+  matchReason:      text("matchReason"),
+  // 工厂当前在线状态快照（匹配时的实时状态）
+  factoryOnlineAt:  tinyint("factoryOnlineAt").notNull().default(0),
+  // 用户操作状态
+  status:           varchar("status", { length: 30 }).notNull().default("pending"),
+  // pending → viewed → rfq_sent → webinar_scheduled → closed
+  viewedAt:         datetime("viewedAt", { mode: "date", fsp: 3 }),
+  rfqSentAt:        datetime("rfqSentAt", { mode: "date", fsp: 3 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type DemandMatchResult = typeof demandMatchResults.$inferSelect;
+export type InsertDemandMatchResult = typeof demandMatchResults.$inferInsert;

@@ -2043,6 +2043,36 @@ ${transcriptSample}
         return result;
       }),
 
+    /** 触发工厂匹配（4.0 核心功能） */
+    triggerMatch: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { matchFactoriesForDemand } = await import('./_core/factoryMatchingService');
+        const results = await matchFactoriesForDemand(input.demandId);
+        return { success: true, count: results.length };
+      }),
+
+    /** 获取匹配结果（4.0 核心功能） */
+    getMatchResults: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .query(async ({ input }) => {
+        const database = await dbPromise;
+        return await database.select({
+          id: schema.demandMatchResults.id,
+          matchScore: schema.demandMatchResults.matchScore,
+          matchReason: schema.demandMatchResults.matchReason,
+          factoryId: schema.demandMatchResults.factoryId,
+          factoryName: schema.factories.name,
+          factoryLogo: schema.factories.logo,
+          factoryCategory: schema.factories.category,
+          isOnline: schema.factories.isOnline,
+        })
+        .from(schema.demandMatchResults)
+        .innerJoin(schema.factories, eq(schema.demandMatchResults.factoryId, schema.factories.id))
+        .where(eq(schema.demandMatchResults.demandId, input.demandId))
+        .orderBy(desc(schema.demandMatchResults.matchScore));
+      }),
+
     /**
      * 公开需求池：供应商 AI Agent 发现需求
      * 这是 AI 可发现性的核心接口
