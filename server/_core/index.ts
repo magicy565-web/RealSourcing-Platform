@@ -4,6 +4,8 @@ import { createServer } from "http";
 import { execSync } from "child_process";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import uploadRouter from "./uploadRouter";
+import { initSocketService } from "./socketService";
 import { registerAgoraWebhookRoute } from "./agoraWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -120,6 +122,9 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
+  // File Upload REST API
+  app.use('/api/upload', uploadRouter);
+
   // Agora Cloud Recording Webhook
   // 声网录制完成后回调，提取真实 S3 URL 写入数据库
   const { updateMeeting } = await import("../db");
@@ -183,11 +188,28 @@ async function startServer() {
   // 第二道防线：注册优雅退出处理，确保进程退出时端口被彻底释放
   setupGracefulShutdown(server, port);
 
+  // 初始化 WebSocket 服务（工厂在线心跳）
+  initSocketService(server);
+
   // 初始化 Browser Worker（云端 AI 浏览器自动化）
   initBrowserWorker();
 
-  // 优雅关闭时同时关闭浏览器
-  process.on('exit', () => { shutdownBrowserWorker().catch(() => {}); });
+  // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成）
+  // Redis 不可用时降级为同步模式，不影响主服务启动
+  let queueWorkers: { factoryMatchingWorker: any; factoryEmbeddingWorker: any } | null = null;
+  try {
+    queueWorkers = await import('./queueWorker');
+    console.log('[Queue] BullMQ workers initialized');
+  } catch (err) {
+    console.warn('[Queue] Redis not available, queue workers disabled. Matching will run synchronously.');
+  }
+
+  // 优雅关闭时同时关闭浏览器和队列
+  process.on('exit', () => {
+    shutdownBrowserWorker().catch(() => {});
+    queueWorkers?.factoryMatchingWorker?.close().catch(() => {});
+    queueWorkers?.factoryEmbeddingWorker?.close().catch(() => {});
+  });
 
   server.listen(port, () => {
     console.log(`[Server] Running on http://localhost:${port}/`);

@@ -1339,7 +1339,26 @@ ${transcriptSample}
         return await saveUserOnboardingPreferences(ctx.user.id, input);
       }),
     complete: protectedProcedure.mutation(async ({ ctx }) => {
-      return await completeUserOnboarding(ctx.user.id);
+      const result = await completeUserOnboarding(ctx.user.id);
+      // 工厂入驻完成后，自动触发首次 Embedding 生成
+      // 这是工厂进入匹配池的关键步骤
+      try {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (factory) {
+          const { enqueueFactoryEmbedding } = await import('./_core/queue');
+          await enqueueFactoryEmbedding({ factoryId: factory.id, reason: 'onboarding' });
+        }
+      } catch {
+        // Redis 不可用时同步生成
+        try {
+          const factory = await getFactoryByUserId(ctx.user.id);
+          if (factory) {
+            const { updateFactoryCapabilityEmbedding } = await import('./_core/factoryMatchingService');
+            updateFactoryCapabilityEmbedding(factory.id).catch(() => {});
+          }
+        } catch {}
+      }
+      return result;
     }),
   }),
 
@@ -1705,6 +1724,15 @@ ${transcriptSample}
         const detailsData = { established, employeeCount, annualRevenue, phone, email, website, coverImage };
         const hasDetails = Object.values(detailsData).some(v => v !== undefined);
         if (hasDetails) await upsertFactoryDetails(factory.id, detailsData);
+        // 工厂资料更新后，异步重新生成能力向量（不阻塞当前请求）
+        try {
+          const { enqueueFactoryEmbedding } = await import('./_core/queue');
+          await enqueueFactoryEmbedding({ factoryId: factory.id, reason: 'profile_update' });
+        } catch {
+          // Redis 不可用时同步生成（开发环境建容）
+          const { updateFactoryCapabilityEmbedding } = await import('./_core/factoryMatchingService');
+          updateFactoryCapabilityEmbedding(factory.id).catch(() => {});
+        }
         return { success: true };
       }),
     addCertification: protectedProcedure
@@ -2043,13 +2071,39 @@ ${transcriptSample}
         return result;
       }),
 
-    /** 触发工厂匹配（4.0 核心功能） */
+    /** 触发工厂匹配（4.0 核心功能）
+     * 异步入队模式：立即返回 jobId，前端通过 getMatchStatus 轮询进度
+     * Redis 不可用时降级为同步模式（兼容开发环境）
+     */
     triggerMatch: protectedProcedure
       .input(z.object({ demandId: z.number() }))
-      .mutation(async ({ input }) => {
-        const { matchFactoriesForDemand } = await import('./_core/factoryMatchingService');
-        const results = await matchFactoriesForDemand(input.demandId);
-        return { success: true, count: results.length };
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { enqueueFactoryMatching } = await import('./_core/queue');
+          const result = await enqueueFactoryMatching({
+            demandId: input.demandId,
+            userId: ctx.user.id,
+            triggeredAt: new Date().toISOString(),
+          });
+          return { mode: 'async', jobId: result.jobId, status: result.status };
+        } catch {
+          // Redis 不可用，降级为同步模式
+          const { matchFactoriesForDemand } = await import('./_core/factoryMatchingService');
+          const results = await matchFactoriesForDemand(input.demandId);
+          return { mode: 'sync', jobId: null, count: results.length, status: 'completed' };
+        }
+      }),
+
+    /** 查询匹配任务状态（前端轮询用） */
+    getMatchStatus: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .query(async ({ input }) => {
+        try {
+          const { getMatchingJobStatus } = await import('./_core/queue');
+          return await getMatchingJobStatus(input.demandId);
+        } catch {
+          return { status: 'redis_unavailable' };
+        }
       }),
 
     /** 获取匹配结果（4.0 核心功能） */
@@ -2101,14 +2155,95 @@ ${transcriptSample}
           visualReferences: d.visualReferences,
           createdAt: d.createdAt,
         }));
-      }),
-
-    /** OSS 健康检查 */
+      }),    /** OSS 健康检查 */
     ossHealth: publicProcedure
       .query(async () => {
-        return ossHealthCheck();
+        return await ossHealthCheck();
+      }),
+  }),
+
+  /**
+   * RFQ & 报价流程（4.0 核心功能）
+   * 实现"30分钟获得报价"的业务闭环
+   */
+  rfq: router({
+    /** 发送标准化 RFQ */
+    send: protectedProcedure
+      .input(z.object({
+        demandId: z.number(),
+        factoryId: z.number(),
+        matchResultId: z.number(),
+        quantity: z.number().optional(),
+        destination: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { sendRFQ } = await import("./_core/rfqService");
+        return await sendRFQ({ ...input, buyerId: ctx.user.id });
       }),
 
+    /** 工厂提交报价 */
+    submit: protectedProcedure
+      .input(z.object({
+        inquiryId: z.number(),
+        factoryId: z.number(),
+        unitPrice: z.number(),
+        currency: z.string().optional(),
+        moq: z.number(),
+        leadTimeDays: z.number(),
+        tierPricing: z.array(z.object({ qty: z.number(), unitPrice: z.number() })).optional(),
+        factoryNotes: z.string().optional(),
+        paymentTerms: z.string().optional(),
+        shippingTerms: z.string().optional(),
+        sampleAvailable: z.boolean().optional(),
+        samplePrice: z.number().optional(),
+        sampleLeadDays: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { submitQuote } = await import("./_core/rfqService");
+        return await submitQuote(input);
+      }),
+
+    /** 买家接受报价 */
+    accept: protectedProcedure
+      .input(z.object({
+        inquiryId: z.number(),
+        feedback: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { acceptQuote } = await import("./_core/rfqService");
+        return await acceptQuote(input.inquiryId, ctx.user.id, input.feedback);
+      }),
+
+    /** 买家拒绝报价 */
+    reject: protectedProcedure
+      .input(z.object({
+        inquiryId: z.number(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { rejectQuote } = await import("./_core/rfqService");
+        return await rejectQuote(input.inquiryId, ctx.user.id, input.reason);
+      }),
+
+    /** 获取报价详情 */
+    getQuote: protectedProcedure
+      .input(z.object({ inquiryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getQuoteByInquiryId } = await import("./_core/rfqService");
+        return await getQuoteByInquiryId(input.inquiryId);
+      }),
+
+    /** 获取工厂待处理 RFQ 列表 */
+    getPendingRFQs: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getFactoryPendingRFQs } = await import("./_core/rfqService");
+        return await getFactoryPendingRFQs(input.factoryId);
+      }),
+  }),
+
+  demands: router({
     /**
      * 为已转化的需求生成 SD 3.5 Turbo 产品渲染图
      * 异步任务：提交 → 轮询 → OSS 存储 → 更新 renderImageUrl
@@ -2401,4 +2536,5 @@ ${transcriptSample}
       }),
   }),
 });
+
 export type AppRouter = typeof appRouter;

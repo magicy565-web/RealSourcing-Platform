@@ -78,11 +78,32 @@ export async function matchFactoriesForDemand(demandId: number) {
 
   const demandVector = JSON.parse(demand.embeddingVector as string);
 
-  // 2. 获取所有活跃的工厂能力向量
-  // 优化点：在 4.0 正式版中应通过 primaryCategory 进行预过滤
-  const candidates = await db.query.factoryCapabilityEmbeddings.findMany({
-    where: eq(schema.factoryCapabilityEmbeddings.isActive, 1),
-  });
+  // 2. 获取候选工厂能力向量（Category 预过滤）
+  // 策略：先按品类精确匹配，如果结果 < 10 条则扩展到全表，确保结果覆盖度
+  const demandCategory = demand.productionCategory;
+  let candidates = [];
+
+  if (demandCategory) {
+    // 第一步：同品类工厂（精确匹配）
+    candidates = await db.query.factoryCapabilityEmbeddings.findMany({
+      where: and(
+        eq(schema.factoryCapabilityEmbeddings.isActive, 1),
+        eq(schema.factoryCapabilityEmbeddings.primaryCategory, demandCategory)
+      ),
+    });
+
+    // 第二步：如果同品类工厂 < 10 家，扩展到全表（确保新平台初期工厂数量少时不失效）
+    if (candidates.length < 10) {
+      candidates = await db.query.factoryCapabilityEmbeddings.findMany({
+        where: eq(schema.factoryCapabilityEmbeddings.isActive, 1),
+      });
+    }
+  } else {
+    // 无品类信息，全表扫描
+    candidates = await db.query.factoryCapabilityEmbeddings.findMany({
+      where: eq(schema.factoryCapabilityEmbeddings.isActive, 1),
+    });
+  }
 
   // 3. 获取工厂实时状态和指标
   const factoryIds = candidates.map(c => c.factoryId);

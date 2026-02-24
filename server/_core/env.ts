@@ -30,4 +30,7 @@ export const ENV = {
   ossAccessKeySecret: process.env.OSS_ACCESS_KEY_SECRET ?? "",
   ossBucket: process.env.OSS_BUCKET ?? "demand-os-discord",
   ossEndpoint: process.env.OSS_ENDPOINT ?? "oss-cn-hangzhou.aliyuncs.com",
+  // Redis 配置（用于 BullMQ 异步任务队列）
+  // 生产环境建议使用阿里云 Redis，本地开发默认 localhost:6379
+  redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
 };

@@ -714,3 +714,61 @@ export const demandMatchResults = mysqlTable("demand_match_results", {
 });
 export type DemandMatchResult = typeof demandMatchResults.$inferSelect;
 export type InsertDemandMatchResult = typeof demandMatchResults.$inferInsert;
+
+// ─── RFQ Quotes (4.0: 30-min Quote Flow) ─────────────────────────────────────
+// 工厂针对 RFQ 提交的正式报价单，支持阶梯报价
+// 状态流转：pending → submitted → accepted / rejected / expired
+export const rfqQuotes = mysqlTable("rfq_quotes", {
+  id:               int("id").primaryKey().autoincrement(),
+  inquiryId:        int("inquiryId").notNull(),
+  demandId:         int("demandId"),
+  factoryId:        int("factoryId").notNull(),
+  buyerId:          int("buyerId").notNull(),
+  status:           varchar("status", { length: 30 }).notNull().default("pending"),
+  unitPrice:        decimal("unitPrice", { precision: 10, scale: 2 }),
+  currency:         varchar("currency", { length: 10 }).default("USD"),
+  moq:              int("moq"),
+  leadTimeDays:     int("leadTimeDays"),
+  validUntil:       datetime("validUntil", { mode: "date", fsp: 3 }),
+  // 阶梯报价 JSON: [{ qty: 100, unitPrice: 25.00 }, { qty: 500, unitPrice: 22.00 }]
+  tierPricing:      json("tierPricing"),
+  factoryNotes:     text("factoryNotes"),
+  paymentTerms:     varchar("paymentTerms", { length: 255 }),
+  shippingTerms:    varchar("shippingTerms", { length: 100 }),
+  sampleAvailable:  tinyint("sampleAvailable").default(0),
+  samplePrice:      decimal("samplePrice", { precision: 10, scale: 2 }),
+  sampleLeadDays:   int("sampleLeadDays"),
+  buyerFeedback:    text("buyerFeedback"),
+  respondedAt:      datetime("respondedAt", { mode: "date", fsp: 3 }),
+  submittedAt:      datetime("submittedAt", { mode: "date", fsp: 3 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type RfqQuote = typeof rfqQuotes.$inferSelect;
+export type InsertRfqQuote = typeof rfqQuotes.$inferInsert;
+
+// ─── Webinar Bookings (4.0: Factory Webinar Scheduling) ──────────────────────
+// 买家与工厂预约 Webinar 的记录
+// 状态流转：pending → confirmed → completed / cancelled / no_show
+export const webinarBookings = mysqlTable("webinar_bookings", {
+  id:               int("id").primaryKey().autoincrement(),
+  buyerId:          int("buyerId").notNull(),
+  factoryId:        int("factoryId").notNull(),
+  demandId:         int("demandId"),
+  inquiryId:        int("inquiryId"),
+  scheduledAt:      datetime("scheduledAt", { mode: "date", fsp: 3 }).notNull(),
+  durationMinutes:  int("durationMinutes").default(30),
+  timezone:         varchar("timezone", { length: 50 }).default("UTC"),
+  meetingType:      varchar("meetingType", { length: 20 }).default("agora"),
+  meetingUrl:       varchar("meetingUrl", { length: 500 }),
+  agoraMeetingId:   int("agoraMeetingId"),
+  status:           varchar("status", { length: 20 }).notNull().default("pending"),
+  buyerAgenda:      text("buyerAgenda"),
+  factoryNotes:     text("factoryNotes"),
+  confirmedAt:      datetime("confirmedAt", { mode: "date", fsp: 3 }),
+  reminderSentAt:   datetime("reminderSentAt", { mode: "date", fsp: 3 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type WebinarBooking = typeof webinarBookings.$inferSelect;
+export type InsertWebinarBooking = typeof webinarBookings.$inferInsert;
