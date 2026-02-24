@@ -2301,6 +2301,35 @@ ${transcriptSample}
         return { id, success: true };
       }),
 
+    // Phase B: 向量语义搜索（直接调用知识库语义检索）
+    semanticSearch: publicProcedure
+      .input(z.object({
+        query: z.string().min(1).max(200),
+        topK: z.number().min(1).max(20).optional().default(5),
+        minSimilarity: z.number().min(0).max(1).optional().default(0.45),
+      }))
+      .query(async ({ input }) => {
+        const { semanticSearchKnowledge } = await import('./_core/productKnowledgeService');
+        const results = await semanticSearchKnowledge(input.query, input.topK, input.minSimilarity);
+        return {
+          results,
+          totalFound: results.length,
+          query: input.query,
+        };
+      }),
+
+    // Phase B: 批量向量化（管理员触发，为现有条目生成向量）
+    batchVectorize: protectedProcedure
+      .input(z.object({
+        batchSize: z.number().min(1).max(200).optional().default(50),
+        delayMs: z.number().min(0).max(2000).optional().default(200),
+      }))
+      .mutation(async ({ input }) => {
+        const { batchVectorizeKnowledge } = await import('./_core/productKnowledgeService');
+        const result = await batchVectorizeKnowledge(input.batchSize, input.delayMs);
+        return result;
+      }),
+
     // 获取热门知识条目（按引用次数）
     getTopKnowledge: publicProcedure
       .input(z.object({
