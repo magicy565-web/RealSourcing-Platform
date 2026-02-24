@@ -1922,121 +1922,44 @@ ${transcriptSample}
         sourceUri: z.string().min(1),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Step 1: 创建需求记录（状态: processing）
+        // Step 1: 创建需求记录（状态: queued）——立即返回，AI 解析全程在 BullMQ Worker 中异步执行
         const { id: demandId } = await createSourcingDemand({
           userId: ctx.user.id,
           sourceType: input.sourceType,
           sourceUri: input.sourceUri,
-          status: 'processing',
+          status: 'queued',
         });
 
-        console.log(`🚀 [Demands] Processing demand #${demandId} | Type: ${input.sourceType} | User: ${ctx.user.id}`);
+        console.log(`📥 [Demands] Demand #${demandId} queued | Type: ${input.sourceType} | User: ${ctx.user.id}`);
 
         try {
-          // Step 2: 内容摄取
-          const ingested = await ingestContent(input.sourceType, input.sourceUri);
-          if (isIngestionError(ingested)) {
-            await updateSourcingDemand(demandId, { status: 'failed', processingError: ingested.error });
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `内容摄取失败: ${ingested.error}` });
-          }
+          // Step 2: 入队异步处理（避免 HTTP 超时）
+          const { enqueueDemandProcessing } = await import('./_core/queue');
+          const { jobId } = await enqueueDemandProcessing({
+            demandId,
+            userId: ctx.user.id,
+            sourceType: input.sourceType,
+            sourceUri: input.sourceUri,
+            submittedAt: new Date().toISOString(),
+          });
 
-          // Step 3: 信息提取 → SourcingDemand
-          const extracted = await extractSourcingDemand(ingested);
-          if (isExtractionError(extracted)) {
-            await updateSourcingDemand(demandId, { status: 'failed', processingError: extracted.error });
-            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `信息提取失败: ${extracted.error}` });
-          }
-
-          // Step 4: 转存视觉参考图片到 OSS
-          const ossImageUrls: string[] = [];
-          for (const imgUrl of extracted.visualReferences.slice(0, 5)) {
-            if (imgUrl.startsWith('http')) {
-              const ossResult = await ossUploadFromUrl(imgUrl, 'references');
-              if (!('error' in ossResult)) ossImageUrls.push(ossResult.url);
-            }
-          }
-
-          // Step 5: 更新需求记录（状态: extracted）
+          // Step 3: 将 jobId 写入需求记录（供前端轮询进度）
           await updateSourcingDemand(demandId, {
-            status: 'extracted',
-            productName: extracted.productName,
-            productDescription: extracted.productDescription,
-            keyFeatures: extracted.keyFeatures,
-            targetAudience: extracted.targetAudience,
-            visualReferences: ossImageUrls.length > 0 ? ossImageUrls : extracted.visualReferences,
-            estimatedQuantity: extracted.estimatedQuantity,
-            targetPrice: extracted.targetPrice,
-            customizationNotes: extracted.customizationNotes,
-            extractedData: extracted.extractedData,
+            matchJobId: jobId as unknown as never,
           });
 
-          // Step 6: 转化为工厂生产参数
-          const params = await transformToManufacturingParams(extracted);
-          if (isTransformationError(params)) {
-            await updateSourcingDemand(demandId, { status: 'failed', processingError: params.error });
-            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `参数转化失败: ${params.error}` });
-          }
+          console.log(`✅ [Demands] Demand #${demandId} enqueued with jobId: ${jobId}`);
 
-          // Step 7: 存储生产参数
-          await upsertManufacturingParameters(demandId, {
-            moq: params.moq ?? undefined,
-            materials: params.materials,
-            dimensions: params.dimensions,
-            weight: params.weight,
-            colorRequirements: params.colorRequirements,
-            packagingRequirements: params.packagingRequirements,
-            certificationsRequired: params.certificationsRequired,
-            estimatedUnitCost: params.estimatedUnitCost ? String(params.estimatedUnitCost) : undefined,
-            toolingCost: params.toolingCost ? String(params.toolingCost) : undefined,
-            leadTimeDays: params.leadTimeDays ?? undefined,
-            productionCategory: params.productionCategory,
-            suggestedFactoryTypes: params.suggestedFactoryTypes,
-          });
-
-          // Step 8: 更新需求状态为 transformed
-          await updateSourcingDemand(demandId, { status: 'transformed' });
-
-          // Step 9: 异步生成语义向量（不阻塞响应）
-          setImmediate(async () => {
-            try {
-              const embText = buildEmbeddingText({
-                productName: extracted.productName,
-                productDescription: extracted.productDescription,
-                keyFeatures: extracted.keyFeatures,
-                productionCategory: String(extracted.extractedData?.productCategory ?? ''),
-                customizationNotes: extracted.customizationNotes,
-                estimatedQuantity: extracted.estimatedQuantity,
-                targetPrice: extracted.targetPrice,
-              });
-              const embResult = await generateEmbedding(embText);
-              if (!isEmbeddingError(embResult)) {
-                await updateSourcingDemand(demandId, {
-                  embeddingVector: JSON.stringify(embResult.vector) as unknown as never,
-                  embeddingModel: embResult.model as unknown as never,
-                  embeddingAt: new Date() as unknown as never,
-                });
-                console.log(`🧠 [Demands] Embedding generated for #${demandId} (${embResult.model}, ${embResult.vector.length}d)`);
-              }
-            } catch (embErr) {
-              console.warn(`⚠️ [Demands] Background embedding failed for #${demandId}:`, embErr);
-            }
-          });
-
-          console.log(`✅ [Demands] Demand #${demandId} fully processed: "${extracted.productName}"`);
-
+          // 立即返回，前端通过轮询 getDemandStatus 获取处理进度
           return {
             demandId,
-            status: 'transformed',
-            productName: extracted.productName,
-            moq: params.moq,
-            estimatedUnitCost: params.estimatedUnitCost,
-            leadTimeDays: params.leadTimeDays,
-            productionCategory: params.productionCategory,
+            status: 'queued',
+            jobId,
+            message: 'AI 解析已入队，预计 1-3 分钟内完成。请轮询 getDemandStatus 获取进度。',
           };
         } catch (err) {
-          if (err instanceof TRPCError) throw err;
           await updateSourcingDemand(demandId, { status: 'failed', processingError: String(err) });
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '需求处理失败，请稍后重试' });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '需求入队失败，请稍后重试' });
         }
       }),
 
@@ -2106,25 +2029,51 @@ ${transcriptSample}
         }
       }),
 
-    /** 获取匹配结果（4.0 核心功能） */
+    /** 获取匹配结果（4.0 核心功能）
+     * 返回字段包含：工厂基础信息、AMR 分数、认证状态、平均响应时间
+     */
     getMatchResults: protectedProcedure
       .input(z.object({ demandId: z.number() }))
       .query(async ({ input }) => {
         const database = await dbPromise;
-        return await database.select({
-          id: schema.demandMatchResults.id,
-          matchScore: schema.demandMatchResults.matchScore,
-          matchReason: schema.demandMatchResults.matchReason,
-          factoryId: schema.demandMatchResults.factoryId,
-          factoryName: schema.factories.name,
-          factoryLogo: schema.factories.logo,
+        const rows = await database.select({
+          // 匹配结果字段
+          id:              schema.demandMatchResults.id,
+          matchScore:      schema.demandMatchResults.matchScore,
+          matchReason:     schema.demandMatchResults.matchReason,
+          factoryId:       schema.demandMatchResults.factoryId,
+          semanticScore:   schema.demandMatchResults.semanticScore,
+          responsivenessScore: schema.demandMatchResults.responsivenessScore,
+          trustScore:      schema.demandMatchResults.trustScore,
+          // 工厂基础信息
+          factoryName:     schema.factories.name,
+          factoryLogo:     schema.factories.logo,
           factoryCategory: schema.factories.category,
-          isOnline: schema.factories.isOnline,
+          factoryCity:     schema.factories.city,
+          isOnline:        schema.factories.isOnline,
+          availableForCall: schema.factories.availableForCall,
+          certificationStatus: schema.factories.certificationStatus,
+          // AMR 分数（来自 factoryMetrics）
+          amrTotalScore:       schema.factoryMetrics.amrTotalScore,
+          amrRfqResponseScore: schema.factoryMetrics.amrRfqResponseScore,
+          amrRfqAcceptScore:   schema.factoryMetrics.amrRfqAcceptScore,
+          avgResponseHours:    schema.factoryMetrics.avgResponseHours,
+          rfqAcceptRate:       schema.factoryMetrics.rfqAcceptRate,
+          amrCalculatedAt:     schema.factoryMetrics.amrCalculatedAt,
+          // 认证信息（来自 factoryDetails）
+          certifications:      schema.factoryDetails.certifications,
+          employeeCount:       schema.factoryDetails.employeeCount,
+          established:         schema.factoryDetails.established,
+          rating:              schema.factoryDetails.rating,
+          reviewCount:         schema.factoryDetails.reviewCount,
         })
         .from(schema.demandMatchResults)
         .innerJoin(schema.factories, eq(schema.demandMatchResults.factoryId, schema.factories.id))
+        .leftJoin(schema.factoryMetrics, eq(schema.demandMatchResults.factoryId, schema.factoryMetrics.factoryId))
+        .leftJoin(schema.factoryDetails, eq(schema.demandMatchResults.factoryId, schema.factoryDetails.factoryId))
         .where(eq(schema.demandMatchResults.demandId, input.demandId))
         .orderBy(desc(schema.demandMatchResults.matchScore));
+        return rows;
       }),
 
     /**

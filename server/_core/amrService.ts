@@ -293,10 +293,19 @@ export async function saveAMRScore(score: AMRScore): Promise<void> {
   const metricsData = {
     factoryId: score.factoryId,
     updatedAt: new Date(),
-    // 将 AMR 分数写入 factoryMetrics 的扩展字段
-    // 注意：需要在 schema 中添加 amrScore 等字段
-    // 目前先写入已有字段
-    sampleConversionRate: String(score.rfqAcceptRate * 100),
+    // 4.0 AMR 分数字段（已在 schema 中添加）
+    amrTotalScore:       String(score.totalScore.toFixed(2)),
+    amrRfqResponseScore: String(score.rfqResponseScore.toFixed(2)),
+    amrRfqAcceptScore:   String(score.rfqAcceptScore.toFixed(2)),
+    amrSmallBatchScore:  String(score.smallBatchScore.toFixed(2)),
+    amrOnlineScore:      String(score.onlineActivityScore.toFixed(2)),
+    amrProfileScore:     String(score.profileCompletenessScore.toFixed(2)),
+    amrReputationScore:  String(score.reputationScore.toFixed(2)),
+    avgResponseHours:    String(score.avgResponseHours.toFixed(2)),
+    rfqAcceptRate:       String(score.rfqAcceptRate.toFixed(4)),
+    amrCalculatedAt:     score.calculatedAt,
+    // 兼容旧字段
+    sampleConversionRate: String((score.rfqAcceptRate * 100).toFixed(2)),
   };
 
   if (existing) {

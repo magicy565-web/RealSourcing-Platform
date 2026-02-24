@@ -194,21 +194,72 @@ async function startServer() {
   // 初始化 Browser Worker（云端 AI 浏览器自动化）
   initBrowserWorker();
 
-  // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成）
+  // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成 + 需求 AI 解析）
   // Redis 不可用时降级为同步模式，不影响主服务启动
-  let queueWorkers: { factoryMatchingWorker: any; factoryEmbeddingWorker: any } | null = null;
+  let queueWorkers: {
+    factoryMatchingWorker: any;
+    factoryEmbeddingWorker: any;
+    demandProcessingWorker: any;
+  } | null = null;
   try {
     queueWorkers = await import('./queueWorker');
-    console.log('[Queue] BullMQ workers initialized');
+    console.log('[Queue] BullMQ workers initialized (matching + embedding + demand-processing)');
   } catch (err) {
     console.warn('[Queue] Redis not available, queue workers disabled. Matching will run synchronously.');
   }
 
-  // 优雅关闭时同时关闭浏览器和队列
+  // ── Fix 4: Webinar 提醒定时任务（每 5 分钟）───────────────────────────────────────
+  // 检查未来 25-35 分钟内即将开始的预约，发送 Agora 入场链接提醒
+  const WEBINAR_REMINDER_INTERVAL_MS = 5 * 60 * 1000; // 5 分钟
+  const webinarReminderTimer = setInterval(async () => {
+    try {
+      const { sendMeetingReminders } = await import('./webinarBookingService');
+      const result = await sendMeetingReminders();
+      if (result.sent > 0) {
+        console.log(`[Scheduler] Webinar reminders sent: ${result.sent}`);
+      }
+    } catch (err) {
+      console.error('[Scheduler] Webinar reminder task failed:', err);
+    }
+  }, WEBINAR_REMINDER_INTERVAL_MS);
+  webinarReminderTimer.unref(); // 不阻止进程退出
+  console.log('[Scheduler] Webinar reminder task registered (every 5 min)');
+
+  // ── Fix 5: AMR 批量刷新定时任务（每日凌晨2点）─────────────────────────────
+  // 重新计算所有工厂的 AMR 分数，确保匹配权重始终反映真实行为数据
+  function scheduleDailyAMR() {
+    const now = new Date();
+    // 计算到今日凌晨2:00（或明日凌晨2:00）的毫秒数
+    const next2AM = new Date(now);
+    next2AM.setHours(2, 0, 0, 0);
+    if (next2AM <= now) {
+      next2AM.setDate(next2AM.getDate() + 1); // 已过凌晨2点，安排到明天
+    }
+    const msUntilNext2AM = next2AM.getTime() - now.getTime();
+    console.log(`[Scheduler] AMR batch refresh scheduled at ${next2AM.toISOString()} (in ${Math.round(msUntilNext2AM / 60000)} min)`);
+
+    setTimeout(async () => {
+      try {
+        const { batchCalculateAMR } = await import('./amrService');
+        const result = await batchCalculateAMR();
+        console.log(`[Scheduler] AMR batch complete: ${result.processed} processed, ${result.errors} errors`);
+      } catch (err) {
+        console.error('[Scheduler] AMR batch refresh failed:', err);
+      } finally {
+        scheduleDailyAMR(); // 完成后安排下一次
+      }
+    }, msUntilNext2AM).unref();
+  }
+  scheduleDailyAMR();
+  console.log('[Scheduler] Daily AMR batch refresh registered (02:00 CST)');
+
+  // 优雅关闭时同时关闭浏览器、队列和定时器
   process.on('exit', () => {
     shutdownBrowserWorker().catch(() => {});
+    clearInterval(webinarReminderTimer);
     queueWorkers?.factoryMatchingWorker?.close().catch(() => {});
     queueWorkers?.factoryEmbeddingWorker?.close().catch(() => {});
+    queueWorkers?.demandProcessingWorker?.close().catch(() => {});
   });
 
   server.listen(port, () => {

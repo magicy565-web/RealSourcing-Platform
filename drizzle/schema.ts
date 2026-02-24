@@ -120,6 +120,17 @@ export const factoryMetrics = mysqlTable("factory_metrics", {
   disputeRate:          decimal("disputeRate", { precision: 5, scale: 2 }).default("0.00"),
   reelCount:            int("reelCount").notNull().default(0),
   reelViewCount:        int("reelViewCount").notNull().default(0),
+  // ── 4.0 AMR 分数字段（由 amrService.saveAMRScore 写入）──────────────────────────────
+  amrTotalScore:        decimal("amrTotalScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrRfqResponseScore:  decimal("amrRfqResponseScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrRfqAcceptScore:    decimal("amrRfqAcceptScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrSmallBatchScore:   decimal("amrSmallBatchScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrOnlineScore:       decimal("amrOnlineScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrProfileScore:      decimal("amrProfileScore", { precision: 5, scale: 2 }).default("0.00"),
+  amrReputationScore:   decimal("amrReputationScore", { precision: 5, scale: 2 }).default("0.00"),
+  avgResponseHours:     decimal("avgResponseHours", { precision: 8, scale: 2 }).default("0.00"),
+  rfqAcceptRate:        decimal("rfqAcceptRate", { precision: 5, scale: 4 }).default("0.0000"),
+  amrCalculatedAt:      datetime("amrCalculatedAt", { mode: "date", fsp: 3 }),
   createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:            datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
@@ -582,6 +593,12 @@ export const sourcingDemands = mysqlTable("sourcing_demands", {
   embeddingVector:     longtext("embeddingVector"),
   embeddingModel:      varchar("embeddingModel", { length: 100 }),
   embeddingAt:         datetime("embeddingAt", { mode: "date", fsp: 3 }),
+  // ── 4.0 匹配状态字段 ─────────────────────────────────────────────────────────
+  // idle: 未触发匹配 | queued: 已入队 | processing: 匹配中 | completed: 完成 | failed: 失败
+  matchStatus:         varchar("matchStatus", { length: 30 }).notNull().default("idle"),
+  matchJobId:          varchar("matchJobId", { length: 100 }),
+  matchedAt:           datetime("matchedAt", { mode: "date", fsp: 3 }),
+  matchCount:          int("matchCount").notNull().default(0),
   createdAt:           datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:           datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
