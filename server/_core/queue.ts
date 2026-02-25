@@ -125,3 +125,50 @@ export async function getMatchingJobStatus(demandId: number) {
 }
 
 export { redisConnection };
+
+// ── RFQ Claw 队列（Open Claw Agent 任务） ─────────────────────────────────────
+/** Open Claw Agent 报价抓取队列 */
+export const rfqClawQueue = new Queue('rfq-claw-queue', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 100 },
+  },
+});
+
+/** RFQ Claw 任务数据类型 */
+export interface RfqClawJobData {
+  demandId: number;
+  factoryId: number;
+  matchResultId?: number;
+  buyerId: number;
+  category?: string;
+  productName?: string;
+  enqueuedAt: string;
+}
+
+/** RFQ 超时告警任务数据类型 */
+export interface RfqTimeoutAlertJobData {
+  demandId: number;
+  factoryId: number;
+  elapsedMinutes: number;
+}
+
+/**
+ * 查询 RFQ Claw 任务状态
+ */
+export async function getRfqClawJobStatus(demandId: number, factoryId: number) {
+  const jobId = `rfq-claw-${demandId}-${factoryId}`;
+  const job = await rfqClawQueue.getJob(jobId);
+  if (!job) return { status: 'not_found', jobId };
+  const state = await job.getState();
+  return {
+    jobId,
+    status: state,
+    progress: typeof job.progress === 'number' ? job.progress : 0,
+    failedReason: job.failedReason,
+    finishedOn: job.finishedOn,
+  };
+}

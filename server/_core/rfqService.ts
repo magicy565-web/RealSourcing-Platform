@@ -254,3 +254,226 @@ export async function getFactoryPendingRFQs(factoryId: number) {
     orderBy: [desc(schema.rfqQuotes.createdAt)],
   });
 }
+
+// ── autoSendRfq：飞书优先 + BullMQ 降级 ───────────────────────────────────────
+/**
+ * 自动发送 RFQ 的核心调度逻辑（T1.2 任务）
+ *
+ * 执行流程：
+ *   1. 从飞书 Bitable 报价库中搜索匹配记录
+ *   2. 若找到有效报价 → 直接创建 RFQ + 发送飞书卡片（2 分钟极速报价）
+ *   3. 若未找到 → 将任务入队 BullMQ rfq-claw-queue，由 Open Claw Agent 处理
+ *   4. 若品类完全空缺 → 发送运营告警卡片
+ */
+export interface AutoSendRfqInput {
+  demandId: number;
+  factoryId: number;
+  matchResultId: number;
+  buyerId: number;
+  category?: string;
+  productName?: string;
+  quantity?: number;
+  destination?: string;
+  notes?: string;
+}
+
+export interface AutoSendRfqResult {
+  mode: 'feishu_instant' | 'claw_queued' | 'manual_fallback';
+  inquiryId?: number;
+  jobId?: string;
+  feishuRecordId?: string;
+  messageId?: string;
+  message: string;
+}
+
+export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqResult> {
+  const db = await dbPromise;
+
+  // ── Step 1: 查询飞书 Bitable 报价库 ──────────────────────────────────────────
+  let feishuQuotes: any[] = [];
+  try {
+    const { searchBitableQuotes } = await import('./feishuService');
+    feishuQuotes = await searchBitableQuotes({
+      factoryId: input.factoryId,
+      category: input.category,
+      maxResults: 5,
+    });
+  } catch (feishuErr) {
+    console.warn('[autoSendRfq] Feishu search failed, falling back to Claw queue:', feishuErr);
+  }
+
+  // ── Step 2: 飞书有数据 → 极速报价路径 ────────────────────────────────────────
+  if (feishuQuotes.length > 0) {
+    const bestQuote = feishuQuotes[0];
+
+    // 检查报价是否过期（超过 90 天）
+    const isExpired = bestQuote.lastUpdated
+      ? (Date.now() - new Date(bestQuote.lastUpdated).getTime()) > 90 * 24 * 60 * 60 * 1000
+      : false;
+
+    // 创建标准 RFQ
+    const rfqResult = await sendRFQ({
+      demandId: input.demandId,
+      factoryId: input.factoryId,
+      matchResultId: input.matchResultId,
+      buyerId: input.buyerId,
+      quantity: input.quantity,
+      destination: input.destination,
+      notes: isExpired
+        ? `${input.notes ?? ''} [价格仅供参考，报价已超过 90 天，正在核实中]`.trim()
+        : input.notes,
+    });
+
+    // 自动提交飞书报价到 rfq_quotes 表
+    await db.update(schema.rfqQuotes)
+      .set({
+        status: 'submitted',
+        unitPrice: bestQuote.unitPrice.toFixed(2),
+        moq: bestQuote.moq,
+        leadTimeDays: bestQuote.leadTimeDays,
+        tierPricing: bestQuote.tierPricing,
+        factoryNotes: isExpired ? '价格仅供参考，报价已超过 90 天' : '来自飞书报价库（自动匹配）',
+        submittedAt: new Date(),
+        updatedAt: new Date(),
+      } as any)
+      .where(
+        and(
+          eq(schema.rfqQuotes.inquiryId, rfqResult.inquiryId),
+          eq(schema.rfqQuotes.factoryId, input.factoryId)
+        )
+      );
+
+    // 获取工厂名称
+    let factoryName = `Factory #${input.factoryId}`;
+    try {
+      const factory = await (db as any).query?.factories?.findFirst?.({
+        where: (f: any, { eq: eqFn }: any) => eqFn(f.id, input.factoryId),
+      });
+      if (factory) factoryName = factory.name ?? factoryName;
+    } catch { /* 工厂查询失败不影响主流程 */ }
+
+    // 发送飞书报价卡片
+    let messageId: string | undefined;
+    try {
+      const { sendQuoteCard } = await import('./feishuService');
+      const cardResult = await sendQuoteCard({
+        isVerified: bestQuote.isVerified,
+        factoryName,
+        productName: bestQuote.productName || input.productName || 'Product',
+        unitPrice: bestQuote.unitPrice,
+        moq: bestQuote.moq,
+        leadTimeDays: bestQuote.leadTimeDays,
+        demandId: input.demandId,
+        inquiryId: rfqResult.inquiryId,
+      });
+      messageId = cardResult?.messageId;
+    } catch (cardErr) {
+      console.warn('[autoSendRfq] Failed to send Feishu card:', cardErr);
+    }
+
+    console.log(`✅ [autoSendRfq] Instant quote via Feishu for demand #${input.demandId}, inquiry #${rfqResult.inquiryId}`);
+
+    return {
+      mode: 'feishu_instant',
+      inquiryId: rfqResult.inquiryId,
+      feishuRecordId: bestQuote.recordId,
+      messageId,
+      message: isExpired
+        ? '已从飞书报价库获取历史报价（价格仅供参考，正在核实中）'
+        : '已从飞书报价库获取最新报价，2 分钟内完成匹配',
+    };
+  }
+
+  // ── Step 3: 飞书无数据 → 入队 BullMQ rfq-claw-queue ─────────────────────────
+  try {
+    const { rfqClawQueue } = await import('./queue');
+    const jobId = `rfq-claw-${input.demandId}-${input.factoryId}`;
+
+    const job = await rfqClawQueue.add(
+      'fetch-quote',
+      {
+        demandId: input.demandId,
+        factoryId: input.factoryId,
+        matchResultId: input.matchResultId,
+        buyerId: input.buyerId,
+        category: input.category,
+        productName: input.productName,
+        enqueuedAt: new Date().toISOString(),
+      },
+      {
+        jobId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }
+    );
+
+    // 30 分钟超时告警（延迟任务）
+    await rfqClawQueue.add(
+      'timeout-alert',
+      {
+        demandId: input.demandId,
+        factoryId: input.factoryId,
+        elapsedMinutes: 30,
+      },
+      {
+        delay: 30 * 60 * 1000,
+        jobId: `rfq-timeout-${input.demandId}-${input.factoryId}`,
+        attempts: 1,
+      }
+    );
+
+    // 若品类完全空缺，发送运营告警
+    try {
+      const { sendEmptyCategoryAlert } = await import('./feishuService');
+      await sendEmptyCategoryAlert({
+        category: input.category ?? 'Unknown',
+        demandId: input.demandId,
+      });
+    } catch { /* 告警失败不影响主流程 */ }
+
+    console.log(`📥 [autoSendRfq] Queued to rfq-claw-queue for demand #${input.demandId}, jobId: ${job.id}`);
+
+    return {
+      mode: 'claw_queued',
+      jobId: job.id ?? jobId,
+      message: 'AI 正在联络工厂，预计 30 分钟内获得报价',
+    };
+  } catch (queueErr) {
+    console.error('[autoSendRfq] Queue failed, falling back to manual:', queueErr);
+
+    // ── Step 4: 队列不可用 → 人工兜底 ──────────────────────────────────────────
+    const rfqResult = await sendRFQ({
+      demandId: input.demandId,
+      factoryId: input.factoryId,
+      matchResultId: input.matchResultId,
+      buyerId: input.buyerId,
+      quantity: input.quantity,
+      destination: input.destination,
+      notes: input.notes,
+    });
+
+    return {
+      mode: 'manual_fallback',
+      inquiryId: rfqResult.inquiryId,
+      message: '已创建询价单，等待工厂手动填写报价（队列服务暂不可用）',
+    };
+  }
+}
+
+// ── 获取买家的 RFQ 列表 ────────────────────────────────────────────────────────
+export async function getBuyerRFQs(buyerId: number) {
+  const db = await dbPromise;
+  return await db.query.rfqQuotes.findMany({
+    where: eq(schema.rfqQuotes.buyerId, buyerId),
+    orderBy: [desc(schema.rfqQuotes.createdAt)],
+  });
+}
+
+// ── 获取需求关联的所有 RFQ ─────────────────────────────────────────────────────
+export async function getRFQsByDemand(demandId: number) {
+  const db = await dbPromise;
+  return await db.query.rfqQuotes.findMany({
+    where: eq(schema.rfqQuotes.demandId, demandId),
+    orderBy: [desc(schema.rfqQuotes.createdAt)],
+  });
+}

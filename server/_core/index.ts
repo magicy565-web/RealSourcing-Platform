@@ -5,6 +5,7 @@ import { execSync } from "child_process";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import uploadRouter from "./uploadRouter";
+import clawAgentRouter, { startHeartbeatMonitor } from "./clawAgentRouter";
 import { initSocketService } from "./socketService";
 import { registerAgoraWebhookRoute } from "./agoraWebhook";
 import { appRouter } from "../routers";
@@ -124,6 +125,8 @@ async function startServer() {
 
   // File Upload REST API
   app.use('/api/upload', uploadRouter);
+  // Open Claw Agent REST API (心跳上报 + RFQ 回调)
+  app.use('/api/v1', clawAgentRouter);
 
   // Agora Cloud Recording Webhook
   // 声网录制完成后回调，提取真实 S3 URL 写入数据库
@@ -193,6 +196,8 @@ async function startServer() {
 
   // 初始化 Browser Worker（云端 AI 浏览器自动化）
   initBrowserWorker();
+  // 启动 Open Claw Agent 心跳监测（每分钟检查一次）
+  startHeartbeatMonitor();
 
   // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成）
   // Redis 不可用时降级为同步模式，不影响主服务启动

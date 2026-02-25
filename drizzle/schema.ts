@@ -772,3 +772,99 @@ export const webinarBookings = mysqlTable("webinar_bookings", {
 });
 export type WebinarBooking = typeof webinarBookings.$inferSelect;
 export type InsertWebinarBooking = typeof webinarBookings.$inferInsert;
+
+// ─── Feishu Quote Cache (4.0: 飞书报价缓存) ───────────────────────────────────
+// 缓存从飞书 Bitable 获取的报价数据，避免重复调用飞书 API
+// 同时作为 Open Claw 回调数据的本地镜像
+export const feishuQuoteCache = mysqlTable("feishu_quote_cache", {
+  id:               int("id").primaryKey().autoincrement(),
+  // 飞书 Bitable 记录 ID（用于更新时定位）
+  bitableRecordId:  varchar("bitableRecordId", { length: 100 }),
+  factoryId:        int("factoryId").notNull(),
+  category:         varchar("category", { length: 100 }),
+  productName:      varchar("productName", { length: 255 }),
+  unitPrice:        decimal("unitPrice", { precision: 10, scale: 2 }).notNull(),
+  currency:         varchar("currency", { length: 10 }).default("USD"),
+  moq:              int("moq").notNull(),
+  leadTimeDays:     int("leadTimeDays").notNull(),
+  // 阶梯报价 JSON: [{ qty: 100, price: 25.00 }, { qty: 500, price: 22.00 }]
+  tierPricing:      json("tierPricing"),
+  paymentTerms:     varchar("paymentTerms", { length: 255 }),
+  shippingTerms:    varchar("shippingTerms", { length: 100 }),
+  isVerified:       tinyint("isVerified").notNull().default(0),
+  // 数据来源：feishu_api（飞书 API 直接获取）| claw_agent（Open Claw 抓取）| manual（人工录入）
+  dataSource:       varchar("dataSource", { length: 30 }).notNull().default("feishu_api"),
+  // 报价最后更新时间（来自飞书 last_updated 字段）
+  quoteUpdatedAt:   datetime("quoteUpdatedAt", { mode: "date", fsp: 3 }),
+  // 是否过期（超过 90 天自动标记）
+  isExpired:        tinyint("isExpired").notNull().default(0),
+  // 缓存过期时间（默认 24 小时刷新）
+  cacheExpiresAt:   datetime("cacheExpiresAt", { mode: "date", fsp: 3 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FeishuQuoteCache = typeof feishuQuoteCache.$inferSelect;
+export type InsertFeishuQuoteCache = typeof feishuQuoteCache.$inferInsert;
+
+// ─── Claw Agent Status (4.0: Open Claw Agent 状态持久化) ──────────────────────
+// 持久化 Open Claw Agent 的心跳状态，支持多实例监控
+export const clawAgentStatus = mysqlTable("claw_agent_status", {
+  id:                   int("id").primaryKey().autoincrement(),
+  agentId:              varchar("agentId", { length: 100 }).notNull().unique(),
+  // 当前状态：online | offline | alert | maintenance
+  status:               varchar("status", { length: 20 }).notNull().default("offline"),
+  version:              varchar("version", { length: 50 }),
+  // 部署环境：aliyun_wuying（阿里云无影）| local | docker
+  deployEnv:            varchar("deployEnv", { length: 50 }).default("aliyun_wuying"),
+  ipAddress:            varchar("ipAddress", { length: 50 }),
+  lastHeartbeatAt:      datetime("lastHeartbeatAt", { mode: "date", fsp: 3 }),
+  // 当前正在处理的任务数
+  activeJobs:           int("activeJobs").notNull().default(0),
+  // 累计处理任务总数
+  totalJobsProcessed:   int("totalJobsProcessed").notNull().default(0),
+  // 累计失败任务数
+  totalJobsFailed:      int("totalJobsFailed").notNull().default(0),
+  // 最后一次成功处理的任务 ID
+  lastSuccessJobId:     varchar("lastSuccessJobId", { length: 100 }),
+  // 最后一次失败原因
+  lastFailureReason:    text("lastFailureReason"),
+  // 是否启用（可手动禁用某个 Agent）
+  isEnabled:            tinyint("isEnabled").notNull().default(1),
+  createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:            datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type ClawAgentStatus = typeof clawAgentStatus.$inferSelect;
+export type InsertClawAgentStatus = typeof clawAgentStatus.$inferInsert;
+
+// ─── RFQ Claw Jobs (4.0: Open Claw 任务追踪) ─────────────────────────────────
+// 追踪每个 rfq-claw-queue 任务的执行状态，支持超时告警和重试
+export const rfqClawJobs = mysqlTable("rfq_claw_jobs", {
+  id:               int("id").primaryKey().autoincrement(),
+  // BullMQ Job ID
+  jobId:            varchar("jobId", { length: 100 }).notNull().unique(),
+  demandId:         int("demandId").notNull(),
+  factoryId:        int("factoryId").notNull(),
+  buyerId:          int("buyerId").notNull(),
+  matchResultId:    int("matchResultId"),
+  category:         varchar("category", { length: 100 }),
+  // 任务状态：queued | active | completed | failed | timeout | cancelled
+  status:           varchar("status", { length: 20 }).notNull().default("queued"),
+  // 处理该任务的 Agent ID
+  assignedAgentId:  varchar("assignedAgentId", { length: 100 }),
+  // 任务入队时间
+  enqueuedAt:       datetime("enqueuedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  // 任务开始处理时间
+  startedAt:        datetime("startedAt", { mode: "date", fsp: 3 }),
+  // 任务完成时间
+  completedAt:      datetime("completedAt", { mode: "date", fsp: 3 }),
+  // 失败原因
+  failureReason:    text("failureReason"),
+  // 重试次数
+  retryCount:       int("retryCount").notNull().default(0),
+  // 是否已发送超时告警
+  timeoutAlertSent: tinyint("timeoutAlertSent").notNull().default(0),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type RfqClawJob = typeof rfqClawJobs.$inferSelect;
+export type InsertRfqClawJob = typeof rfqClawJobs.$inferInsert;

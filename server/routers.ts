@@ -2241,6 +2241,46 @@ ${transcriptSample}
         const { getFactoryPendingRFQs } = await import("./_core/rfqService");
         return await getFactoryPendingRFQs(input.factoryId);
       }),
+
+    /** 自动发送 RFQ（飞书优先 + BullMQ 降级）*/
+    autoSend: protectedProcedure
+      .input(z.object({
+        demandId: z.number(),
+        factoryId: z.number(),
+        matchResultId: z.number(),
+        category: z.string().optional(),
+        productName: z.string().optional(),
+        quantity: z.number().optional(),
+        destination: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { autoSendRfq } = await import("./_core/rfqService");
+        return await autoSendRfq({ ...input, buyerId: ctx.user.id });
+      }),
+
+    /** 获取买家的所有 RFQ 列表 */
+    getBuyerRFQs: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getBuyerRFQs } = await import("./_core/rfqService");
+        return await getBuyerRFQs(ctx.user.id);
+      }),
+
+    /** 获取需求关联的所有 RFQ */
+    getRFQsByDemand: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .query(async ({ input }) => {
+        const { getRFQsByDemand } = await import("./_core/rfqService");
+        return await getRFQsByDemand(input.demandId);
+      }),
+
+    /** 查询 Open Claw 任务状态 */
+    getClawJobStatus: protectedProcedure
+      .input(z.object({ demandId: z.number(), factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getRfqClawJobStatus } = await import("./_core/queue");
+        return await getRfqClawJobStatus(input.demandId, input.factoryId);
+      }),
   }),
 
   demands: router({
