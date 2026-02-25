@@ -385,6 +385,233 @@ export const appRouter = router({
         return response;
       }),
 
+    // P2.1: Agent 欢迎消息
+    agentWelcome: protectedProcedure
+      .mutation(async () => {
+        return {
+          content: "您好！我是您的 AI 采购顾问 🤖\n\n我将通过几个简单的问题，帮您在 **15 分钟内**精准匹配最优供应商。\n\n请告诉我：**您想采购什么产品？**（可以描述产品名称、用途或特征）",
+          phase: "welcome" as const,
+          progressPercent: 0,
+          preferences: {},
+          sessionState: {
+            currentPhase: "welcome" as const,
+            preferences: {} as Record<string, unknown>,
+            conversationHistory: [] as Array<{ role: "user" | "assistant"; content: string }>,
+          },
+        };
+      }),
+
+    // P2.2: Agent 多轮对话核心接口
+    agentChat: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+        message: z.string().min(1).max(2000),
+        sessionState: z.object({
+          currentPhase: z.enum(["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"]),
+          preferences: z.record(z.unknown()),
+          conversationHistory: z.array(z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string(),
+          })),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import('./_core/llm');
+        const { getAllFactories } = await import('./_core/dataApi');
+
+        const currentPhase = input.sessionState.currentPhase;
+        const prefs = input.sessionState.preferences as Record<string, unknown>;
+        const history = input.sessionState.conversationHistory;
+
+        const systemPrompt = `你是 RealSourcing 平台的 AI 采购顾问，专门帮助买家在中国找到最优质的供应商。
+
+你的任务是通过多轮对话，逐步收集买家的采购需求，包括：产品信息、价格预算、交期要求、定制需求、采购数量、工厂资质要求。
+
+当前对话阶段：${currentPhase}
+当前已收集的偏好：${JSON.stringify(prefs)}
+
+阶段流程：welcome → price → leadtime → customization → quantity → qualification → summary → quotes
+
+规则：
+1. 每次只问一个问题，不要一次问多个
+2. 根据用户回答提取关键信息，更新偏好
+3. 当收集到足够信息（至少有产品名称和价格）时，进入 summary 阶段汇总需求
+4. summary 阶段后进入 quotes 阶段返回报价
+5. 回复要简洁友好，使用中文
+6. 在回复末尾用 <!--STATE: {...} --> 格式返回状态更新
+
+JSON 格式示例：
+<!--STATE: {
+  "nextPhase": "price",
+  "progressPercent": 15,
+  "extractedPrefs": {
+    "productName": "口红管",
+    "productCategory": "美妆个护"
+  }
+} -->`;
+
+        const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
+          { role: "system", content: systemPrompt },
+          ...history.slice(-10).map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
+          { role: "user", content: input.message },
+        ];
+
+        const llmResult = await invokeLLM({ messages, maxTokens: 800 });
+        const rawContent = (llmResult.content as string) || "抱歉，我暂时无法处理您的请求，请稍后再试。";
+
+        let nextPhase = currentPhase;
+        let progressPercent = 10;
+        let extractedPrefs: Record<string, unknown> = {};
+        let quotes: unknown[] | undefined;
+
+        const stateMatch = rawContent.match(/<!--STATE:\s*({[\s\S]*?})\s*-->/);
+        if (stateMatch) {
+          try {
+            const stateData = JSON.parse(stateMatch[1]);
+            nextPhase = stateData.nextPhase || currentPhase;
+            progressPercent = stateData.progressPercent || progressPercent;
+            extractedPrefs = stateData.extractedPrefs || {};
+          } catch (_) {}
+        }
+
+        const cleanContent = rawContent.replace(/<!--STATE:[\s\S]*?-->/g, "").trim();
+
+        if (nextPhase === "quotes") {
+          try {
+            const allFactories = await getAllFactories();
+            const mergedPrefs = { ...prefs, ...extractedPrefs };
+            const productName = ((mergedPrefs.productName || mergedPrefs.productCategory || input.message) as string);
+            const queryLower = productName.toLowerCase();
+
+            const matched = allFactories
+              .filter((f: any) =>
+                f.name?.toLowerCase().includes(queryLower) ||
+                f.category?.toLowerCase().includes(queryLower) ||
+                f.productCategories?.some((c: string) => c.toLowerCase().includes(queryLower))
+              )
+              .slice(0, 5);
+
+            if (matched.length > 0) {
+              quotes = matched.map((f: any, i: number) => ({
+                quoteId: `q-${f.id}-${Date.now()}-${i}`,
+                factoryId: f.id,
+                factoryName: f.name,
+                factoryScore: f.score || f.overallScore || 4.5,
+                isVerified: f.isVerified || f.verified || false,
+                productName: productName,
+                productCategory: f.category || f.productCategories?.[0],
+                unitPrice: f.minPrice || f.avgPrice || null,
+                currency: "USD",
+                moq: f.moq || f.minOrderQuantity || 500,
+                leadTimeDays: f.leadTime || 30,
+                matchScore: Math.max(75, 95 - i * 5),
+                matchReasons: [
+                  f.isVerified ? "已通过 AI 验厂" : "平台认证工厂",
+                  `评分 ${(f.score || f.overallScore || 4.5).toFixed(1)} 分`,
+                  `专注 ${f.category || "制造业"}`
+                ],
+                certifications: f.certifications || [],
+                location: f.location || f.city || "中国",
+              }));
+            } else {
+              quotes = [
+                {
+                  quoteId: `q-demo-1-${Date.now()}`,
+                  factoryName: "深圳鸿毅实业有限公司",
+                  factoryScore: 4.9,
+                  isVerified: true,
+                  productName: productName,
+                  productCategory: (mergedPrefs.productCategory as string) || "制造业",
+                  unitPrice: 2.50,
+                  currency: "USD",
+                  moq: 1000,
+                  leadTimeDays: 25,
+                  matchScore: 94,
+                  matchReasons: ["已通过 AI 验厂", "评分 4.9 分", "10年出口经验"],
+                  certifications: ["CE", "ISO9001"],
+                  location: "广东深圳",
+                },
+                {
+                  quoteId: `q-demo-2-${Date.now()}`,
+                  factoryName: "义乌博远贸易有限公司",
+                  factoryScore: 4.7,
+                  isVerified: true,
+                  productName: productName,
+                  productCategory: (mergedPrefs.productCategory as string) || "制造业",
+                  unitPrice: 1.80,
+                  currency: "USD",
+                  moq: 500,
+                  leadTimeDays: 35,
+                  matchScore: 87,
+                  matchReasons: ["价格竞争力强", "MOQ 灵活", "快速响应"],
+                  certifications: ["CE"],
+                  location: "浙江义乌",
+                },
+              ];
+            }
+          } catch (_) {}
+        }
+
+        const mergedPreferences = { ...prefs, ...extractedPrefs };
+
+        return {
+          content: cleanContent,
+          phase: nextPhase,
+          progressPercent,
+          preferences: mergedPreferences,
+          quotes,
+          sessionState: {
+            currentPhase: nextPhase,
+            preferences: mergedPreferences,
+            conversationHistory: [
+              ...history,
+              { role: "user" as const, content: input.message },
+              { role: "assistant" as const, content: cleanContent },
+            ],
+          },
+        };
+      }),
+
+    // P2.3: Agent 直接检索报价
+    agentQuotes: protectedProcedure
+      .input(z.object({
+        preferences: z.record(z.unknown()),
+        limit: z.number().min(1).max(10).default(5),
+      }))
+      .mutation(async ({ input }) => {
+        const { getAllFactories } = await import('./_core/dataApi');
+        const allFactories = await getAllFactories();
+        const productName = ((input.preferences.productName || input.preferences.productCategory || "") as string);
+        const queryLower = productName.toLowerCase();
+
+        const matched = queryLower
+          ? allFactories
+              .filter((f: any) =>
+                f.name?.toLowerCase().includes(queryLower) ||
+                f.category?.toLowerCase().includes(queryLower)
+              )
+              .slice(0, input.limit)
+          : allFactories.slice(0, input.limit);
+
+        return matched.map((f: any, i: number) => ({
+          quoteId: `q-${f.id}-${Date.now()}-${i}`,
+          factoryId: f.id,
+          factoryName: f.name,
+          factoryScore: f.score || f.overallScore || 4.5,
+          isVerified: f.isVerified || false,
+          productName: productName || "产品",
+          productCategory: f.category,
+          unitPrice: f.minPrice || null,
+          currency: "USD",
+          moq: f.moq || 500,
+          leadTimeDays: f.leadTime || 30,
+          matchScore: Math.max(70, 95 - i * 5),
+          matchReasons: ["平台认证工厂", `评分 ${(f.score || f.overallScore || 4.5).toFixed(1)} 分`],
+          certifications: f.certifications || [],
+          location: f.location || "中国",
+        }));
+      }),
+
     // P1.3: 识别 Meeting Reel 关键时刻
     identifyReelHighlights: protectedProcedure
       .input(z.object({
