@@ -50,11 +50,15 @@ CREATE TABLE IF NOT EXISTS `sourcing_room_messages` (
   COMMENT='需求沟通室消息表 - 30分钟首次对话核心';
 
 -- ─── 3. 为 factories 表补充在线状态字段（如果不存在）────────────────────────
+-- MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS，使用条件判断方式
 ALTER TABLE `factories`
-  ADD COLUMN IF NOT EXISTS `isOnline`             TINYINT(1) NOT NULL DEFAULT 0 COMMENT '当前在线状态',
-  ADD COLUMN IF NOT EXISTS `lastOnlineAt`         DATETIME(3) COMMENT '最后在线时间',
-  ADD COLUMN IF NOT EXISTS `availableForCall`     TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否可立即通话',
-  ADD COLUMN IF NOT EXISTS `averageResponseTime`  INT DEFAULT 0 COMMENT '平均响应时间（分钟）';
+  ADD COLUMN `isOnline`             TINYINT(1) NOT NULL DEFAULT 0 COMMENT '当前在线状态';
+ALTER TABLE `factories`
+  ADD COLUMN `lastOnlineAt`         DATETIME(3) COMMENT '最后在线时间';
+ALTER TABLE `factories`
+  ADD COLUMN `availableForCall`     TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否可立即通话';
+ALTER TABLE `factories`
+  ADD COLUMN `averageResponseTime`  INT DEFAULT 0 COMMENT '平均响应时间（分钟）';
 
 -- ─── 完成 ──────────────────────────────────────────────────────────────────────
 -- 执行完毕后，请运行以下命令验证：
