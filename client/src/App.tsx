@@ -37,6 +37,8 @@ import SampleOrderTracker from "./pages/SampleOrderTracker";
 import Meetings from "./pages/Meetings";
 import SourcingDemandPage from "./pages/SourcingDemandPage";
 import SourcingDemandDetail from "./pages/SourcingDemandDetail";
+import MatchingDashboard from "./pages/MatchingDashboard";
+import SourcingRoom from "./pages/SourcingRoom";
 
 function Router() {
   return (
@@ -189,6 +191,18 @@ function Router() {
       <Route path="/sourcing-demands/:id">
         <ProtectedRoute>
           <SourcingDemandDetail />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── 15-min Factory Matching (Phase 4.0) ── */}
+      <Route path="/matching/:id">
+        <ProtectedRoute>
+          <MatchingDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/sourcing-room/:slug">
+        <ProtectedRoute>
+          <SourcingRoom />
         </ProtectedRoute>
       </Route>
 

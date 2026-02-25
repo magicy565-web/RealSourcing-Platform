@@ -770,14 +770,24 @@ export default function SourcingDemandDetail() {
                   </h2>
                   <p className="text-sm text-gray-500">Real-time matching based on your production parameters and factory availability</p>
                 </div>
-                <Button 
-                  onClick={() => triggerMatchMutation.mutate({ demandId })}
-                  disabled={triggerMatchMutation.isLoading}
-                  className="bg-amber-600 hover:bg-amber-500 text-white"
-                >
-                  {triggerMatchMutation.isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                  Refresh Matches
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setLocation(`/matching/${demandId}`)}
+                    className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold shadow-lg shadow-purple-600/20"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Open Matching Dashboard
+                  </Button>
+                  <Button 
+                    onClick={() => triggerMatchMutation.mutate({ demandId })}
+                    disabled={triggerMatchMutation.isLoading}
+                    variant="outline"
+                    className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {triggerMatchMutation.isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Refresh
+                  </Button>
+                </div>
               </div>
 
               {matchResults.isLoading ? (
@@ -847,16 +857,9 @@ export default function SourcingDemandDetail() {
                             </Button>
                             <Button 
                               className={`h-8 text-[10px] ${result.isOnline ? 'bg-green-600 hover:bg-green-500' : 'bg-purple-600 hover:bg-purple-500'} text-white`}
-                              onClick={() => {
-                                if (result.isOnline) {
-                                  toast.success("Connecting to factory agent...");
-                                  // TODO: 接入 30 分钟实时握手流程
-                                } else {
-                                  toast.info("Factory is offline. Sending offline inquiry...");
-                                }
-                              }}
+                              onClick={() => setLocation(`/matching/${demandId}`)}
                             >
-                              {result.isOnline ? 'Start Live Chat' : 'Send Inquiry'}
+                              {result.isOnline ? 'Start Live Chat' : 'Request Chat'}
                             </Button>
                           </div>
                         </div>

@@ -868,3 +868,42 @@ export const rfqClawJobs = mysqlTable("rfq_claw_jobs", {
 });
 export type RfqClawJob = typeof rfqClawJobs.$inferSelect;
 export type InsertRfqClawJob = typeof rfqClawJobs.$inferInsert;
+
+// ─── Handshake Requests (4.0: 15-min Real-time Matching) ─────────────────────
+// 买家向匹配工厂发起"请求对话"时创建记录
+// 状态流转：pending → accepted → rejected / expired
+export const handshakeRequests = mysqlTable("handshake_requests", {
+  id:                   int("id").primaryKey().autoincrement(),
+  demandId:             int("demandId").notNull(),
+  factoryId:            int("factoryId").notNull(),
+  buyerId:              int("buyerId").notNull(),
+  matchResultId:        int("matchResultId"),
+  // pending | accepted | rejected | expired
+  status:               varchar("status", { length: 20 }).notNull().default("pending"),
+  buyerMessage:         text("buyerMessage"),
+  factoryRejectReason:  varchar("factoryRejectReason", { length: 500 }),
+  // 请求超时时间（默认 15 分钟后过期）
+  expiresAt:            datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  respondedAt:          datetime("respondedAt", { mode: "date", fsp: 3 }),
+  // 接受后创建的沟通室 URL slug
+  roomSlug:             varchar("roomSlug", { length: 100 }),
+  createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:            datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type HandshakeRequest = typeof handshakeRequests.$inferSelect;
+export type InsertHandshakeRequest = typeof handshakeRequests.$inferInsert;
+
+// ─── Sourcing Room Messages (4.0: 30-min First Conversation) ─────────────────
+// 买家与工厂在需求沟通室中的实时对话记录
+export const sourcingRoomMessages = mysqlTable("sourcing_room_messages", {
+  id:           int("id").primaryKey().autoincrement(),
+  handshakeId:  int("handshakeId").notNull(),
+  senderId:     int("senderId").notNull(),
+  senderRole:   varchar("senderRole", { length: 20 }).notNull().default("buyer"), // buyer | factory | ai
+  content:      text("content").notNull(),
+  messageType:  varchar("messageType", { length: 20 }).notNull().default("text"), // text | system | ai_intro
+  isRead:       tinyint("isRead").notNull().default(0),
+  createdAt:    datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type SourcingRoomMessage = typeof sourcingRoomMessages.$inferSelect;
+export type InsertSourcingRoomMessage = typeof sourcingRoomMessages.$inferInsert;

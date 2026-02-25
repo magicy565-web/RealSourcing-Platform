@@ -2338,7 +2338,7 @@ ${transcriptSample}
       .input(z.object({ demandId: z.number() }))
       .query(async ({ input }) => {
         const database = await dbPromise;
-        return await database.select({
+        const rows = await database.select({
           id: schema.demandMatchResults.id,
           matchScore: schema.demandMatchResults.matchScore,
           matchReason: schema.demandMatchResults.matchReason,
@@ -2347,11 +2347,44 @@ ${transcriptSample}
           factoryLogo: schema.factories.logo,
           factoryCategory: schema.factories.category,
           isOnline: schema.factories.isOnline,
+          factoryLocation: schema.factories.city,
+          factoryAverageResponseTime: schema.factories.averageResponseTime,
+          factoryCertificationStatus: schema.factories.certificationStatus,
+          factoryResponseRate: schema.factories.responseRate,
+          factoryOverallScore: schema.factories.overallScore,
         })
         .from(schema.demandMatchResults)
         .innerJoin(schema.factories, eq(schema.demandMatchResults.factoryId, schema.factories.id))
         .where(eq(schema.demandMatchResults.demandId, input.demandId))
         .orderBy(desc(schema.demandMatchResults.matchScore));
+        // 将工厂字段嵌套到 factory 对象中，方便前端使用
+        return {
+          matches: rows.map(r => ({
+            id: r.id,
+            matchScore: parseFloat(r.matchScore ?? '0'),
+            matchReason: r.matchReason,
+            matchReasons: (() => {
+              // 将 matchReason 按句号分割为数组
+              if (r.matchReason) {
+                return r.matchReason.split('\u3002').filter(Boolean).map((s: string) => s.trim());
+              }
+              return [];
+            })(),
+            factoryId: r.factoryId,
+            factory: {
+              id: r.factoryId,
+              name: r.factoryName,
+              logoUrl: r.factoryLogo,
+              category: r.factoryCategory,
+              isOnline: r.isOnline === 1,
+              location: r.factoryLocation,
+              rating: parseFloat(r.factoryOverallScore ?? '0'),
+              certificationStatus: r.factoryCertificationStatus,
+              responseRate: parseFloat(r.factoryResponseRate?.toString() ?? '0'),
+              averageResponseTime: r.factoryAverageResponseTime ?? 0,
+            },
+          })),
+        };
       }),
 
     /**
@@ -2387,11 +2420,147 @@ ${transcriptSample}
       .query(async () => {
         return await ossHealthCheck();
       }),
+
+    // ── 以下路由原属于第二个 demands 路由器，已合并到此 ──
+
+    /**
+     * 为已转化的需求生成 SD 3.5 Turbo 产品渲染图
+     * 异步任务：提交 → 轮询 → OSS 存储 → 更新 renderImageUrl
+     */
+    generateRender: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await getDemandWithParameters(input.demandId);
+        if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
+        if (result.demand.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        if (!result.params) throw new TRPCError({ code: 'BAD_REQUEST', message: '生产参数尚未生成，请先完成需求处理' });
+
+        const renderInput = {
+          productName: result.demand.productName ?? '',
+          productDescription: result.demand.productDescription ?? '',
+          materials: Array.isArray(result.params.materials) ? result.params.materials as Array<{ name: string; specification?: string }> : [],
+          colorRequirements: Array.isArray(result.params.colorRequirements) ? result.params.colorRequirements as Array<{ name: string; hex?: string }> : [],
+          dimensions: result.params.dimensions ?? '',
+          productionCategory: result.params.productionCategory ?? '',
+          customizationNotes: result.demand.customizationNotes ?? '',
+        };
+
+        console.log(`🎨 [Route] Generating render for demand #${input.demandId}`);
+        const renderResult = await generateRenderImage(renderInput);
+
+        if (isRenderImageError(renderResult)) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `渲染图生成失败: ${renderResult.error}`,
+          });
+        }
+
+        // 更新 manufacturing_parameters.renderImageUrl
+        await upsertManufacturingParameters(input.demandId, {
+          renderImageUrl: renderResult.ossUrl,
+        });
+
+        return {
+          renderImageUrl: renderResult.ossUrl,
+          taskId: renderResult.taskId,
+          prompt: renderResult.prompt,
+        };
+      }),
+
+    /**
+     * 为需求生成语义向量并存储
+     * 在 submitAndProcess 完成后自动调用，也可手动触发
+     */
+    embedDemand: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const demand = await getSourcingDemandById(input.demandId);
+        if (!demand) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
+        if (demand.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+
+        const embeddingText = buildEmbeddingText({
+          productName: demand.productName ?? '',
+          productDescription: demand.productDescription,
+          keyFeatures: demand.keyFeatures,
+          productionCategory: (demand.extractedData as Record<string, unknown>)?.productCategory as string ?? null,
+          customizationNotes: demand.customizationNotes,
+          estimatedQuantity: demand.estimatedQuantity,
+          targetPrice: demand.targetPrice,
+        });
+
+        const embResult = await generateEmbedding(embeddingText);
+        if (isEmbeddingError(embResult)) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `向量生成失败: ${embResult.error}`,
+          });
+        }
+
+        // 将向量存入数据库
+        await updateSourcingDemand(input.demandId, {
+          embeddingVector: JSON.stringify(embResult.vector) as unknown as never,
+          embeddingModel: embResult.model as unknown as never,
+          embeddingAt: new Date() as unknown as never,
+        });
+
+        return {
+          success: true,
+          model: embResult.model,
+          dimensions: embResult.vector.length,
+          tokenCount: embResult.tokenCount,
+        };
+      }),
+
+    /**
+     * 语义相似度搜索：供应商 AI Agent 发现匹配需求
+     */
+    semanticSearch: publicProcedure
+      .input(z.object({
+        query: z.string().min(5).max(1000),
+        topK: z.number().min(1).max(20).default(10),
+        minSimilarity: z.number().min(0).max(1).default(0.5),
+      }))
+      .query(async ({ input }) => {
+        // Step 1: 生成查询向量
+        const queryEmbedding = await generateEmbedding(input.query);
+        if (isEmbeddingError(queryEmbedding)) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `查询向量生成失败: ${queryEmbedding.error}`,
+          });
+        }
+
+        // Step 2: 获取所有已发布且有向量的需求
+        const publishedDemands = await getPublishedSourcingDemands({ limit: 500 });
+        const demandsWithVectors = publishedDemands.filter(
+          (d: { embeddingVector?: unknown }) => d.embeddingVector != null
+        );
+
+        if (demandsWithVectors.length === 0) {
+          return { results: [], queryModel: queryEmbedding.model, totalSearched: 0 };
+        }
+
+        // Step 3: 计算余弦相似度
+        const similar = findSimilarDemands(
+          queryEmbedding.vector,
+          demandsWithVectors as Parameters<typeof findSimilarDemands>[1],
+          input.topK,
+          input.minSimilarity
+        );
+
+        console.log(`🔍 [SemanticSearch] Query: "${input.query.slice(0, 50)}" | Found: ${similar.length}/${demandsWithVectors.length}`);
+
+        return {
+          results: similar,
+          queryModel: queryEmbedding.model,
+          totalSearched: demandsWithVectors.length,
+        };
+      }),
   }),
 
   /**
    * RFQ & 报价流程（4.0 核心功能）
-   * 实现"30分钟获得报价"的业务闭环
+   * 实现“30分钟获得报价”的业务闭环
    */
   rfq: router({
     /** 发送标准化 RFQ */
@@ -2510,146 +2679,7 @@ ${transcriptSample}
       }),
   }),
 
-  demands: router({
-    /**
-     * 为已转化的需求生成 SD 3.5 Turbo 产品渲染图
-     * 异步任务：提交 → 轮询 → OSS 存储 → 更新 renderImageUrl
-     */
-    generateRender: protectedProcedure
-      .input(z.object({ demandId: z.number() }))
-      .mutation(async ({ input, ctx }) => {
-        const result = await getDemandWithParameters(input.demandId);
-        if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
-        if (result.demand.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
-        if (!result.params) throw new TRPCError({ code: 'BAD_REQUEST', message: '生产参数尚未生成，请先完成需求处理' });
-
-        const renderInput = {
-          productName: result.demand.productName ?? '',
-          productDescription: result.demand.productDescription ?? '',
-          materials: Array.isArray(result.params.materials) ? result.params.materials as Array<{ name: string; specification?: string }> : [],
-          colorRequirements: Array.isArray(result.params.colorRequirements) ? result.params.colorRequirements as Array<{ name: string; hex?: string }> : [],
-          dimensions: result.params.dimensions ?? '',
-          productionCategory: result.params.productionCategory ?? '',
-          customizationNotes: result.demand.customizationNotes ?? '',
-        };
-
-        console.log(`🎨 [Route] Generating render for demand #${input.demandId}`);
-        const renderResult = await generateRenderImage(renderInput);
-
-        if (isRenderImageError(renderResult)) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `渲染图生成失败: ${renderResult.error}`,
-          });
-        }
-
-        // 更新 manufacturing_parameters.renderImageUrl
-        await upsertManufacturingParameters(input.demandId, {
-          renderImageUrl: renderResult.ossUrl,
-        });
-
-        return {
-          renderImageUrl: renderResult.ossUrl,
-          taskId: renderResult.taskId,
-          prompt: renderResult.prompt,
-        };
-      }),
-
-    /**
-     * 为需求生成语义向量并存储
-     * 在 submitAndProcess 完成后自动调用，也可手动触发
-     */
-    embedDemand: protectedProcedure
-      .input(z.object({ demandId: z.number() }))
-      .mutation(async ({ input, ctx }) => {
-        const demand = await getSourcingDemandById(input.demandId);
-        if (!demand) throw new TRPCError({ code: 'NOT_FOUND', message: '需求不存在' });
-        if (demand.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
-
-        const embeddingText = buildEmbeddingText({
-          productName: demand.productName ?? '',
-          productDescription: demand.productDescription,
-          keyFeatures: demand.keyFeatures,
-          productionCategory: (demand.extractedData as Record<string, unknown>)?.productCategory as string ?? null,
-          customizationNotes: demand.customizationNotes,
-          estimatedQuantity: demand.estimatedQuantity,
-          targetPrice: demand.targetPrice,
-        });
-
-        const embResult = await generateEmbedding(embeddingText);
-        if (isEmbeddingError(embResult)) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `向量生成失败: ${embResult.error}`,
-          });
-        }
-
-        // 将向量存入数据库
-        await updateSourcingDemand(input.demandId, {
-          embeddingVector: JSON.stringify(embResult.vector) as unknown as never,
-          embeddingModel: embResult.model as unknown as never,
-          embeddingAt: new Date() as unknown as never,
-        });
-
-        return {
-          success: true,
-          model: embResult.model,
-          dimensions: embResult.vector.length,
-          tokenCount: embResult.tokenCount,
-        };
-      }),
-
-    /**
-     * 语义相似度搜索：供应商 AI Agent 发现匹配需求
-     *
-     * 供应商输入自己的产品描述，系统返回语义最相似的公开需求
-     * 这是平台吸引外部采购商 AI 的核心接口
-     */
-    semanticSearch: publicProcedure
-      .input(z.object({
-        query: z.string().min(5).max(1000),
-        topK: z.number().min(1).max(20).default(10),
-        minSimilarity: z.number().min(0).max(1).default(0.5),
-      }))
-      .query(async ({ input }) => {
-        // Step 1: 生成查询向量
-        const queryEmbedding = await generateEmbedding(input.query);
-        if (isEmbeddingError(queryEmbedding)) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `查询向量生成失败: ${queryEmbedding.error}`,
-          });
-        }
-
-        // Step 2: 获取所有已发布且有向量的需求
-        const publishedDemands = await getPublishedSourcingDemands({ limit: 500 });
-        const demandsWithVectors = publishedDemands.filter(
-          (d: { embeddingVector?: unknown }) => d.embeddingVector != null
-        );
-
-        if (demandsWithVectors.length === 0) {
-          return { results: [], queryModel: queryEmbedding.model, totalSearched: 0 };
-        }
-
-        // Step 3: 计算余弦相似度
-        const similar = findSimilarDemands(
-          queryEmbedding.vector,
-          demandsWithVectors as Parameters<typeof findSimilarDemands>[1],
-          input.topK,
-          input.minSimilarity
-        );
-
-        console.log(`🔍 [SemanticSearch] Query: "${input.query.slice(0, 50)}" | Found: ${similar.length}/${demandsWithVectors.length}`);
-
-        return {
-          results: similar,
-          queryModel: queryEmbedding.model,
-          totalSearched: demandsWithVectors.length,
-        };
-      }),
-  }),
-
-  // ─── Knowledge Base Management API ──────────────────────────────────────────
+  // ─── Knowledge Base Management API ────────────────────────────────────────────
   knowledge: router({
 
     // 搜索知识库（公开，供 AI 助理调用）
@@ -2888,6 +2918,89 @@ ${transcriptSample}
       .mutation(async ({ input }) => {
         const { refreshFactoryAMR } = await import('./_core/amrService');
         return refreshFactoryAMR(input.factoryId);
+      }),
+
+    // ─── 握手请求路由 (4.0: 15-min Matching) ────────────────────────────────
+    /** 买家发起握手请求 */
+    createHandshake: protectedProcedure
+      .input(z.object({
+        demandId: z.number(),
+        factoryId: z.number(),
+        matchResultId: z.number().optional(),
+        buyerMessage: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createHandshakeRequest } = await import('./_core/handshakeService');
+        return createHandshakeRequest({ ...input, buyerId: ctx.user.id });
+      }),
+
+    /** 工厂接受握手请求 */
+    acceptHandshake: protectedProcedure
+      .input(z.object({ handshakeId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { acceptHandshakeRequest } = await import('./_core/handshakeService');
+        return acceptHandshakeRequest(input.handshakeId, ctx.user.id);
+      }),
+
+    /** 工厂拒绝握手请求 */
+    rejectHandshake: protectedProcedure
+      .input(z.object({
+        handshakeId: z.number(),
+        reason: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { rejectHandshakeRequest } = await import('./_core/handshakeService');
+        return rejectHandshakeRequest(input.handshakeId, ctx.user.id, input.reason);
+      }),
+
+    /** 获取需求的所有握手请求 */
+    getHandshakesByDemand: protectedProcedure
+      .input(z.object({ demandId: z.number() }))
+      .query(async ({ input }) => {
+        const { getHandshakesByDemand } = await import('./_core/handshakeService');
+        return getHandshakesByDemand(input.demandId);
+      }),
+
+    /** 获取工厂待处理握手请求 */
+    getFactoryPendingHandshakes: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { getFactoryPendingHandshakes } = await import('./_core/handshakeService');
+        return getFactoryPendingHandshakes(input.factoryId);
+      }),
+
+    /** 获取沟通室消息 */
+    getSourcingRoomMessages: protectedProcedure
+      .input(z.object({ handshakeId: z.number(), limit: z.number().optional().default(50) }))
+      .query(async ({ input }) => {
+        const { getSourcingRoomMessages } = await import('./_core/handshakeService');
+        return getSourcingRoomMessages(input.handshakeId, input.limit);
+      }),
+
+    /** 发送沟通室消息 */
+    sendSourcingRoomMessage: protectedProcedure
+      .input(z.object({
+        handshakeId: z.number(),
+        content: z.string().min(1).max(2000),
+        senderRole: z.enum(['buyer', 'factory']),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { sendSourcingRoomMessage } = await import('./_core/handshakeService');
+        const messageId = await sendSourcingRoomMessage(
+          input.handshakeId,
+          ctx.user.id,
+          input.senderRole,
+          input.content
+        );
+        return { success: true, messageId };
+      }),
+
+    /** 通过 roomSlug 获取握手详情 */
+    getHandshakeByRoomSlug: protectedProcedure
+      .input(z.object({ roomSlug: z.string() }))
+      .query(async ({ input }) => {
+        const { getHandshakeByRoomSlug } = await import('./_core/handshakeService');
+        return getHandshakeByRoomSlug(input.roomSlug);
       }),
 
     // ─── 工厂知识库摄入路由 ───────────────────────────────────────────────────

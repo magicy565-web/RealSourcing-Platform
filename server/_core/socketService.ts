@@ -3,7 +3,7 @@ import { Server as HttpServer } from 'http';
 import { dbPromise } from '../db';
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { authenticateUser } from './sdk';
+import { sdk } from './sdk';
 
 let io: SocketIOServer | null = null;
 
@@ -27,7 +27,7 @@ export function initSocketService(server: HttpServer) {
       try {
         // 模拟请求对象用于 sdk 鉴权
         const mockReq = { headers: { cookie: `token=${data.token}` } } as any;
-        const user = await authenticateUser(mockReq);
+        const user = await sdk.authenticateRequest(mockReq);
 
         if (!user) {
           socket.emit('error', { message: 'Authentication failed' });
@@ -60,6 +60,14 @@ export function initSocketService(server: HttpServer) {
         socket.emit('authenticated', { status: 'ok' });
       } catch (err) {
         console.error('❌ [Socket] Auth error:', err);
+      }
+    });
+
+    // 2b. 快速注册（前端直接发送 userId，无需 token）
+    socket.on('register_user', (data: { userId: number }) => {
+      if (data.userId) {
+        (socket as any).userId = data.userId;
+        console.log(`👤 [Socket] User ${data.userId} registered on socket ${socket.id}`);
       }
     });
 
