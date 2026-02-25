@@ -276,10 +276,15 @@ export default function AIAssistant() {
         role: "assistant",
         content: result.content,
         timestamp: new Date(),
-        phase: result.phase as Phase,
+        phase: (result.phase as Phase) || "welcome",
       }]);
-      setSessionState(result.sessionState as SessionState);
-      setProgressPercent(result.progressPercent);
+      const newState: SessionState = {
+        currentPhase: ((result.sessionState as any)?.currentPhase as Phase) || "welcome",
+        preferences: (result.sessionState as any)?.preferences || {},
+        conversationHistory: (result.sessionState as any)?.conversationHistory || [],
+      };
+      setSessionState(newState);
+      setProgressPercent(result.progressPercent || 0);
     } catch {
       setMessages([{
         id: `welcome-fallback-${Date.now()}`,
@@ -329,13 +334,18 @@ export default function AIAssistant() {
       setMessages(prev => prev.filter(m => m.id !== typingId).concat({
         id: `ai-${Date.now()}`,
         role: "assistant",
-        content: result.content,
+        content: result.content || "",
         timestamp: new Date(),
-        phase: result.phase as Phase,
+        phase: (result.phase as Phase) || sessionState.currentPhase,
         quotes: result.quotes as QuoteCard[] | undefined,
       }));
-      setSessionState(result.sessionState as SessionState);
-      setProgressPercent(result.progressPercent);
+      const updatedState: SessionState = {
+        currentPhase: ((result.sessionState as any)?.currentPhase as Phase) || sessionState.currentPhase,
+        preferences: (result.sessionState as any)?.preferences || sessionState.preferences,
+        conversationHistory: (result.sessionState as any)?.conversationHistory || sessionState.conversationHistory,
+      };
+      setSessionState(updatedState);
+      setProgressPercent(result.progressPercent || 0);
     } catch {
       setMessages(prev => prev.filter(m => m.id !== typingId).concat({
         id: `err-${Date.now()}`,
