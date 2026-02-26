@@ -13,7 +13,7 @@ import { nanoid } from "nanoid";
 import {
   createUser, getUserByEmail, getUserById, getUserByOpenId,
   getUserNotifications, getUnreadNotificationsCount,
-  markNotificationAsRead, markAllNotificationsAsRead, createNotification,
+  markNotificationAsRead, markAllNotificationsAsRead, createNotification, deleteNotification,
   // Webinar
   getAllWebinars, getWebinarById, getWebinarsByHostId, createWebinar, updateWebinar,
   getWebinarParticipants, registerForWebinar, getWebinarRegistration,
@@ -736,7 +736,7 @@ ${transcriptSample}
         name: z.string().min(1, "姓名不能为空"),
         email: z.string().email("邮箱格式不正确"),
         password: z.string().min(6, "密码至少 6 位"),
-        role: z.enum(["buyer", "factory", "user"]).default("user"),
+        role: z.enum(["BUYER", "FACTORY_ADMIN", "buyer", "factory", "user"]).default("BUYER"),
       }))
       .mutation(async ({ input }) => {
         const existingUser = await getUserByEmail(input.email);
@@ -745,12 +745,17 @@ ${transcriptSample}
         }
         const hashedPassword = await bcrypt.hash(input.password, 10);
         const openId = `email_${nanoid()}`;
+        
+        // 映射角色到数据库 ENUM
+        let dbRole = "BUYER";
+        if (input.role === "factory" || input.role === "FACTORY_ADMIN") dbRole = "FACTORY_ADMIN";
+        
         await createUser({
           openId,
           name: input.name,
           email: input.email,
           passwordHash: hashedPassword,
-          role: input.role,
+          role: dbRole,
         });
         return { success: true, message: "注册成功" };
       }),
@@ -1779,6 +1784,12 @@ ${transcriptSample}
       await markAllNotificationsAsRead(ctx.user.id);
       return { success: true };
     }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteNotification(input.id);
+        return { success: true };
+      }),
 
      create: protectedProcedure
       .input(z.object({
@@ -2220,11 +2231,8 @@ ${transcriptSample}
             suggestedFactoryTypes: params.suggestedFactoryTypes,
           });
 
-          // Step 8: 更新需求状态为 transformed，同步写入 productionCategory（供匹配服务直接读取）
-          await updateSourcingDemand(demandId, {
-            status: 'transformed',
-            productionCategory: params.productionCategory ?? undefined,
-          });
+          // Step 8: 更新需求状态为 transformed
+          await updateSourcingDemand(demandId, { status: 'transformed' });
 
           // Step 9: 异步生成语义向量（不阻塞响应）
           setImmediate(async () => {
@@ -2233,8 +2241,7 @@ ${transcriptSample}
                 productName: extracted.productName,
                 productDescription: extracted.productDescription,
                 keyFeatures: extracted.keyFeatures,
-                // 优先使用 params.productionCategory（经 AI 转化的精准品类），回退到 extractedData.productCategory
-                productionCategory: params.productionCategory ?? String(extracted.extractedData?.productCategory ?? ''),
+                productionCategory: String(extracted.extractedData?.productCategory ?? ''),
                 customizationNotes: extracted.customizationNotes,
                 estimatedQuantity: extracted.estimatedQuantity,
                 targetPrice: extracted.targetPrice,

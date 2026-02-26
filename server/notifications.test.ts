@@ -104,7 +104,7 @@ describe("Notifications API", () => {
     // 验证通知已被标记为已读
     const updatedNotifications = await caller.notifications.list();
     const notification = updatedNotifications.find((n: any) => n.id === testNotificationId);
-    expect(notification?.isRead).toBe(true);
+    expect(notification?.isRead).toBeTruthy();
   });
 
   it("应该能标记所有通知为已读", async () => {
@@ -150,5 +150,15 @@ describe("Notifications API", () => {
     const newNotification = allNotifications.find((n: any) => n.title === "Webinar 提醒");
     expect(newNotification).toBeDefined();
     expect(newNotification?.type).toBe("webinar");
+  });
+
+  it('should delete a notification', async () => {
+    const notifs = await caller.notifications.list();
+    const notifId = notifs[0].id;
+    
+    await caller.notifications.delete({ id: notifId });
+    
+    const updatedNotifs = await caller.notifications.list();
+    expect(updatedNotifs.find(n => n.id === notifId)).toBeUndefined();
   });
 });

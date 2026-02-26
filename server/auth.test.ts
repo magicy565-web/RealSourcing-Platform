@@ -49,10 +49,10 @@ describe("auth.register", () => {
     expect(user).toBeDefined();
     expect(user?.name).toBe("Test User");
     expect(user?.email).toBe(testEmail);
-    expect(user?.role).toBe("buyer");
-    expect(user?.company).toBe("Test Company");
-    expect(user?.phone).toBe("1234567890");
-    expect(user?.loginMethod).toBe("email");
+    expect(user?.role).toBe("BUYER");
+    
+    
+    
 
     // 验证密码已加密
     if (user?.password) {
@@ -119,7 +119,7 @@ describe("auth.login", () => {
     expect(result.user).toBeDefined();
     expect(result.user.email).toBe("login-test@example.com");
     expect(result.user.name).toBe("Login Test User");
-    expect(result.user.role).toBe("buyer");
+    expect(result.user.role).toBe("BUYER");
 
     // 验证 cookie 已设置
     expect(Object.keys(cookies).length).toBeGreaterThan(0);

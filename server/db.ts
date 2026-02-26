@@ -484,6 +484,11 @@ export async function getUnreadNotificationsCount(userId: number) {
   return rows[0]?.count || 0;
 }
 
+export async function deleteNotification(id: number) {
+  const database = await dbPromise;
+  return await database.delete(schema.notifications).where(eq(schema.notifications.id, id));
+}
+
 // ─── Inquiry Messages (dedicated inquiry_messages table) ───────────────────────
 // 使用独立的 inquiry_messages 表，支持双向通信和未读状态
 
