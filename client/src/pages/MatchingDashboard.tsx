@@ -1,599 +1,657 @@
 /**
- * RealSourcing 4.0 - Matching Dashboard
- * 15分钟实时匹配工厂核心体验页面
+ * RealSourcing 4.0 — Matching Dashboard (完全重构版)
  *
- * 功能：
- * - 展示 AI 匹配到的工厂列表（含匹配分数、理由、在线状态）
- * - 实时倒计时（15分钟匹配窗口）
- * - 买家一键"请求对话"发起握手
- * - WebSocket 实时推送工厂接受/拒绝通知
- * - 握手成功后跳转需求沟通室
+ * 设计理念：
+ * - 上方：工厂匹配结果区（AMR 卡片，实时 WebSocket 推送）
+ * - 下方：AI 对话微调区（自然语言指令，实时重排）
+ * - 顶部：15 分钟倒计时 + 状态 Ticker
+ * - 侧滑：工厂详情 Drawer（完整雷达图 + 认证 + 指标）
  */
-
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Factory, Zap, Clock, CheckCircle2, Loader2,
-  MessageSquare, Star, Shield, Package, DollarSign, Globe,
-  ChevronRight, Sparkles, TrendingUp, Award, Phone,
-  AlertCircle, RefreshCw, Send, X, Wifi, WifiOff, Timer,
-  Users, BarChart3, Eye, Play
+  ArrowLeft, Zap, Clock, CheckCircle2, Loader2,
+  MessageSquare, Shield, Globe, Sparkles, Send, X, Timer,
+  BarChart3, Star, BadgeCheck, Activity, RefreshCw,
+  AlertTriangle, Play, TrendingUp, Factory, MapPin,
+  Users, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
 import { useSocket } from "@/hooks/useSocket";
+import { ScoreRing } from "@/components/matching/ScoreRing";
+import { AMRDimensionBars } from "@/components/matching/AMRDimensionBars";
+import { AMRRadarChart, type AMRDimensions } from "@/components/matching/AMRRadarChart";
 
-// ── 常量 ──────────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+const MATCH_WINDOW_SECONDS = 15 * 60;
 
 const GRID_BG = `
-  linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px)
+  linear-gradient(rgba(124,58,237,0.025) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(124,58,237,0.025) 1px, transparent 1px)
 `;
 
-const MATCH_SCORE_CONFIG = [
-  { min: 90, label: "Perfect Match", color: "#4ade80", bg: "rgba(74,222,128,0.12)", glow: "shadow-green-500/20" },
-  { min: 75, label: "Strong Match",  color: "#60a5fa", bg: "rgba(96,165,250,0.12)",  glow: "shadow-blue-500/20"  },
-  { min: 60, label: "Good Match",    color: "#a78bfa", bg: "rgba(167,139,250,0.12)", glow: "shadow-purple-500/20" },
-  { min: 0,  label: "Possible Match",color: "#94a3b8", bg: "rgba(148,163,184,0.12)", glow: "shadow-gray-500/10"  },
-];
-
-function getMatchConfig(score: number) {
-  return MATCH_SCORE_CONFIG.find(c => score >= c.min) ?? MATCH_SCORE_CONFIG[3];
-}
-
-// ── 倒计时 Hook ────────────────────────────────────────────────────────────────
-
-function useCountdown(targetSeconds: number) {
-  const [remaining, setRemaining] = useState(targetSeconds);
-
-  useEffect(() => {
-    if (remaining <= 0) return;
-    const timer = setInterval(() => {
-      setRemaining(prev => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [remaining]);
-
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
-  const progress = ((targetSeconds - remaining) / targetSeconds) * 100;
-  const isUrgent = remaining < 180; // 3 分钟内变红
-  const isExpired = remaining === 0;
-
-  return { remaining, minutes, seconds, progress, isUrgent, isExpired };
-}
-
-// ── 握手状态 Map ───────────────────────────────────────────────────────────────
-
-type HandshakeStatus = 'idle' | 'pending' | 'accepted' | 'rejected' | 'expired';
+// ── Types ─────────────────────────────────────────────────────────────────────
+type HandshakeStatus = "idle" | "pending" | "accepted" | "rejected" | "expired";
 
 interface HandshakeState {
   status: HandshakeStatus;
   handshakeId?: number;
   roomSlug?: string;
-  expiresAt?: Date;
 }
 
-// ── 子组件：工厂匹配卡片 ───────────────────────────────────────────────────────
-
-interface FactoryMatchCardProps {
-  match: any;
-  handshakeState: HandshakeState;
-  onRequestChat: (factoryId: number, matchResultId?: number) => void;
-  isRequesting: boolean;
-  onNavigateToRoom: (roomSlug: string) => void;
-}
-
-function FactoryMatchCard({
-  match, handshakeState, onRequestChat, isRequesting, onNavigateToRoom
-}: FactoryMatchCardProps) {
-  const [showMessageInput, setShowMessageInput] = useState(false);
-  const [buyerMessage, setBuyerMessage] = useState("");
-  const config = getMatchConfig(match.matchScore ?? 0);
-
-  const handleSendRequest = () => {
-    onRequestChat(match.factoryId ?? match.factory?.id, match.id);
-    setShowMessageInput(false);
+interface MatchResult {
+  id: number;
+  matchScore: number;
+  matchReason?: string;
+  matchReasons?: string[];
+  structuredReasons?: Array<{ icon: string; label: string; value: string; highlight: boolean }>;
+  factoryId: number;
+  amrScore?: number;
+  amrAcumen?: number;
+  amrChannel?: number;
+  amrVelocity?: number;
+  amrGlobal?: number;
+  factory?: {
+    id: number;
+    name: string;
+    logoUrl?: string;
+    coverImage?: string;
+    category?: string;
+    country?: string;
+    city?: string;
+    isOnline: boolean;
+    location?: string;
+    rating?: number;
+    reviewCount?: number;
+    certificationStatus?: string;
+    certifications?: string[];
+    responseRate?: number;
+    averageResponseTime?: number;
+    aiVerificationScore?: number;
+    complianceScore?: number;
+    trustBadges?: string[];
+    totalOrders?: number;
+    disputeRate?: number;
+    hasReel?: boolean;
+    moq?: number;
   };
+}
 
-  const isOnline = match.factory?.isOnline;
-  const factoryName = match.factory?.name ?? `Factory #${match.factoryId}`;
-  const score = match.matchScore ?? 0;
-  const reasons = Array.isArray(match.matchReasons) ? match.matchReasons as string[] : [];
-  const certifications = Array.isArray(match.factory?.certifications)
-    ? match.factory.certifications as string[]
-    : [];
+interface ChatMessage {
+  role: "user" | "ai";
+  content: string;
+  timestamp: Date;
+}
 
+// ── Countdown Hook ────────────────────────────────────────────────────────────
+function useCountdown(targetSeconds: number) {
+  const [remaining, setRemaining] = useState(targetSeconds);
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const t = setInterval(() => setRemaining(p => Math.max(0, p - 1)), 1000);
+    return () => clearInterval(t);
+  }, [remaining]);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  const isUrgent = remaining < 180;
+  const isExpired = remaining === 0;
+  return { m, s, isUrgent, isExpired };
+}
+
+// ── Score Config ──────────────────────────────────────────────────────────────
+function getScoreConfig(score: number) {
+  if (score >= 90) return { label: "Perfect Match", color: "#4ade80", bg: "rgba(74,222,128,0.1)",  border: "rgba(74,222,128,0.25)"  };
+  if (score >= 75) return { label: "Strong Match",  color: "#60a5fa", bg: "rgba(96,165,250,0.1)",  border: "rgba(96,165,250,0.25)"  };
+  if (score >= 60) return { label: "Good Match",    color: "#a78bfa", bg: "rgba(167,139,250,0.1)", border: "rgba(167,139,250,0.25)" };
+  return              { label: "Possible",          color: "#f59e0b", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.2)"   };
+}
+
+// ── Skeleton Card ─────────────────────────────────────────────────────────────
+function SkeletonCard({ index }: { index: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border overflow-hidden transition-all duration-300 ${
-        handshakeState.status === 'accepted'
-          ? 'border-green-500/40 shadow-lg shadow-green-500/10'
-          : handshakeState.status === 'pending'
-          ? 'border-amber-500/40 shadow-lg shadow-amber-500/10'
-          : 'border-white/8 hover:border-white/15'
-      }`}
-      style={{ background: "rgba(255,255,255,0.025)", backdropFilter: "blur(20px)" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: index * 0.1 }}
+      className="rounded-2xl border border-white/5 overflow-hidden"
+      style={{ background: "rgba(255,255,255,0.015)" }}
     >
-      {/* Card Header */}
-      <div className="p-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          {/* Factory Info */}
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            {/* Avatar */}
-            <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-gradient-to-br from-purple-600/30 to-blue-600/20 border border-white/10 flex items-center justify-center">
-              {match.factory?.logoUrl ? (
-                <img src={match.factory.logoUrl} alt={factoryName}
-                  className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              ) : (
-                <Factory className="w-5 h-5 text-purple-400" />
-              )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-white truncate">{factoryName}</h3>
-                {/* Online indicator */}
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  isOnline
-                    ? 'bg-green-500/15 border border-green-500/25 text-green-300'
-                    : 'bg-gray-500/10 border border-gray-600/20 text-gray-500'
-                }`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
-                  {isOnline ? 'Online' : 'Offline'}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {match.factory?.location && (
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <Globe className="w-3 h-3" />
-                    {match.factory.location}
-                  </span>
-                )}
-                {match.factory?.averageResponseTime > 0 && (
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    Avg. {match.factory.averageResponseTime}min response
-                  </span>
-                )}
-              </div>
-            </div>
+      <div className="p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/5 animate-pulse" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 bg-white/5 rounded animate-pulse w-3/4" />
+            <div className="h-2.5 bg-white/5 rounded animate-pulse w-1/2" />
           </div>
-
-          {/* Match Score */}
-          <div className="flex-shrink-0 text-right">
-            <div
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold"
-              style={{ background: config.bg, color: config.color }}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              {score}%
-            </div>
-            <p className="text-xs mt-1" style={{ color: config.color }}>{config.label}</p>
-          </div>
+          <div className="w-12 h-12 rounded-full bg-white/5 animate-pulse" />
         </div>
-
-        {/* Match Score Bar */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-gray-600">AI Match Score</span>
-            <span className="text-xs font-medium" style={{ color: config.color }}>{score}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${score}%` }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="h-full rounded-full"
-              style={{ background: `linear-gradient(90deg, ${config.color}80, ${config.color})` }}
-            />
-          </div>
-        </div>
-
-        {/* Match Reasons */}
-        {reasons.length > 0 && (
-          <div className="mt-3 space-y-1.5">
-            {reasons.slice(0, 3).map((reason, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
-                <span className="text-xs text-gray-400">{reason}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Certifications */}
-        {certifications.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {certifications.slice(0, 4).map((cert, i) => (
-              <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-blue-500/10 border border-blue-500/20 text-blue-300 flex items-center gap-1">
-                <Shield className="w-2.5 h-2.5" />
-                {cert}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Factory Stats */}
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {[
-            { icon: Package, label: "MOQ", value: match.factory?.moq ?? "—" },
-            { icon: Star, label: "Rating", value: match.factory?.rating ? `${match.factory.rating}/5` : "—" },
-            { icon: TrendingUp, label: "Capacity", value: match.factory?.annualCapacity ?? "—" },
-          ].map((stat) => (
-            <div key={stat.label} className="p-2 rounded-xl bg-white/3 border border-white/5 text-center">
-              <stat.icon className="w-3 h-3 text-gray-600 mx-auto mb-1" />
-              <p className="text-xs font-semibold text-white truncate">{stat.value}</p>
-              <p className="text-xs text-gray-600">{stat.label}</p>
+        <div className="space-y-2">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-16 h-2 bg-white/5 rounded animate-pulse" />
+              <div className="flex-1 h-1 bg-white/5 rounded animate-pulse" />
+              <div className="w-6 h-2 bg-white/5 rounded animate-pulse" />
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Handshake Status Banner */}
-      <AnimatePresence>
-        {handshakeState.status === 'pending' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-5 py-3 bg-amber-500/8 border-t border-amber-500/20"
-          >
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 text-amber-400 animate-spin flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs font-medium text-amber-300">Waiting for factory response...</p>
-                <p className="text-xs text-amber-500/70 mt-0.5">Request expires in 15 minutes</p>
-              </div>
-              <HandshakeCountdown expiresAt={handshakeState.expiresAt} />
-            </div>
-          </motion.div>
-        )}
-
-        {handshakeState.status === 'accepted' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-5 py-3 bg-green-500/8 border-t border-green-500/20"
-          >
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-green-300">Factory accepted! Sourcing room ready.</p>
-              </div>
-              {handshakeState.roomSlug && (
-                <Button
-                  size="sm"
-                  onClick={() => onNavigateToRoom(handshakeState.roomSlug!)}
-                  className="h-7 text-xs bg-green-600 hover:bg-green-500 text-white"
-                >
-                  Enter Room
-                  <ChevronRight className="w-3 h-3 ml-1" />
-                </Button>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {handshakeState.status === 'rejected' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-5 py-3 bg-red-500/8 border-t border-red-500/20"
-          >
-            <div className="flex items-center gap-2">
-              <X className="w-4 h-4 text-red-400 flex-shrink-0" />
-              <p className="text-xs text-red-300">Factory declined this request</p>
-            </div>
-          </motion.div>
-        )}
-
-        {handshakeState.status === 'expired' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-5 py-3 bg-gray-500/8 border-t border-gray-500/20"
-          >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-              <p className="text-xs text-gray-500">Request expired — try again</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Action Area */}
-      {handshakeState.status === 'idle' && (
-        <div className="px-5 py-4 border-t border-white/5">
-          <AnimatePresence mode="wait">
-            {showMessageInput ? (
-              <motion.div
-                key="message-input"
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="space-y-3"
-              >
-                <Textarea
-                  value={buyerMessage}
-                  onChange={(e) => setBuyerMessage(e.target.value)}
-                  placeholder="Add a message to the factory (optional)..."
-                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 text-sm resize-none h-20"
-                  maxLength={500}
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleSendRequest}
-                    disabled={isRequesting}
-                    className="flex-1 h-9 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white text-sm font-semibold shadow-lg shadow-purple-600/20"
-                  >
-                    {isRequesting ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Send Request
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowMessageInput(false)}
-                    className="h-9 text-gray-500 hover:text-gray-300"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="action-buttons"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2"
-              >
-                <Button
-                  size="sm"
-                  onClick={() => setShowMessageInput(true)}
-                  disabled={isRequesting}
-                  className="flex-1 h-9 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white text-sm font-semibold shadow-lg shadow-purple-600/20"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Request Chat
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(`/factory/${match.factoryId ?? match.factory?.id}`, '_blank')}
-                  className="h-9 border-white/10 text-gray-400 hover:text-white hover:bg-white/5"
-                >
-                  <Eye className="w-4 h-4" />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex gap-2 pt-2 border-t border-white/5">
+          <div className="flex-1 h-2 bg-white/5 rounded animate-pulse" />
+          <div className="w-24 h-7 bg-white/5 rounded-lg animate-pulse" />
         </div>
-      )}
+      </div>
     </motion.div>
   );
 }
 
-// ── 握手倒计时组件 ─────────────────────────────────────────────────────────────
+// ── Match Card ────────────────────────────────────────────────────────────────
+interface MatchCardProps {
+  match: MatchResult;
+  index: number;
+  handshakeState: HandshakeState;
+  onRequestChat: (factoryId: number, matchId: number) => void;
+  onViewDetails: (match: MatchResult) => void;
+  isRequesting: boolean;
+  overrideScore?: number;
+}
 
-function HandshakeCountdown({ expiresAt }: { expiresAt?: Date }) {
-  const [remaining, setRemaining] = useState(0);
+function MatchCard({ match, index, handshakeState, onRequestChat, onViewDetails, isRequesting, overrideScore }: MatchCardProps) {
+  const score = overrideScore ?? match.matchScore ?? 0;
+  const cfg = getScoreConfig(score);
+  const factory = match.factory;
+  const name = factory?.name ?? `Factory #${match.factoryId}`;
+  const isOnline = factory?.isOnline ?? false;
+  const certs = factory?.certifications ?? [];
 
-  useEffect(() => {
-    if (!expiresAt) return;
-    const update = () => {
-      const diff = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-      setRemaining(diff);
-    };
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [expiresAt]);
+  const amrDimensions: AMRDimensions = {
+    acumen:   match.amrAcumen   ?? Math.round(score * 0.85),
+    channel:  match.amrChannel  ?? Math.round(score * 0.9),
+    velocity: match.amrVelocity ?? Math.round(score * 0.88),
+    global:   match.amrGlobal   ?? Math.round(score * 0.82),
+    trust:    factory?.aiVerificationScore ?? 70,
+  };
 
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
+  const borderColor =
+    handshakeState.status === "accepted" ? "rgba(74,222,128,0.35)" :
+    handshakeState.status === "pending"  ? "rgba(245,158,11,0.35)"  :
+    cfg.border;
 
   return (
-    <div className="text-xs font-mono font-bold text-amber-400">
-      {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-    </div>
+    <motion.div
+      layout
+      layoutId={`card-${match.factoryId}`}
+      initial={{ opacity: 0, y: 32, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.45, delay: index * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="group relative overflow-hidden rounded-2xl cursor-pointer"
+      style={{
+        background: "rgba(255,255,255,0.022)",
+        backdropFilter: "blur(24px)",
+        border: `1px solid ${borderColor}`,
+        boxShadow: `0 0 24px rgba(124,58,237,0.06)`,
+      }}
+      onClick={() => onViewDetails(match)}
+    >
+      {/* Top highlight line */}
+      <div className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${cfg.color}60, transparent)` }} />
+
+      {/* Cover strip */}
+      {factory?.coverImage && (
+        <div className="relative h-20 overflow-hidden">
+          <img src={factory.coverImage} alt={name}
+            className="w-full h-full object-cover opacity-35 group-hover:opacity-50 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0d0d1a]" />
+        </div>
+      )}
+
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden border border-white/10 bg-gradient-to-br from-violet-900/50 to-slate-900 flex items-center justify-center">
+              {factory?.logoUrl ? (
+                <img src={factory.logoUrl} alt={name} className="w-full h-full object-cover"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              ) : (
+                <Factory className="w-4 h-4 text-violet-400" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="text-sm font-bold text-white truncate leading-tight">{name}</h3>
+                {factory?.aiVerificationScore && factory.aiVerificationScore >= 80 && (
+                  <BadgeCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {factory?.location && (
+                  <span className="text-[11px] text-gray-500 flex items-center gap-0.5">
+                    <MapPin className="w-2.5 h-2.5" />{factory.location}
+                  </span>
+                )}
+                {factory?.category && (
+                  <span className="text-[11px] text-gray-600 truncate">{factory.category}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <ScoreRing score={score} size={52} strokeWidth={4} animated />
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+              isOnline
+                ? "bg-green-500/12 border border-green-500/20 text-green-400"
+                : "bg-gray-800/50 border border-gray-700/30 text-gray-600"
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-green-400 animate-pulse" : "bg-gray-600"}`} />
+              {isOnline ? "Online" : "Offline"}
+            </div>
+          </div>
+        </div>
+
+        {/* AMR Bars */}
+        <div className="mb-4">
+          <AMRDimensionBars
+            acumen={amrDimensions.acumen}
+            channel={amrDimensions.channel}
+            velocity={amrDimensions.velocity}
+            global={amrDimensions.global}
+            compact
+          />
+        </div>
+
+        {/* Structured reasons */}
+        {match.structuredReasons && match.structuredReasons.length > 0 && (
+          <div className="mb-4 space-y-1.5">
+            {match.structuredReasons.slice(0, 3).map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className={`w-1 h-1 rounded-full flex-shrink-0 ${r.highlight ? "bg-green-400" : "bg-gray-600"}`} />
+                <span className="text-[11px] text-gray-500">
+                  <span className="text-gray-400 font-medium">{r.label}:</span> {r.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Match reasons (fallback) */}
+        {(!match.structuredReasons || match.structuredReasons.length === 0) && match.matchReasons && match.matchReasons.length > 0 && (
+          <div className="mb-4 space-y-1.5">
+            {match.matchReasons.slice(0, 2).map((r, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <CheckCircle2 className="w-3 h-3 text-green-400/70 flex-shrink-0 mt-0.5" />
+                <span className="text-[11px] text-gray-500 leading-relaxed">{r}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Certs */}
+        {certs.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {certs.slice(0, 4).map((c, i) => (
+              <span key={i} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 border border-blue-500/15 text-blue-400">{c}</span>
+            ))}
+            {certs.length > 4 && <span className="px-1.5 py-0.5 rounded text-[10px] text-gray-600">+{certs.length - 4}</span>}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
+          <div className="flex items-center gap-3">
+            {factory?.averageResponseTime && factory.averageResponseTime > 0 && (
+              <span className="text-[11px] text-gray-600 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {factory.averageResponseTime < 60 ? `${factory.averageResponseTime}min` : `${Math.round(factory.averageResponseTime / 60)}h`}
+              </span>
+            )}
+            {factory?.totalOrders && factory.totalOrders > 0 && (
+              <span className="text-[11px] text-gray-600 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />{factory.totalOrders} orders
+              </span>
+            )}
+          </div>
+
+          {handshakeState.status === "accepted" ? (
+            <button onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 border border-green-500/25 text-green-300">
+              <CheckCircle2 className="w-3.5 h-3.5" />Room Ready
+            </button>
+          ) : handshakeState.status === "pending" ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <Loader2 className="w-3 h-3 animate-spin" />Awaiting...
+            </div>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onRequestChat(match.factoryId, match.id); }}
+              disabled={isRequesting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:opacity-90"
+              style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}
+            >
+              {isRequesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
+              Request Chat
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
-// ── 主组件 ────────────────────────────────────────────────────────────────────
+// ── Factory Detail Drawer ─────────────────────────────────────────────────────
+function FactoryDetailDrawer({
+  match, onClose, onRequestChat, handshakeState, isRequesting, onNavigateToRoom,
+}: {
+  match: MatchResult | null;
+  onClose: () => void;
+  onRequestChat: (factoryId: number, matchId: number) => void;
+  handshakeState: HandshakeState;
+  isRequesting: boolean;
+  onNavigateToRoom: (slug: string) => void;
+}) {
+  const factory = match?.factory;
+  const score = match?.matchScore ?? 0;
+  const cfg = getScoreConfig(score);
 
+  const amrDimensions: AMRDimensions = {
+    acumen:   match?.amrAcumen   ?? Math.round(score * 0.85),
+    channel:  match?.amrChannel  ?? Math.round(score * 0.9),
+    velocity: match?.amrVelocity ?? Math.round(score * 0.88),
+    global:   match?.amrGlobal   ?? Math.round(score * 0.82),
+    trust:    factory?.aiVerificationScore ?? 70,
+  };
+
+  return (
+    <AnimatePresence>
+      {match && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 280 }}
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 overflow-y-auto"
+            style={{ background: "linear-gradient(160deg,#0d0d1f 0%,#0a0a18 100%)", borderLeft: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            {/* Drawer header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-5 border-b border-white/6"
+              style={{ background: "rgba(13,13,31,0.95)", backdropFilter: "blur(20px)" }}>
+              <div>
+                <h2 className="text-base font-bold text-white">{factory?.name ?? "Factory Details"}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{factory?.location}</p>
+              </div>
+              <button onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/8 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Cover */}
+              {factory?.coverImage && (
+                <div className="relative h-32 rounded-xl overflow-hidden">
+                  <img src={factory.coverImage} alt={factory.name} className="w-full h-full object-cover opacity-55" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d1f] to-transparent" />
+                </div>
+              )}
+
+              {/* Score */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-4 h-4" style={{ color: cfg.color }} />
+                    <span className="text-sm font-bold" style={{ color: cfg.color }}>{cfg.label}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">AI Semantic Match Score</p>
+                </div>
+                <ScoreRing score={score} size={72} strokeWidth={5} animated sublabel="Match" />
+              </div>
+
+              {/* AMR Radar */}
+              <div className="rounded-xl border border-white/6 p-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+                  AMR Performance Radar
+                </h3>
+                <div className="flex justify-center">
+                  <AMRRadarChart dimensions={amrDimensions} size={200} animated showLabels />
+                </div>
+              </div>
+
+              {/* AMR Bars */}
+              <div className="rounded-xl border border-white/6 p-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dimension Breakdown</h3>
+                <AMRDimensionBars
+                  acumen={amrDimensions.acumen}
+                  channel={amrDimensions.channel}
+                  velocity={amrDimensions.velocity}
+                  global={amrDimensions.global}
+                />
+              </div>
+
+              {/* Certifications */}
+              {factory?.certifications && factory.certifications.length > 0 && (
+                <div className="rounded-xl border border-white/6 p-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-blue-400" />Certifications
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {factory.certifications.map((c, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-300">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Key metrics */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Total Orders",   value: factory?.totalOrders ?? "—",  icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                  { label: "Dispute Rate",   value: factory?.disputeRate != null ? `${factory.disputeRate.toFixed(1)}%` : "—", icon: <Activity className="w-3.5 h-3.5" /> },
+                  { label: "Response Rate",  value: factory?.responseRate != null ? `${factory.responseRate.toFixed(0)}%` : "—", icon: <Zap className="w-3.5 h-3.5" /> },
+                  { label: "AI Trust Score", value: factory?.aiVerificationScore ?? "—", icon: <BadgeCheck className="w-3.5 h-3.5" /> },
+                ].map((m, i) => (
+                  <div key={i} className="rounded-xl border border-white/6 p-3" style={{ background: "rgba(255,255,255,0.02)" }}>
+                    <div className="flex items-center gap-1.5 text-gray-500 mb-1.5">{m.icon}<span className="text-[10px] uppercase tracking-wider font-medium">{m.label}</span></div>
+                    <p className="text-lg font-bold text-white tabular-nums">{m.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Match reasons */}
+              {match?.matchReasons && match.matchReasons.length > 0 && (
+                <div className="rounded-xl border border-white/6 p-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />AI Match Analysis
+                  </h3>
+                  <div className="space-y-2">
+                    {match.matchReasons.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <div className="w-1 h-1 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
+                        <p className="text-xs text-gray-400 leading-relaxed">{r}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CTA */}
+              <div className="pb-4">
+                {handshakeState.status === "accepted" ? (
+                  <button
+                    onClick={() => handshakeState.roomSlug && onNavigateToRoom(handshakeState.roomSlug)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-green-500/15 border border-green-500/25 text-green-300 hover:bg-green-500/25 transition-colors"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />Enter Sourcing Room
+                  </button>
+                ) : handshakeState.status === "pending" ? (
+                  <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />Awaiting factory response...
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => match && onRequestChat(match.factoryId, match.id)}
+                    disabled={isRequesting}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:opacity-90"
+                    style={{ background: `linear-gradient(135deg,${cfg.color}20,${cfg.color}10)`, border: `1px solid ${cfg.border}`, color: cfg.color, boxShadow: `0 0 20px ${cfg.color}15` }}
+                  >
+                    {isRequesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    Request Chat with Factory
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function MatchingDashboard() {
-  const params = useParams<{ id: string }>();
-  const demandId = parseInt(params.id || "0");
+  const { id } = useParams<{ id: string }>();
+  const demandId = parseInt(id ?? "0");
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const socket = useSocket();
 
-  // 握手状态 Map: factoryId → HandshakeState
   const [handshakeStates, setHandshakeStates] = useState<Map<number, HandshakeState>>(new Map());
   const [requestingFactoryId, setRequestingFactoryId] = useState<number | null>(null);
-  const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+  const [scoreOverrides, setScoreOverrides] = useState<Map<number, number>>(new Map());
+  const [sortedFactoryIds, setSortedFactoryIds] = useState<number[]>([]);
+  const [tickerMsg, setTickerMsg] = useState("AI is scanning 10,000+ verified suppliers...");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const { m, s, isUrgent, isExpired } = useCountdown(MATCH_WINDOW_SECONDS);
 
-  // 15分钟匹配窗口倒计时（从页面加载开始）
-  const { minutes, seconds, progress, isUrgent, isExpired } = useCountdown(15 * 60);
+  // Queries
+  const demandQuery = trpc.sourcingDemands.getById.useQuery({ id: demandId }, { enabled: !!demandId });
+  const matchResults = trpc.sourcingDemands.getMatchResults.useQuery({ demandId }, { enabled: !!demandId, refetchInterval: false });
+  const handshakesByDemand = trpc.knowledge.getHandshakesByDemand.useQuery({ demandId }, { enabled: !!demandId });
 
-  // ── tRPC ──────────────────────────────────────────────────────────────────
-
-  const { data, isLoading, refetch } = trpc.demands.getById.useQuery(
-    { id: demandId },
-    { enabled: !!demandId && !!user }
-  );
-
-  const matchResults = trpc.demands.getMatchResults.useQuery(
-    { demandId },
-    { enabled: !!demandId && !!user, refetchInterval: 10000 }
-  );
-
-  const handshakesByDemand = trpc.knowledge.getHandshakesByDemand.useQuery(
-    { demandId },
-    { enabled: !!demandId && !!user, refetchInterval: 5000 }
-  );
-
-  const triggerMatchMutation = trpc.demands.triggerMatch.useMutation({
-    onSuccess: () => {
-      setIsTriggering(false);
-      toast.success("🎯 AI matching complete! Top factories found.");
-      matchResults.refetch();
-    },
-    onError: (err) => {
-      setIsTriggering(false);
-      toast.error("Matching failed: " + err.message);
-    },
+  // Mutations
+  const triggerMatchMutation = trpc.sourcingDemands.triggerMatch.useMutation({
+    onSuccess: () => { setIsTriggering(false); setTickerMsg("AI matching triggered — results will appear shortly"); },
+    onError: () => setIsTriggering(false),
   });
 
   const createHandshakeMutation = trpc.knowledge.createHandshake.useMutation({
-    onSuccess: (result, variables) => {
-      setRequestingFactoryId(null);
-      if (result.success) {
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-        setHandshakeStates(prev => new Map(prev).set(variables.factoryId, {
-          status: 'pending',
-          handshakeId: result.handshakeId,
-          expiresAt,
-        }));
-        toast.success("✅ Request sent! Waiting for factory response...");
-      } else {
-        toast.error(result.error ?? "Failed to send request");
+    onSuccess: (result: any) => {
+      const fid = requestingFactoryId;
+      if (fid) {
+        setHandshakeStates(prev => { const n = new Map(prev); n.set(fid, { status: "pending", handshakeId: result?.id }); return n; });
       }
-    },
-    onError: (err) => {
       setRequestingFactoryId(null);
-      toast.error("Failed to send request: " + err.message);
+      toast.success("Chat request sent! Factory has 15 minutes to respond.");
+    },
+    onError: () => setRequestingFactoryId(null),
+  });
+
+  const refineMatchMutation = trpc.sourcingDemands.refineMatch.useMutation({
+    onSuccess: (result: any) => {
+      setIsRefining(false);
+      if (result?.rankedFactoryIds) setSortedFactoryIds(result.rankedFactoryIds);
+      if (result?.scores) {
+        const m = new Map<number, number>();
+        for (const [k, v] of Object.entries(result.scores)) m.set(parseInt(k), v as number);
+        setScoreOverrides(m);
+      }
+      const summary = result?.summary ?? "Match refined based on your preferences";
+      setChatMessages(prev => [...prev, { role: "ai", content: summary, timestamp: new Date() }]);
+      setTickerMsg(summary);
+    },
+    onError: () => {
+      setIsRefining(false);
+      setChatMessages(prev => [...prev, { role: "ai", content: "Sorry, I couldn't process that. Please try again.", timestamp: new Date() }]);
     },
   });
 
-  // ── WebSocket 实时通知 ─────────────────────────────────────────────────────
-
-  const socket = useSocket();
-
-  // 加入需求房间，接收 match_complete 推送
+  // WebSocket
   useEffect(() => {
     if (!socket || !demandId) return;
-    socket.emit('join_demand_room', { demandId });
+    socket.emit("join_demand_room", { demandId });
+
+    socket.on("match_complete", (data: any) => {
+      if (data.demandId !== demandId) return;
+      matchResults.refetch();
+      const count = data.factoryCount ?? "several";
+      toast.success(`✨ ${count} factories matched!`, { description: "Results updated below", duration: 4000 });
+      setTickerMsg(`AI found ${count} matching factories`);
+    });
+
+    socket.on("match_expired", (data: any) => {
+      if (data.demandId !== demandId) return;
+      toast.warning("⏰ 15-minute window closed", { description: "You can re-trigger matching anytime", duration: 8000 });
+    });
+
+    socket.on("handshake_accepted", (data: any) => {
+      const { handshakeId, factoryId, factoryName, roomSlug } = data;
+      setHandshakeStates(prev => { const n = new Map(prev); n.set(factoryId, { status: "accepted", handshakeId, roomSlug }); return n; });
+      toast.success(`🎉 ${factoryName} accepted!`, {
+        action: { label: "Enter Room", onClick: () => setLocation(`/sourcing-room/${roomSlug}`) },
+        duration: 12000,
+      });
+      setTickerMsg(`${factoryName} accepted your chat request`);
+    });
+
+    socket.on("handshake_rejected", (data: any) => {
+      const { factoryId, factoryName } = data;
+      setHandshakeStates(prev => { const n = new Map(prev); n.set(factoryId, { status: "rejected" }); return n; });
+      toast.error(`${factoryName} declined the request`);
+    });
+
+    socket.on("handshake_expired", (data: any) => {
+      const { handshakeId } = data;
+      setHandshakeStates(prev => {
+        const n = new Map(prev);
+        for (const [fid, state] of n.entries()) {
+          if (state.handshakeId === handshakeId) n.set(fid, { ...state, status: "expired" });
+        }
+        return n;
+      });
+    });
+
     return () => {
-      socket.emit('leave_demand_room', { demandId });
+      socket.off("match_complete");
+      socket.off("match_expired");
+      socket.off("handshake_accepted");
+      socket.off("handshake_rejected");
+      socket.off("handshake_expired");
+      socket.emit("leave_demand_room", { demandId });
     };
   }, [socket, demandId]);
 
-  useEffect(() => {
-    if (!socket) return;
-
-    // 匹配完成：实时刷新卡片列表
-    socket.on('match_complete', (data: any) => {
-      if (data.demandId !== demandId) return;
-      matchResults.refetch();
-      toast.success(`🎯 AI matched ${data.matchCount} factories for you!`, {
-        description: 'Factory cards are loading below...',
-        duration: 5000,
-      });
-    });
-
-    // 15分钟窗口关闭
-    socket.on('match_expired', (data: any) => {
-      if (data.demandId !== demandId) return;
-      toast.warning('⏰ Matching window closed', {
-        description: data.message ?? 'The 15-minute window has ended.',
-        duration: 8000,
-      });
-    });
-
-    // 工厂接受握手
-    socket.on('handshake_accepted', (data: any) => {
-      const { handshakeId, factoryId, factoryName, roomSlug } = data;
-      setHandshakeStates(prev => {
-        const next = new Map(prev);
-        next.set(factoryId, { status: 'accepted', handshakeId, roomSlug });
-        return next;
-      });
-      toast.success(`🎉 ${factoryName} accepted your request! Sourcing room is ready.`, {
-        action: {
-          label: "Enter Room",
-          onClick: () => setLocation(`/sourcing-room/${roomSlug}`),
-        },
-        duration: 10000,
-      });
-    });
-
-    // 工厂拒绝握手
-    socket.on('handshake_rejected', (data: any) => {
-      const { handshakeId, factoryId, factoryName, reason } = data;
-      setHandshakeStates(prev => {
-        const next = new Map(prev);
-        next.set(factoryId, { status: 'rejected', handshakeId });
-        return next;
-      });
-      toast.error(`${factoryName} declined the request${reason ? `: ${reason}` : ''}`);
-    });
-
-    // 握手过期
-    socket.on('handshake_expired', (data: any) => {
-      const { handshakeId } = data;
-      setHandshakeStates(prev => {
-        const next = new Map(prev);
-        for (const [fid, state] of next.entries()) {
-          if (state.handshakeId === handshakeId) {
-            next.set(fid, { ...state, status: 'expired' });
-          }
-        }
-        return next;
-      });
-    });
-
-    return () => {
-      socket.off('match_complete');
-      socket.off('match_expired');
-      socket.off('handshake_accepted');
-      socket.off('handshake_rejected');
-      socket.off('handshake_expired');
-    };
-  }, [socket, demandId, setLocation]);
-
-  // ── 从数据库恢复握手状态 ───────────────────────────────────────────────────
-
+  // Restore handshake states from DB
   useEffect(() => {
     if (!handshakesByDemand.data) return;
-    const stateMap = new Map<number, HandshakeState>();
+    const map = new Map<number, HandshakeState>();
     for (const h of handshakesByDemand.data as any[]) {
-      const existing = stateMap.get(h.factoryId);
-      // 优先保留 accepted 状态
-      if (!existing || h.status === 'accepted') {
-        stateMap.set(h.factoryId, {
-          status: h.status as HandshakeStatus,
-          handshakeId: h.id,
-          roomSlug: h.roomSlug ?? undefined,
-          expiresAt: h.expiresAt ? new Date(h.expiresAt) : undefined,
-        });
+      const existing = map.get(h.factoryId);
+      if (!existing || h.status === "accepted") {
+        map.set(h.factoryId, { status: h.status, handshakeId: h.id, roomSlug: h.roomSlug ?? undefined });
       }
     }
-    setHandshakeStates(stateMap);
+    setHandshakeStates(map);
   }, [handshakesByDemand.data]);
 
-  // ── 事件处理 ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
-  const handleRequestChat = useCallback((factoryId: number, matchResultId?: number) => {
+  const handleRequestChat = useCallback((factoryId: number, matchResultId: number) => {
     if (!user) return;
     setRequestingFactoryId(factoryId);
     createHandshakeMutation.mutate({ demandId, factoryId, matchResultId });
@@ -604,281 +662,261 @@ export default function MatchingDashboard() {
     triggerMatchMutation.mutate({ demandId });
   };
 
-  // ── 渲染 ──────────────────────────────────────────────────────────────────
+  const handleSendChat = () => {
+    const instruction = chatInput.trim();
+    if (!instruction || isRefining) return;
+    setChatMessages(prev => [...prev, { role: "user", content: instruction, timestamp: new Date() }]);
+    setChatInput("");
+    setIsRefining(true);
+    refineMatchMutation.mutate({ demandId, instruction });
+  };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center"
-        style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
-        <Button onClick={() => setLocation("/login")} className="bg-purple-600 hover:bg-purple-700">
-          Sign In
-        </Button>
-      </div>
-    );
-  }
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); }
+  };
 
-  const demand = (data as any)?.demand;
-  const matches: any[] = (matchResults.data as any)?.matches ?? [];
-  const isMatchLoading = matchResults.isLoading;
+  // Sorted matches
+  const demand = (demandQuery.data as any)?.demand;
+  const rawMatches: MatchResult[] = (matchResults.data as any)?.matches ?? [];
+  const matches: MatchResult[] = sortedFactoryIds.length > 0
+    ? [...rawMatches].sort((a, b) => {
+        const ai = sortedFactoryIds.indexOf(a.factoryId);
+        const bi = sortedFactoryIds.indexOf(b.factoryId);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      })
+    : rawMatches;
+
   const hasMatches = matches.length > 0;
-
-  // 统计
-  const pendingCount = Array.from(handshakeStates.values()).filter(s => s.status === 'pending').length;
-  const acceptedCount = Array.from(handshakeStates.values()).filter(s => s.status === 'accepted').length;
+  const pendingCount = Array.from(handshakeStates.values()).filter(s => s.status === "pending").length;
+  const acceptedCount = Array.from(handshakeStates.values()).filter(s => s.status === "accepted").length;
 
   return (
-    <div className="min-h-screen text-white"
+    <div className="min-h-screen text-white flex flex-col"
       style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
-      {/* Grid background */}
+      {/* Grid bg */}
       <div className="fixed inset-0 pointer-events-none"
-        style={{ backgroundImage: GRID_BG, backgroundSize: "32px 32px", opacity: 0.6 }} />
+        style={{ backgroundImage: GRID_BG, backgroundSize: "32px 32px" }} />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          {/* Back */}
-          <button
-            onClick={() => setLocation(`/sourcing-demands/${demandId}`)}
-            className="flex items-center gap-2 text-gray-500 hover:text-gray-300 transition-colors mb-4 text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Demand
-          </button>
-
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600/30 to-purple-800/20 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
-                <Zap className="w-6 h-6 text-purple-400" />
+      {/* ── Top Bar ──────────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 border-b border-white/6"
+        style={{ background: "rgba(5,3,16,0.92)", backdropFilter: "blur(24px)" }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          {/* Left */}
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => setLocation(`/sourcing-demands/${demandId}`)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/8 transition-colors flex-shrink-0">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                <span className="text-sm font-bold text-white truncate">
+                  {demand?.productName ?? "AI Factory Matching"}
+                </span>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Factory Matching</h1>
-                <p className="text-sm text-gray-400 mt-0.5">
-                  {demand?.productName
-                    ? `Finding best factories for "${demand.productName}"`
-                    : "AI-powered factory discovery"}
+              {demand?.estimatedQuantity && (
+                <p className="text-[11px] text-gray-600 truncate">
+                  {demand.estimatedQuantity} units · {demand.targetPrice ?? "Price TBD"}
                 </p>
-              </div>
-            </div>
-
-            {/* 15-min Countdown */}
-            <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
-              isUrgent
-                ? 'bg-red-500/10 border-red-500/30'
-                : 'bg-purple-500/8 border-purple-500/20'
-            }`}>
-              <Timer className={`w-5 h-5 ${isUrgent ? 'text-red-400' : 'text-purple-400'}`} />
-              <div>
-                <p className={`text-xs font-medium ${isUrgent ? 'text-red-300' : 'text-purple-300'}`}>
-                  Matching Window
-                </p>
-                <p className={`text-xl font-mono font-bold ${isUrgent ? 'text-red-400' : 'text-white'}`}>
-                  {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-                </p>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Stats Bar */}
-          <div className="flex items-center gap-6 mt-5 flex-wrap">
-            {[
-              { icon: Factory, label: "Matches Found", value: matches.length, color: "text-purple-400" },
-              { icon: MessageSquare, label: "Requests Sent", value: pendingCount, color: "text-amber-400" },
-              { icon: CheckCircle2, label: "Accepted", value: acceptedCount, color: "text-green-400" },
-            ].map((stat) => (
-              <div key={stat.label} className="flex items-center gap-2">
-                <stat.icon className={`w-4 h-4 ${stat.color}`} />
-                <span className="text-xl font-bold text-white">{stat.value}</span>
-                <span className="text-xs text-gray-500">{stat.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-4">
-            <Progress
-              value={progress}
-              className="h-1.5 bg-white/5"
-            />
-          </div>
-        </motion.div>
-
-        {/* ── Main Content ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-          {/* Left: Match List */}
-          <div className="lg:col-span-3 space-y-4">
-
-            {/* Trigger Match Button (if no matches yet) */}
-            {!hasMatches && !isMatchLoading && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border border-purple-500/20 p-8 text-center"
-                style={{ background: "rgba(124,58,237,0.05)" }}
-              >
-                <div className="w-16 h-16 rounded-2xl bg-purple-600/20 border border-purple-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-purple-400" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Start AI Factory Matching</h3>
-                <p className="text-sm text-gray-400 mb-6 max-w-md mx-auto">
-                  Our AI will analyze your sourcing demand and find the top matching factories
-                  from our verified supplier network in seconds.
-                </p>
-                <Button
-                  onClick={handleTriggerMatch}
-                  disabled={isTriggering}
-                  className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold px-8 h-11 shadow-lg shadow-purple-600/25"
-                >
-                  {isTriggering ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                      Matching in progress...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-5 h-5 mr-2" />
-                      Find Matching Factories
-                    </>
-                  )}
-                </Button>
-              </motion.div>
-            )}
-
-            {/* Loading */}
-            {isMatchLoading && (
-              <div className="flex items-center justify-center py-20">
-                <div className="text-center">
-                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-4" />
-                  <p className="text-gray-400 text-sm">Loading match results...</p>
-                </div>
-              </div>
-            )}
-
-            {/* Match Results */}
+          {/* Center stats */}
+          <div className="hidden md:flex items-center gap-4">
             {hasMatches && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-sm font-semibold text-white">
-                    {matches.length} Matched Factories
-                  </h2>
-                  <button
-                    onClick={() => matchResults.refetch()}
-                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Refresh
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {matches.map((match: any, index: number) => {
-                    const factoryId = match.factoryId ?? match.factory?.id ?? index;
-                    const handshakeState = handshakeStates.get(factoryId) ?? { status: 'idle' };
-                    return (
-                      <FactoryMatchCard
-                        key={match.id ?? index}
-                        match={match}
-                        handshakeState={handshakeState}
-                        onRequestChat={handleRequestChat}
-                        isRequesting={requestingFactoryId === factoryId}
-                        onNavigateToRoom={(slug) => setLocation(`/sourcing-room/${slug}`)}
-                      />
-                    );
-                  })}
-                </div>
-              </>
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Factory className="w-3.5 h-3.5" />
+                <span className="font-semibold text-white">{matches.length}</span> matched
+              </span>
+            )}
+            {pendingCount > 0 && (
+              <span className="text-xs text-amber-400 flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />{pendingCount} pending
+              </span>
+            )}
+            {acceptedCount > 0 && (
+              <span className="text-xs text-green-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />{acceptedCount} accepted
+              </span>
             )}
           </div>
 
-          {/* Right: Sidebar */}
-          <div className="space-y-4">
+          {/* Countdown */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border flex-shrink-0 ${
+            isExpired ? "border-gray-700/30 bg-gray-800/20 text-gray-600"
+            : isUrgent ? "border-red-500/30 bg-red-500/8 text-red-400"
+            : "border-violet-500/20 bg-violet-500/8 text-violet-300"
+          }`}>
+            <Timer className={`w-3.5 h-3.5 ${isUrgent && !isExpired ? "animate-pulse" : ""}`} />
+            <span className="text-sm font-bold tabular-nums">
+              {isExpired ? "Expired" : `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`}
+            </span>
+          </div>
+        </div>
 
-            {/* Demand Summary */}
-            {demand && (
-              <div className="rounded-2xl border border-white/8 p-5"
-                style={{ background: "rgba(255,255,255,0.02)" }}>
-                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-purple-400" />
-                  Demand Summary
-                </h3>
-                <div className="space-y-2.5">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-0.5">Product</p>
-                    <p className="text-sm font-medium text-white">{demand.productName ?? "—"}</p>
-                  </div>
-                  {demand.estimatedQuantity && (
-                    <div>
-                      <p className="text-xs text-gray-600 mb-0.5">Quantity</p>
-                      <p className="text-sm font-medium text-white">{demand.estimatedQuantity}</p>
-                    </div>
-                  )}
-                  {demand.targetPrice && (
-                    <div>
-                      <p className="text-xs text-gray-600 mb-0.5">Target Price</p>
-                      <p className="text-sm font-medium text-white">{demand.targetPrice}</p>
-                    </div>
+        {/* Ticker */}
+        <div className="border-t border-white/4 overflow-hidden h-7 flex items-center px-4 sm:px-6">
+          <AnimatePresence mode="wait">
+            <motion.p key={tickerMsg}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.3 }}
+              className="text-[11px] text-gray-600 flex items-center gap-2">
+              <Activity className="w-3 h-3 text-violet-500 flex-shrink-0" />
+              {tickerMsg}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ── Main Content ─────────────────────────────────────────────────────── */}
+      <div className="relative z-10 flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 gap-5">
+
+        {/* Results area */}
+        <div className="flex-1">
+          {/* Empty state */}
+          {!hasMatches && !matchResults.isLoading && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-20 h-20 rounded-2xl border border-violet-500/20 bg-violet-500/8 flex items-center justify-center mb-6">
+                <Sparkles className="w-9 h-9 text-violet-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Ready to Find Your Factories</h2>
+              <p className="text-sm text-gray-500 max-w-sm mb-8">
+                AI will scan 10,000+ verified suppliers and match them to your demand in seconds.
+                Results appear in real-time as they're found.
+              </p>
+              <button onClick={handleTriggerMatch} disabled={isTriggering}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:opacity-90"
+                style={{ background: "linear-gradient(135deg,rgba(124,58,237,0.3),rgba(124,58,237,0.15))", border: "1px solid rgba(124,58,237,0.4)", color: "#a78bfa", boxShadow: "0 0 24px rgba(124,58,237,0.15)" }}>
+                {isTriggering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                {isTriggering ? "Matching in progress..." : "Start AI Matching"}
+              </button>
+            </motion.div>
+          )}
+
+          {/* Skeletons */}
+          {matchResults.isLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[0,1,2].map(i => <SkeletonCard key={i} index={i} />)}
+            </div>
+          )}
+
+          {/* Cards */}
+          {hasMatches && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">{matches.length} Matched Factories</h2>
+                  {sortedFactoryIds.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/20 text-violet-400 font-medium">AI Refined</span>
                   )}
                 </div>
+                <button onClick={handleTriggerMatch} disabled={isTriggering}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                  {isTriggering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  Re-run
+                </button>
               </div>
-            )}
 
-            {/* How It Works */}
-            <div className="rounded-2xl border border-white/8 p-5"
-              style={{ background: "rgba(255,255,255,0.02)" }}>
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                How It Works
-              </h3>
-              <div className="space-y-3">
-                {[
-                  { step: "1", title: "AI Matches Factories", desc: "Semantic matching across 10,000+ verified suppliers", color: "purple" },
-                  { step: "2", title: "Request Chat", desc: "Click 'Request Chat' on any matched factory", color: "blue" },
-                  { step: "3", title: "15-min Response", desc: "Factory responds within 15 minutes", color: "amber" },
-                  { step: "4", title: "Enter Sourcing Room", desc: "AI-assisted negotiation begins", color: "green" },
-                ].map((item) => (
-                  <div key={item.step} className="flex items-start gap-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                      item.color === 'purple' ? 'bg-purple-500/20 text-purple-300' :
-                      item.color === 'blue' ? 'bg-blue-500/20 text-blue-300' :
-                      item.color === 'amber' ? 'bg-amber-500/20 text-amber-300' :
-                      'bg-green-500/20 text-green-300'
-                    }`}>
-                      {item.step}
+              <LayoutGroup>
+                <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <AnimatePresence>
+                    {matches.map((match, index) => {
+                      const hs = handshakeStates.get(match.factoryId) ?? { status: "idle" };
+                      return (
+                        <MatchCard
+                          key={match.id ?? match.factoryId}
+                          match={match}
+                          index={index}
+                          handshakeState={hs}
+                          onRequestChat={handleRequestChat}
+                          onViewDetails={setSelectedMatch}
+                          isRequesting={requestingFactoryId === match.factoryId}
+                          overrideScore={scoreOverrides.get(match.factoryId)}
+                        />
+                      );
+                    })}
+                  </AnimatePresence>
+                </motion.div>
+              </LayoutGroup>
+            </>
+          )}
+        </div>
+
+        {/* ── AI Chat Area ──────────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-white/6 overflow-hidden flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.018)", backdropFilter: "blur(20px)" }}>
+          {/* Chat history */}
+          {chatMessages.length > 0 && (
+            <div className="max-h-48 overflow-y-auto p-4 space-y-3 border-b border-white/5">
+              {chatMessages.map((msg, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "ai" && (
+                    <div className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/25 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Sparkles className="w-3 h-3 text-violet-400" />
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-white">{item.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                    </div>
+                  )}
+                  <div className={`max-w-xs rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-violet-500/15 border border-violet-500/20 text-violet-200"
+                      : "bg-white/5 border border-white/8 text-gray-300"
+                  }`}>
+                    {msg.content}
                   </div>
-                ))}
-              </div>
+                </motion.div>
+              ))}
+              {isRefining && (
+                <div className="flex gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/25 flex items-center justify-center flex-shrink-0">
+                    <Loader2 className="w-3 h-3 text-violet-400 animate-spin" />
+                  </div>
+                  <div className="px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-gray-500">
+                    Refining match results...
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
             </div>
+          )}
 
-            {/* Re-trigger match */}
-            {hasMatches && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTriggerMatch}
-                disabled={isTriggering}
-                className="w-full border-white/10 text-gray-400 hover:text-white hover:bg-white/5 text-xs"
-              >
-                {isTriggering ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                )}
-                Re-run AI Matching
-              </Button>
-            )}
+          {/* Input */}
+          <div className="p-3 flex items-end gap-3">
+            <div className="flex-1">
+              <textarea
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={handleChatKeyDown}
+                placeholder={hasMatches
+                  ? 'Refine results, e.g. "I need BSCI certified factories" or "Prioritize faster response time"'
+                  : "Describe what you're looking for and AI will match factories..."}
+                rows={1}
+                className="w-full bg-transparent text-sm text-white placeholder-gray-600 resize-none focus:outline-none leading-relaxed"
+                style={{ maxHeight: "80px" }}
+              />
+            </div>
+            <button onClick={handleSendChat} disabled={!chatInput.trim() || isRefining}
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 disabled:opacity-30"
+              style={{
+                background: chatInput.trim() ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.05)",
+                border: chatInput.trim() ? "1px solid rgba(124,58,237,0.4)" : "1px solid rgba(255,255,255,0.08)",
+              }}>
+              <Send className="w-4 h-4 text-violet-300" />
+            </button>
           </div>
         </div>
       </div>
+
+      {/* ── Factory Detail Drawer ─────────────────────────────────────────────── */}
+      <FactoryDetailDrawer
+        match={selectedMatch}
+        onClose={() => setSelectedMatch(null)}
+        onRequestChat={handleRequestChat}
+        handshakeState={selectedMatch ? (handshakeStates.get(selectedMatch.factoryId) ?? { status: "idle" }) : { status: "idle" }}
+        isRequesting={selectedMatch ? requestingFactoryId === selectedMatch.factoryId : false}
+        onNavigateToRoom={slug => setLocation(`/sourcing-room/${slug}`)}
+      />
     </div>
   );
 }

@@ -2343,55 +2343,286 @@ ${transcriptSample}
       .input(z.object({ demandId: z.number() }))
       .query(async ({ input }) => {
         const database = await dbPromise;
+        const schemaModule = await import('../drizzle/schema');
+        const { leftJoin } = await import('drizzle-orm');
         const rows = await database.select({
-          id: schema.demandMatchResults.id,
-          matchScore: schema.demandMatchResults.matchScore,
-          matchReason: schema.demandMatchResults.matchReason,
-          factoryId: schema.demandMatchResults.factoryId,
-          factoryName: schema.factories.name,
-          factoryLogo: schema.factories.logo,
-          factoryCategory: schema.factories.category,
-          isOnline: schema.factories.isOnline,
-          factoryLocation: schema.factories.city,
-          factoryAverageResponseTime: schema.factories.averageResponseTime,
-          factoryCertificationStatus: schema.factories.certificationStatus,
-          factoryResponseRate: schema.factories.responseRate,
-          factoryOverallScore: schema.factories.overallScore,
+          // Match result fields
+          id:         schemaModule.demandMatchResults.id,
+          matchScore: schemaModule.demandMatchResults.matchScore,
+          matchReason: schemaModule.demandMatchResults.matchReason,
+          factoryId:  schemaModule.demandMatchResults.factoryId,
+          // Factory core fields
+          factoryName:               schemaModule.factories.name,
+          factoryLogo:               schemaModule.factories.logo,
+          factoryCategory:           schemaModule.factories.category,
+          factoryCountry:            schemaModule.factories.country,
+          factoryCity:               schemaModule.factories.city,
+          isOnline:                  schemaModule.factories.isOnline,
+          averageResponseTime:       schemaModule.factories.averageResponseTime,
+          certificationStatus:       schemaModule.factories.certificationStatus,
+          responseRate:              schemaModule.factories.responseRate,
+          overallScore:              schemaModule.factories.overallScore,
+          hasReel:                   schemaModule.factories.hasReel,
+          languagesSpoken:           schemaModule.factories.languagesSpoken,
+          // Factory details (LEFT JOIN)
+          certifications:            schemaModule.factoryDetails.certifications,
+          productionCapacity:        schemaModule.factoryDetails.productionCapacity,
+          employeeCount:             schemaModule.factoryDetails.employeeCount,
+          coverImage:                schemaModule.factoryDetails.coverImage,
+          detailRating:              schemaModule.factoryDetails.rating,
+          reviewCount:               schemaModule.factoryDetails.reviewCount,
+          // Factory verifications (LEFT JOIN)
+          aiVerificationScore:       schemaModule.factoryVerifications.aiVerificationScore,
+          complianceScore:           schemaModule.factoryVerifications.complianceScore,
+          trustBadges:               schemaModule.factoryVerifications.trustBadges,
+          // Factory metrics (LEFT JOIN)
+          totalOrders:               schemaModule.factoryMetrics.totalOrders,
+          disputeRate:               schemaModule.factoryMetrics.disputeRate,
+          sampleConversionRate:      schemaModule.factoryMetrics.sampleConversionRate,
+          reelCount:                 schemaModule.factoryMetrics.reelCount,
         })
-        .from(schema.demandMatchResults)
-        .innerJoin(schema.factories, eq(schema.demandMatchResults.factoryId, schema.factories.id))
-        .where(eq(schema.demandMatchResults.demandId, input.demandId))
-        .orderBy(desc(schema.demandMatchResults.matchScore));
-        // 将工厂字段嵌套到 factory 对象中，方便前端使用
+        .from(schemaModule.demandMatchResults)
+        .innerJoin(schemaModule.factories, eq(schemaModule.demandMatchResults.factoryId, schemaModule.factories.id))
+        .leftJoin(schemaModule.factoryDetails, eq(schemaModule.factories.id, schemaModule.factoryDetails.factoryId))
+        .leftJoin(schemaModule.factoryVerifications, eq(schemaModule.factories.id, schemaModule.factoryVerifications.factoryId))
+        .leftJoin(schemaModule.factoryMetrics, eq(schemaModule.factories.id, schemaModule.factoryMetrics.factoryId))
+        .where(eq(schemaModule.demandMatchResults.demandId, input.demandId))
+        .orderBy(desc(schemaModule.demandMatchResults.matchScore));
+
         return {
-          matches: rows.map(r => ({
-            id: r.id,
-            matchScore: parseFloat(r.matchScore ?? '0'),
-            matchReason: r.matchReason,
-            matchReasons: (() => {
-              // 将 matchReason 按句号分割为数组
-              if (r.matchReason) {
-                return r.matchReason.split('\u3002').filter(Boolean).map((s: string) => s.trim());
-              }
-              return [];
-            })(),
-            factoryId: r.factoryId,
-            factory: {
-              id: r.factoryId,
-              name: r.factoryName,
-              logoUrl: r.factoryLogo,
-              category: r.factoryCategory,
-              isOnline: r.isOnline === 1,
-              location: r.factoryLocation,
-              rating: parseFloat(r.factoryOverallScore ?? '0'),
-              certificationStatus: r.factoryCertificationStatus,
-              responseRate: parseFloat(r.factoryResponseRate?.toString() ?? '0'),
-              averageResponseTime: r.factoryAverageResponseTime ?? 0,
-            },
-          })),
+          matches: rows.map(r => {
+            const matchScore = parseFloat(r.matchScore ?? '0');
+            const aiScore    = r.aiVerificationScore ?? 0;
+            const compliance = r.complianceScore ?? 0;
+            const respRate   = parseFloat(r.responseRate?.toString() ?? '0');
+            const avgResp    = r.averageResponseTime ?? 0;
+            const totalOrd   = r.totalOrders ?? 0;
+            const dispRate   = parseFloat(r.disputeRate?.toString() ?? '0');
+
+            // ── AMR 四维计算 ──────────────────────────────────────────────
+            // Acumen (市场洞察): AI验厂分 + 合规分 综合
+            const amrAcumen = Math.round(
+              (aiScore * 0.6 + compliance * 0.4)
+            );
+            // Channel (渠道能力): 响应率 + hasReel + 语言数
+            const langCount = Array.isArray(r.languagesSpoken) ? (r.languagesSpoken as string[]).length : 1;
+            const amrChannel = Math.min(100, Math.round(
+              respRate * 0.5 + (r.hasReel ? 20 : 0) + Math.min(30, langCount * 10)
+            ));
+            // Velocity (响应速度): 平均响应时间反算（越快越高）
+            const amrVelocity = avgResp === 0 ? 50 : Math.min(100, Math.round(
+              Math.max(0, 100 - (avgResp / 60) * 20)
+            ));
+            // Global (全球化): 总订单数 + 样品转化率
+            const sampleConv = parseFloat(r.sampleConversionRate?.toString() ?? '0');
+            const amrGlobal = Math.min(100, Math.round(
+              Math.min(50, totalOrd * 0.5) + sampleConv * 0.5
+            ));
+            // AMR 综合分 (加权平均)
+            const amrScore = Math.round(
+              amrAcumen * 0.25 + amrChannel * 0.25 + amrVelocity * 0.25 + amrGlobal * 0.25
+            );
+
+            // ── 结构化推荐理由 ────────────────────────────────────────────
+            const structuredReasons: Array<{ icon: string; label: string; value: string; highlight: boolean }> = [];
+
+            // 1. 品类匹配
+            if (r.factoryCategory) {
+              structuredReasons.push({
+                icon: 'category',
+                label: 'Category Match',
+                value: r.factoryCategory,
+                highlight: matchScore >= 85,
+              });
+            }
+            // 2. 认证
+            const certs = Array.isArray(r.certifications) ? r.certifications as string[] : [];
+            if (certs.length > 0) {
+              structuredReasons.push({
+                icon: 'cert',
+                label: 'Certifications',
+                value: certs.slice(0, 3).join(' · '),
+                highlight: certs.length >= 2,
+              });
+            }
+            // 3. 响应速度
+            if (avgResp > 0) {
+              structuredReasons.push({
+                icon: 'speed',
+                label: 'Avg Response',
+                value: avgResp < 60 ? `${avgResp} min` : `${Math.round(avgResp / 60)}h`,
+                highlight: avgResp <= 15,
+              });
+            }
+            // 4. 交付记录
+            if (totalOrd > 0) {
+              structuredReasons.push({
+                icon: 'track',
+                label: 'Track Record',
+                value: `${totalOrd} orders · ${dispRate.toFixed(1)}% dispute`,
+                highlight: totalOrd >= 50 && dispRate < 2,
+              });
+            }
+
+            return {
+              id: r.id,
+              matchScore,
+              matchReason: r.matchReason,
+              matchReasons: r.matchReason
+                ? r.matchReason.split('。').filter(Boolean).map((s: string) => s.trim())
+                : [],
+              structuredReasons,
+              factoryId: r.factoryId,
+              // AMR data
+              amrScore,
+              amrAcumen,
+              amrChannel,
+              amrVelocity,
+              amrGlobal,
+              factory: {
+                id:                  r.factoryId,
+                name:                r.factoryName,
+                logoUrl:             r.factoryLogo,
+                coverImage:          r.coverImage ?? undefined,
+                category:            r.factoryCategory,
+                country:             r.factoryCountry,
+                city:                r.factoryCity,
+                isOnline:            r.isOnline === 1,
+                location:            [r.factoryCity, r.factoryCountry].filter(Boolean).join(', '),
+                rating:              parseFloat(r.detailRating?.toString() ?? r.overallScore?.toString() ?? '0'),
+                reviewCount:         r.reviewCount ?? 0,
+                certificationStatus: r.certificationStatus,
+                certifications:      certs,
+                responseRate:        respRate,
+                averageResponseTime: avgResp,
+                aiVerificationScore: aiScore,
+                complianceScore:     compliance,
+                trustBadges:         Array.isArray(r.trustBadges) ? r.trustBadges as string[] : [],
+                totalOrders:         totalOrd,
+                disputeRate:         dispRate,
+                hasReel:             r.hasReel === 1,
+                languagesSpoken:     Array.isArray(r.languagesSpoken) ? r.languagesSpoken as string[] : [],
+              },
+            };
+          }),
         };
       }),
 
+    /**
+     * 自然语言微调匹配权重（4.0 核心功能）
+     * 用户输入自然语言指令 → LLM 解析 → 重新加权排序现有候选池
+     * 不重新做向量搜索，只是重新加权，响应极快
+     */
+    refineMatch: protectedProcedure
+      .input(z.object({
+        demandId: z.number(),
+        instruction: z.string().min(1).max(500),
+        currentMatchIds: z.array(z.number()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { callAI } = await import('./_core/aiService');
+
+        // Step 1: LLM 解析自然语言指令为结构化权重调整参数
+        const parsePrompt = `You are a factory matching assistant. The user wants to refine their factory search results.
+
+User instruction: "${input.instruction}"
+
+Parse this instruction into a JSON object with these optional fields:
+- certRequired: string[] (e.g. ["BSCI", "ISO9001"] - certifications that must be present)
+- categoryBoost: string (e.g. "sportswear" - boost factories in this category)
+- responseTimeMax: number (max average response time in minutes)
+- boostOnline: boolean (prefer online factories)
+- boostHighOrders: boolean (prefer factories with more orders)
+- boostLowDispute: boolean (prefer factories with low dispute rate)
+- minAiScore: number (0-100, minimum AI verification score)
+- summary: string (brief English summary of what was adjusted, max 20 words)
+
+Return ONLY valid JSON, no explanation.`;
+
+        let refinements: any = {};
+        let summary = 'Refining match based on your preferences...';
+
+        try {
+          const aiResponse = await callAI([
+            { role: 'user', content: parsePrompt }
+          ], { model: 'gpt-4.1-mini', temperature: 0.1 });
+
+          const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            refinements = JSON.parse(jsonMatch[0]);
+            summary = refinements.summary ?? summary;
+          }
+        } catch (err) {
+          console.warn('[refineMatch] LLM parse failed, using defaults:', err);
+        }
+
+        // Step 2: 获取当前匹配结果
+        const database = await dbPromise;
+        const schemaModule = await import('../drizzle/schema');
+        const rows = await database.select({
+          id:                  schemaModule.demandMatchResults.id,
+          matchScore:          schemaModule.demandMatchResults.matchScore,
+          factoryId:           schemaModule.demandMatchResults.factoryId,
+          factoryName:         schemaModule.factories.name,
+          factoryCategory:     schemaModule.factories.category,
+          isOnline:            schemaModule.factories.isOnline,
+          averageResponseTime: schemaModule.factories.averageResponseTime,
+          certifications:      schemaModule.factoryDetails.certifications,
+          aiVerificationScore: schemaModule.factoryVerifications.aiVerificationScore,
+          totalOrders:         schemaModule.factoryMetrics.totalOrders,
+          disputeRate:         schemaModule.factoryMetrics.disputeRate,
+        })
+        .from(schemaModule.demandMatchResults)
+        .innerJoin(schemaModule.factories, eq(schemaModule.demandMatchResults.factoryId, schemaModule.factories.id))
+        .leftJoin(schemaModule.factoryDetails, eq(schemaModule.factories.id, schemaModule.factoryDetails.factoryId))
+        .leftJoin(schemaModule.factoryVerifications, eq(schemaModule.factories.id, schemaModule.factoryVerifications.factoryId))
+        .leftJoin(schemaModule.factoryMetrics, eq(schemaModule.factories.id, schemaModule.factoryMetrics.factoryId))
+        .where(eq(schemaModule.demandMatchResults.demandId, input.demandId))
+        .orderBy(desc(schemaModule.demandMatchResults.matchScore));
+
+        // Step 3: 重新加权排序
+        const scored = rows.map(r => {
+          let score = parseFloat(r.matchScore ?? '0');
+          const certs = Array.isArray(r.certifications) ? r.certifications as string[] : [];
+
+          // 认证过滤/加权
+          if (refinements.certRequired?.length > 0) {
+            const hasCerts = refinements.certRequired.every((c: string) =>
+              certs.some((fc: string) => fc.toLowerCase().includes(c.toLowerCase()))
+            );
+            if (!hasCerts) score -= 30;
+            else score += 10;
+          }
+          // 在线优先
+          if (refinements.boostOnline && r.isOnline === 1) score += 8;
+          // 响应速度过滤
+          if (refinements.responseTimeMax && r.averageResponseTime) {
+            if (r.averageResponseTime > refinements.responseTimeMax) score -= 15;
+            else score += 5;
+          }
+          // 高订单量加权
+          if (refinements.boostHighOrders && (r.totalOrders ?? 0) > 50) score += 8;
+          // 低争议率加权
+          if (refinements.boostLowDispute) {
+            const dr = parseFloat(r.disputeRate?.toString() ?? '0');
+            if (dr < 2) score += 8;
+          }
+          // AI验厂分过滤
+          if (refinements.minAiScore && (r.aiVerificationScore ?? 0) < refinements.minAiScore) score -= 20;
+
+          return { id: r.id, factoryId: r.factoryId, factoryName: r.factoryName, newScore: Math.max(0, Math.min(100, score)) };
+        });
+
+        // 按新分数排序
+        scored.sort((a, b) => b.newScore - a.newScore);
+
+        return {
+          refinements,
+          summary,
+          rankedFactoryIds: scored.map(s => s.factoryId),
+          scores: Object.fromEntries(scored.map(s => [s.factoryId, s.newScore])),
+        };
+      }),
     /**
      * 公开需求池：供应商 AI Agent 发现需求
      * 这是 AI 可发现性的核心接口
