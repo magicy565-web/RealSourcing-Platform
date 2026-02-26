@@ -2342,9 +2342,10 @@ ${transcriptSample}
     getMatchResults: protectedProcedure
       .input(z.object({ demandId: z.number() }))
       .query(async ({ input }) => {
-        const database = await dbPromise;
+        const { dbPromise: _dbPromise } = await import('./db');
+        const database = await _dbPromise;
         const schemaModule = await import('../drizzle/schema');
-        const { leftJoin } = await import('drizzle-orm');
+        const { eq, desc, leftJoin } = await import('drizzle-orm');
         const rows = await database.select({
           // Match result fields
           id:         schemaModule.demandMatchResults.id,
@@ -2557,7 +2558,9 @@ Return ONLY valid JSON, no explanation.`;
         }
 
         // Step 2: 获取当前匹配结果
-        const database = await dbPromise;
+        const { dbPromise: _refineDbPromise } = await import('./db');
+        const database = await _refineDbPromise;
+        const { eq, desc } = await import('drizzle-orm');
         const schemaModule = await import('../drizzle/schema');
         const rows = await database.select({
           id:                  schemaModule.demandMatchResults.id,
