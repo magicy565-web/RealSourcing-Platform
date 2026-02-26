@@ -2220,8 +2220,11 @@ ${transcriptSample}
             suggestedFactoryTypes: params.suggestedFactoryTypes,
           });
 
-          // Step 8: 更新需求状态为 transformed
-          await updateSourcingDemand(demandId, { status: 'transformed' });
+          // Step 8: 更新需求状态为 transformed，同步写入 productionCategory（供匹配服务直接读取）
+          await updateSourcingDemand(demandId, {
+            status: 'transformed',
+            productionCategory: params.productionCategory ?? undefined,
+          });
 
           // Step 9: 异步生成语义向量（不阻塞响应）
           setImmediate(async () => {
@@ -2230,7 +2233,8 @@ ${transcriptSample}
                 productName: extracted.productName,
                 productDescription: extracted.productDescription,
                 keyFeatures: extracted.keyFeatures,
-                productionCategory: String(extracted.extractedData?.productCategory ?? ''),
+                // 优先使用 params.productionCategory（经 AI 转化的精准品类），回退到 extractedData.productCategory
+                productionCategory: params.productionCategory ?? String(extracted.extractedData?.productCategory ?? ''),
                 customizationNotes: extracted.customizationNotes,
                 estimatedQuantity: extracted.estimatedQuantity,
                 targetPrice: extracted.targetPrice,

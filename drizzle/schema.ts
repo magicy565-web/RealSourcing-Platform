@@ -578,6 +578,8 @@ export const sourcingDemands = mysqlTable("sourcing_demands", {
   extractedData:       json("extractedData"),
   processingError:     text("processingError"),
   isPublished:         tinyint("isPublished").notNull().default(0),
+  // 品类字段：由 AI 从 manufacturingParams 提取后同步写入，供匹配服务直接读取（避免 JOIN）
+  productionCategory:  varchar("productionCategory", { length: 100 }),
   // 语义向量（1536 维，JSON 格式存储）
   embeddingVector:     longtext("embeddingVector"),
   embeddingModel:      varchar("embeddingModel", { length: 100 }),

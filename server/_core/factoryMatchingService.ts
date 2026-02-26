@@ -27,6 +27,40 @@ import {
 import { aiService } from './aiService';
 import { getIO } from './socketService';
 
+// ── 品类归一化映射 ─────────────────────────────────────────────────────────────
+// 解决 AI 生成的 productionCategory 与工厂 factory.category 命名不一致问题
+// 例：AI 生成 "消费电子 - 智能家居" → 工厂数据库中为 "智能家居"
+const CATEGORY_ALIAS_MAP: Record<string, string[]> = {
+  '智能家居':  ['智能家居', '消费电子 - 智能家居', '智能家居控制', '家居智能', '智能家电'],
+  '运动装备':  ['运动装备', '服装配饰 - 运动', '运动服装', '运动用品', '体育用品'],
+  '美妆个护':  ['美妆个护', '美妆', '化妆品', '个人护理', '美容产品'],
+  '礼品工艺':  ['礼品工艺', '礼品', '工艺品', '纪念品', '促销礼品'],
+  '精密模具':  ['精密模具', '模具', '注塑模具', '冲压模具', '机械加工'],
+  '穿戴科技':  ['穿戴科技', 'AR眼镜', '智能穿戴', '可穿戴设备', '消费电子 - 穿戴'],
+  '消费电子':  ['消费电子', '电子产品', '电子设备', '数码产品'],
+  '家居用品':  ['家居用品', '家居', '家具', '家居装饰'],
+  '服装配饰':  ['服装配饰', '服装', '纺织品', '配饰'],
+};
+
+/**
+ * 将 AI 生成的 productionCategory 归一化为工厂数据库中使用的标准品类名
+ * 支持模糊匹配（包含关系），确保品类过滤不因命名差异而失效
+ */
+export function normalizeCategoryForMatching(rawCategory: string | null | undefined): string | null {
+  if (!rawCategory) return null;
+  const raw = rawCategory.trim();
+  // 1. 精确匹配
+  for (const [canonical, aliases] of Object.entries(CATEGORY_ALIAS_MAP)) {
+    if (aliases.some(alias => alias === raw)) return canonical;
+  }
+  // 2. 包含匹配（AI 生成的品类通常包含标准品类名）
+  for (const [canonical, aliases] of Object.entries(CATEGORY_ALIAS_MAP)) {
+    if (aliases.some(alias => raw.includes(alias) || alias.includes(raw))) return canonical;
+  }
+  // 3. 无法归一化，返回原始值（让调用方决定是否扩展到全表）
+  return raw;
+}
+
 // ── 匹配权重配置 ───────────────────────────────────────────────────────────────
 const WEIGHTS = {
   SEMANTIC: 0.60,       // 语义相似度（核心）
@@ -190,7 +224,11 @@ export async function matchFactoriesForDemand(demandId: number) {
 
   // 2. 获取候选工厂能力向量（Category 预过滤）
   // 策略：先按品类精确匹配，如果结果 < 10 条则扩展到全表
-  const demandCategory = demand.productionCategory;
+  // 品类归一化：将 AI 生成的 productionCategory 映射到工厂数据库的标准品类名
+  const rawCategory = demand.productionCategory;
+  const demandCategory = normalizeCategoryForMatching(rawCategory);
+  console.log(`[Matching] Demand #${demandId} category: raw="${rawCategory}" → normalized="${demandCategory}"`);
+
   let candidates: any[] = [];
 
   if (demandCategory) {
@@ -200,13 +238,16 @@ export async function matchFactoriesForDemand(demandId: number) {
         eq(schema.factoryCapabilityEmbeddings.primaryCategory, demandCategory)
       ),
     });
+    console.log(`[Matching] Category filter "${demandCategory}" → ${candidates.length} candidates`);
     // 同品类工厂不足 10 家时，扩展到全表（确保新平台初期不失效）
     if (candidates.length < 10) {
+      console.log(`[Matching] Too few category matches, expanding to full table`);
       candidates = await db.query.factoryCapabilityEmbeddings.findMany({
         where: eq(schema.factoryCapabilityEmbeddings.isActive, 1),
       });
     }
   } else {
+    console.log(`[Matching] No category specified, using full table scan`);
     candidates = await db.query.factoryCapabilityEmbeddings.findMany({
       where: eq(schema.factoryCapabilityEmbeddings.isActive, 1),
     });

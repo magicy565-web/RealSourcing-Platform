@@ -556,8 +556,11 @@ async function processDemandTask(task: DemandTask): Promise<void> {
       });
     }
 
-    // Step 7: 更新状态为 transformed（完成）
-    await updateSourcingDemand(demandId, { status: 'transformed' });
+    // Step 7: 更新状态为 transformed，同步写入 productionCategory（供匹配服务直接读取）
+    await updateSourcingDemand(demandId, {
+      status: 'transformed',
+      productionCategory: (isTransformationError(params) ? undefined : params.productionCategory) ?? undefined,
+    });
 
     // Step 8: 异步生成语义向量（不阻塞）
     setImmediate(async () => {
