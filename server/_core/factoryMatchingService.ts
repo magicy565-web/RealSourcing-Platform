@@ -49,6 +49,7 @@ const CATEGORY_ALIAS_MAP: Record<string, string[]> = {
 export function normalizeCategoryForMatching(rawCategory: string | null | undefined): string | null {
   if (!rawCategory) return null;
   const raw = rawCategory.trim();
+  if (!raw) return null; // 纯空格字符串处理
   // 1. 精确匹配
   for (const [canonical, aliases] of Object.entries(CATEGORY_ALIAS_MAP)) {
     if (aliases.some(alias => alias === raw)) return canonical;
@@ -277,7 +278,7 @@ export async function matchFactoriesForDemand(demandId: number) {
     semanticScore: string;
     responsivenessScore: string;
     trustScore: string;
-    factoryOnlineAt: number | null | boolean;
+    factoryOnlineAt: number | null;
     matchReason: string;
     _factory: any;
     _scores: { semanticScore: number; responsivenessScore: number; finalScore: number };
@@ -317,7 +318,7 @@ export async function matchFactoriesForDemand(demandId: number) {
       semanticScore: semanticScore.toFixed(4),
       responsivenessScore: (responsivenessScore * 100).toFixed(2),
       trustScore: (trustScore * 100).toFixed(2),
-      factoryOnlineAt: factory.isOnline,
+      factoryOnlineAt: factory.isOnline ? 1 : 0,
       matchReason: '', // 占位，下面异步填充
       _factory: factory,
       _scores: { semanticScore, responsivenessScore, finalScore },

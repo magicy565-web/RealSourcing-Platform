@@ -527,6 +527,7 @@ async function processDemandTask(task: DemandTask): Promise<void> {
       estimatedQuantity: extracted.estimatedQuantity,
       targetPrice: extracted.targetPrice,
       customizationNotes: extracted.customizationNotes,
+      productCategory: extracted.productCategory ?? '',
       extractedData: extracted.extractedData,
     };
 
