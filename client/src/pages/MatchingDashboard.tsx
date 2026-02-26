@@ -489,8 +489,36 @@ export default function MatchingDashboard() {
 
   const socket = useSocket();
 
+  // 加入需求房间，接收 match_complete 推送
+  useEffect(() => {
+    if (!socket || !demandId) return;
+    socket.emit('join_demand_room', { demandId });
+    return () => {
+      socket.emit('leave_demand_room', { demandId });
+    };
+  }, [socket, demandId]);
+
   useEffect(() => {
     if (!socket) return;
+
+    // 匹配完成：实时刷新卡片列表
+    socket.on('match_complete', (data: any) => {
+      if (data.demandId !== demandId) return;
+      matchResults.refetch();
+      toast.success(`🎯 AI matched ${data.matchCount} factories for you!`, {
+        description: 'Factory cards are loading below...',
+        duration: 5000,
+      });
+    });
+
+    // 15分钟窗口关闭
+    socket.on('match_expired', (data: any) => {
+      if (data.demandId !== demandId) return;
+      toast.warning('⏰ Matching window closed', {
+        description: data.message ?? 'The 15-minute window has ended.',
+        duration: 8000,
+      });
+    });
 
     // 工厂接受握手
     socket.on('handshake_accepted', (data: any) => {
@@ -535,11 +563,13 @@ export default function MatchingDashboard() {
     });
 
     return () => {
+      socket.off('match_complete');
+      socket.off('match_expired');
       socket.off('handshake_accepted');
       socket.off('handshake_rejected');
       socket.off('handshake_expired');
     };
-  }, [socket, setLocation]);
+  }, [socket, demandId, setLocation]);
 
   // ── 从数据库恢复握手状态 ───────────────────────────────────────────────────
 

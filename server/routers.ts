@@ -2305,13 +2305,18 @@ ${transcriptSample}
     triggerMatch: protectedProcedure
       .input(z.object({ demandId: z.number() }))
       .mutation(async ({ input, ctx }) => {
+        const jobData = {
+          demandId: input.demandId,
+          userId: ctx.user.id,
+          triggeredAt: new Date().toISOString(),
+        };
         try {
-          const { enqueueFactoryMatching } = await import('./_core/queue');
-          const result = await enqueueFactoryMatching({
-            demandId: input.demandId,
-            userId: ctx.user.id,
-            triggeredAt: new Date().toISOString(),
-          });
+          const { enqueueFactoryMatching, enqueueMatchExpiry } = await import('./_core/queue');
+          const result = await enqueueFactoryMatching(jobData);
+          // 同时入队 15 分钟过期任务（重新触发时会刷新计时器）
+          await enqueueMatchExpiry(jobData).catch(err =>
+            console.warn('[triggerMatch] enqueueMatchExpiry failed (non-critical):', err.message)
+          );
           return { mode: 'async', jobId: result.jobId, status: result.status };
         } catch {
           // Redis 不可用，降级为同步模式
@@ -2934,14 +2939,29 @@ ${transcriptSample}
         return createHandshakeRequest({ ...input, buyerId: ctx.user.id });
       }),
 
-    /** 工厂接受握手请求 */
+     /** 工厂接受握手请求 */
     acceptHandshake: protectedProcedure
       .input(z.object({ handshakeId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { acceptHandshakeRequest } = await import('./_core/handshakeService');
-        return acceptHandshakeRequest(input.handshakeId, ctx.user.id);
+        const result = await acceptHandshakeRequest(input.handshakeId, ctx.user.id);
+        // WebSocket 通知买家：工厂已接受握手
+        try {
+          const { sendHandshakeResponseToBuyer } = await import('./_core/socketService');
+          if (result?.buyerUserId) {
+            sendHandshakeResponseToBuyer(result.buyerUserId, {
+              type: 'handshake_accepted',
+              handshakeId: input.handshakeId,
+              roomSlug: result.roomSlug,
+              factoryId: result.factoryId,
+              factoryName: result.factoryName,
+            });
+          }
+        } catch (e) {
+          console.warn('[acceptHandshake] WebSocket push failed (non-critical):', (e as Error).message);
+        }
+        return result;
       }),
-
     /** 工厂拒绝握手请求 */
     rejectHandshake: protectedProcedure
       .input(z.object({
@@ -2950,7 +2970,84 @@ ${transcriptSample}
       }))
       .mutation(async ({ input, ctx }) => {
         const { rejectHandshakeRequest } = await import('./_core/handshakeService');
-        return rejectHandshakeRequest(input.handshakeId, ctx.user.id, input.reason);
+        const result = await rejectHandshakeRequest(input.handshakeId, ctx.user.id, input.reason);
+        // WebSocket 通知买家：工厂已拒绝握手
+        try {
+          const { sendHandshakeResponseToBuyer } = await import('./_core/socketService');
+          if (result?.buyerUserId) {
+            sendHandshakeResponseToBuyer(result.buyerUserId, {
+              type: 'handshake_rejected',
+              handshakeId: input.handshakeId,
+              factoryId: result.factoryId,
+              reason: input.reason,
+            });
+          }
+        } catch (e) {
+          console.warn('[rejectHandshake] WebSocket push failed (non-critical):', (e as Error).message);
+        }
+        return result;
+      }),
+    /**
+     * 工厂响应模拟器（开发/测试用）
+     * 允许通过 API 模拟工厂接受或拒绝握手，用于端到端测试
+     */
+    simulateFactoryResponse: protectedProcedure
+      .input(z.object({
+        handshakeId: z.number(),
+        response: z.enum(['accept', 'reject']),
+        reason: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        // 获取握手请求详情
+        const handshake = await db.query.handshakeRequests.findFirst({
+          where: eq(schema.handshakeRequests.id, input.handshakeId),
+        });
+        if (!handshake) throw new TRPCError({ code: 'NOT_FOUND', message: '握手请求不存在' });
+        if (handshake.status !== 'pending') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `握手请求已处于 ${handshake.status} 状态` });
+        }
+        // 获取工厂信息（用于找到工厂用户 ID）
+        const factory = await db.query.factories.findFirst({
+          where: eq(schema.factories.id, handshake.factoryId),
+        });
+        if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
+        // 以工厂用户身份执行操作
+        if (input.response === 'accept') {
+          const { acceptHandshakeRequest } = await import('./_core/handshakeService');
+          const result = await acceptHandshakeRequest(input.handshakeId, factory.userId);
+          try {
+            const { sendHandshakeResponseToBuyer } = await import('./_core/socketService');
+            if (result?.buyerUserId) {
+              sendHandshakeResponseToBuyer(result.buyerUserId, {
+                type: 'handshake_accepted',
+                handshakeId: input.handshakeId,
+                roomSlug: result.roomSlug,
+                factoryId: factory.id,
+                factoryName: factory.name,
+              });
+            }
+          } catch (e) { /* non-critical */ }
+          return { ...result, simulated: true };
+        } else {
+          const { rejectHandshakeRequest } = await import('./_core/handshakeService');
+          const result = await rejectHandshakeRequest(input.handshakeId, factory.userId, input.reason);
+          try {
+            const { sendHandshakeResponseToBuyer } = await import('./_core/socketService');
+            if (result?.buyerUserId) {
+              sendHandshakeResponseToBuyer(result.buyerUserId, {
+                type: 'handshake_rejected',
+                handshakeId: input.handshakeId,
+                factoryId: factory.id,
+                reason: input.reason,
+              });
+            }
+          } catch (e) { /* non-critical */ }
+          return { ...result, simulated: true };
+        }
       }),
 
     /** 获取需求的所有握手请求 */

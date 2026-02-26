@@ -14,9 +14,10 @@ import {
   Award, Globe, Phone, Mail, Building2, Star, Eye,
   BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload,
   Play, Sparkles, ChevronRight, Save, RefreshCw,
-  Send, Search, Circle, WifiOff
+  Send, Search, Circle, WifiOff, Handshake, CheckCircle2, XCircle, ExternalLink
 } from "lucide-react";
 import { useInquiryRTM } from "@/hooks/useInquiryRTM";
+import { useSocket } from "@/hooks/useSocket";
 
 // ── MeetingsTab Component ─────────────────────────────────────────────────────
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -286,7 +287,7 @@ function MeetingsTab({ meetings, availability, onNavigate, onSaveAvailability, i
 }
 // ─────────────────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "products" | "webinars" | "meetings" | "inquiries" | "certifications" | "profile" | "orders";
+type Tab = "overview" | "products" | "webinars" | "meetings" | "inquiries" | "certifications" | "profile" | "orders" | "handshakes";
 
 export default function FactoryDashboard() {
   const [, setLocation] = useLocation();
@@ -315,6 +316,11 @@ export default function FactoryDashboard() {
     enabled: !!user,
   });
   const { data: stats } = trpc.factoryDashboard.stats.useQuery(undefined, { enabled: !!user });
+  // 握手请求列表（15分钟匹配功能）
+  const { data: pendingHandshakes = [], refetch: refetchHandshakes } = trpc.knowledge.getFactoryPendingHandshakes.useQuery(
+    { factoryId: factoryData?.id ?? 0 },
+    { enabled: !!factoryData?.id, refetchInterval: 15000 }
+  );
   const { data: sampleOrders, refetch: refetchOrders } = trpc.sampleOrders.factorySampleOrders.useQuery(undefined, { enabled: !!user });
   // 工厂端询价列表（附带未读数）
   const { data: factoryInquiries = [], refetch: refetchFactoryInquiries } = trpc.inquiries.factoryInquiries.useQuery(undefined, {
@@ -344,6 +350,24 @@ export default function FactoryDashboard() {
       chatMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatMessages]);
+
+  // ── WebSocket：接收握手请求实时通知 ──────────────────────────────────────────
+  const socket = useSocket();
+  useEffect(() => {
+    if (!socket || !factoryData?.id) return;
+    socket.on('handshake_request', (data: any) => {
+      refetchHandshakes();
+      toast.info(`📩 New sourcing request from a buyer!`, {
+        description: data.demandTitle ?? 'A buyer wants to connect with you.',
+        action: {
+          label: 'View',
+          onClick: () => setActiveTab('handshakes'),
+        },
+        duration: 10000,
+      });
+    });
+    return () => { socket.off('handshake_request'); };
+  }, [socket, factoryData?.id]);
 
   // ── tRPC Mutations ────────────────────────────────────────────────────────────
   const updateProfile = trpc.factoryDashboard.updateProfile.useMutation({
@@ -380,6 +404,22 @@ export default function FactoryDashboard() {
       toast.success(statusLabels[vars.status] || '状态已更新');
     },
     onError: () => toast.error('操作失败，请重试'),
+  });
+  const acceptHandshakeMutation = trpc.knowledge.acceptHandshake.useMutation({
+    onSuccess: (result: any) => {
+      refetchHandshakes();
+      if (result?.roomSlug) {
+        toast.success('✅ Accepted! Sourcing room is ready.', {
+          action: { label: 'Enter Room', onClick: () => setLocation(`/sourcing-room/${result.roomSlug}`) },
+          duration: 10000,
+        });
+      }
+    },
+    onError: (err: any) => toast.error('Failed to accept: ' + err.message),
+  });
+  const rejectHandshakeMutation = trpc.knowledge.rejectHandshake.useMutation({
+    onSuccess: () => { refetchHandshakes(); toast.success('Request declined.'); },
+    onError: (err: any) => toast.error('Failed to reject: ' + err.message),
   });
   const setAvailabilityMutation = trpc.factoryDashboard.setAvailability.useMutation({
     onSuccess: () => { refetch(); toast.success('可用时间已保存'); },
@@ -441,6 +481,7 @@ export default function FactoryDashboard() {
     { id: "meetings", icon: <Calendar className="w-4 h-4" />, label: "会议管理", badge: stats?.upcomingMeetings },
     { id: "inquiries", icon: <MessageSquare className="w-4 h-4" />, label: "询价管理", badge: stats?.pendingInquiries },
     { id: "orders", icon: <ShoppingBag className="w-4 h-4" />, label: "样品订单" },
+    { id: "handshakes", icon: <Handshake className="w-4 h-4" />, label: "握手请求", badge: (pendingHandshakes as any[]).length || undefined },
     { id: "certifications", icon: <Award className="w-4 h-4" />, label: "资质认证", badge: factoryData.certifications?.length },
     { id: "profile", icon: <Settings className="w-4 h-4" />, label: "工厂设置" },
   ];
@@ -1452,6 +1493,77 @@ export default function FactoryDashboard() {
         )}
 
         {/* ── 工厂设置 Tab ── */}
+        {/* ── 握手请求 Tab ──────────────────────────────────────────────────── */}
+        {activeTab === "handshakes" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-white text-xl font-bold">握手请求</h2>
+              <button onClick={() => refetchHandshakes()} className="text-gray-400 hover:text-white transition-colors">
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+            {(pendingHandshakes as any[]).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Handshake className="w-12 h-12 text-gray-600 mb-4" />
+                <p className="text-gray-400 font-medium">暂无待处理的握手请求</p>
+                <p className="text-gray-600 text-sm mt-1">当买家向您发起对话请求时，会在这里显示</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(pendingHandshakes as any[]).map((h: any) => {
+                  const expiresAt = h.expiresAt ? new Date(h.expiresAt) : null;
+                  const now = new Date();
+                  const minutesLeft = expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 60000)) : null;
+                  const isExpiringSoon = minutesLeft !== null && minutesLeft < 3;
+                  return (
+                    <div key={h.id} className={`p-4 rounded-xl border transition-all ${isExpiringSoon ? 'border-red-500/40 bg-red-500/5' : 'border-white/10 bg-white/3'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-white font-semibold text-sm">Demand #{h.demandId}</span>
+                            {minutesLeft !== null && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isExpiringSoon ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                                ⏰ {minutesLeft}分钟后过期
+                              </span>
+                            )}
+                          </div>
+                          {h.buyerMessage && (
+                            <p className="text-gray-400 text-sm mt-1 line-clamp-2">"{h.buyerMessage}"</p>
+                          )}
+                          <p className="text-gray-600 text-xs mt-1">
+                            收到时间：{new Date(h.createdAt).toLocaleString('zh-CN')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => acceptHandshakeMutation.mutate({ handshakeId: h.id })}
+                            disabled={acceptHandshakeMutation.isPending || rejectHandshakeMutation.isPending}
+                            className="h-8 bg-green-600 hover:bg-green-500 text-white text-xs"
+                          >
+                            {acceptHandshakeMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                            接受
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => rejectHandshakeMutation.mutate({ handshakeId: h.id })}
+                            disabled={acceptHandshakeMutation.isPending || rejectHandshakeMutation.isPending}
+                            className="h-8 border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs"
+                          >
+                            {rejectHandshakeMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3 mr-1" />}
+                            拒绝
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "profile" && (
           <div>
             <div className="flex items-center justify-between mb-6">

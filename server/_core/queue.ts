@@ -17,7 +17,7 @@ import { ENV } from './env';
 
 // ── Redis 连接 ─────────────────────────────────────────────────────────────────
 // 优先使用环境变量中的 Redis URL，本地开发回退到默认配置
-const redisConnection = new IORedis(ENV.REDIS_URL || 'redis://localhost:6379', {
+const redisConnection = new IORedis(ENV.redisUrl || 'redis://localhost:6379', {
   maxRetriesPerRequest: null, // BullMQ 要求此配置
   enableReadyCheck: false,
 });
@@ -51,7 +51,7 @@ export const factoryEmbeddingQueue = new Queue('factory-embedding', {
 
 /** 队列事件监听（用于前端轮询状态） */
 export const matchingQueueEvents = new QueueEvents('factory-matching', {
-  connection: new IORedis(ENV.REDIS_URL || 'redis://localhost:6379', {
+  connection: new IORedis(ENV.redisUrl || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   }),
@@ -68,6 +68,13 @@ export interface FactoryMatchingJobData {
 export interface FactoryEmbeddingJobData {
   factoryId: number;
   reason: 'onboarding' | 'profile_update';
+}
+
+/** 匹配过期任务数据类型 */
+export interface MatchExpiryJobData {
+  demandId: number;
+  userId: number;
+  triggeredAt: string;
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────────────────────
@@ -122,6 +129,38 @@ export async function getMatchingJobStatus(demandId: number) {
     failedReason: job.failedReason,
     finishedOn: job.finishedOn,
   };
+}
+
+/** 匹配过期队列（15分钟后自动过期未处理的匹配结果） */
+export const matchExpiryQueue = new Queue('match-expiry', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 50 },
+  },
+});
+
+/**
+ * 向过期队列添加延迟任务
+ * 15分钟后自动将该需求的所有 pending 匹配结果标记为 expired
+ */
+export async function enqueueMatchExpiry(data: MatchExpiryJobData) {
+  const jobId = `expire-demand-${data.demandId}`;
+  const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+  // 先移除旧任务（重新触发时刷新计时器）
+  const existing = await matchExpiryQueue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (state === 'delayed' || state === 'waiting') {
+      await existing.remove();
+    }
+  }
+  const job = await matchExpiryQueue.add('expire', data, {
+    jobId,
+    delay: FIFTEEN_MINUTES_MS,
+  });
+  return { jobId: job.id };
 }
 
 export { redisConnection };
