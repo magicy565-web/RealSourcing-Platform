@@ -201,7 +201,7 @@ async function startServer() {
 
   // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成）
   // Redis 不可用时降级为同步模式，不影响主服务启动
-  let queueWorkers: { factoryMatchingWorker: any; factoryEmbeddingWorker: any } | null = null;
+  let queueWorkers: { factoryMatchingWorker: any; factoryEmbeddingWorker: any; matchExpiryWorker: any } | null = null;
   try {
     queueWorkers = await import('./queueWorker');
     console.log('[Queue] BullMQ workers initialized');
@@ -214,6 +214,7 @@ async function startServer() {
     shutdownBrowserWorker().catch(() => {});
     queueWorkers?.factoryMatchingWorker?.close().catch(() => {});
     queueWorkers?.factoryEmbeddingWorker?.close().catch(() => {});
+    queueWorkers?.matchExpiryWorker?.close().catch(() => {});
   });
 
   server.listen(port, () => {

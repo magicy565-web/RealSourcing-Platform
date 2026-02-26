@@ -77,11 +77,31 @@ export function initSocketService(server: HttpServer) {
       }
     });
 
-    // ── 2. 快速注册用户 ID（买家端使用，无需 token） ───────────────────────────
-    socket.on('register_user', (data: { userId: number }) => {
-      if (data.userId) {
-        (socket as any).userId = data.userId;
-        console.log(`👤 [Socket] User ${data.userId} registered on socket ${socket.id}`);
+    // ── 2. 快速注册用户 ID（买家/工厂通用） ──────────────────────────────────────
+    // 注册 userId 后，自动查询该用户是否为工厂用户，若是则同步设置 factoryId
+    // 这确保工厂端在不触发 authenticate 事件的情况下也能收到握手请求通知
+    socket.on('register_user', async (data: { userId: number }) => {
+      if (!data.userId) return;
+      (socket as any).userId = data.userId;
+      console.log(`👤 [Socket] User ${data.userId} registered on socket ${socket.id}`);
+      // 自动检查是否为工厂用户，设置 factoryId 以支持握手通知路由
+      try {
+        const db = await dbPromise;
+        const factory = await db.query.factories.findFirst({
+          where: eq(schema.factories.userId, data.userId),
+        });
+        if (factory) {
+          (socket as any).factoryId = factory.id;
+          // 同步更新工厂在线状态
+          await db.update(schema.factories)
+            .set({ isOnline: 1 } as any)
+            .where(eq(schema.factories.id, factory.id));
+          io?.emit('factory_status_change', { factoryId: factory.id, isOnline: 1 });
+          console.log(`🏭 [Socket] Factory ${factory.name} (ID: ${factory.id}) linked via register_user`);
+        }
+      } catch (err) {
+        // 非关键路径，失败不影响连接
+        console.warn(`⚠️ [Socket] register_user factory lookup failed for user ${data.userId}:`, (err as Error).message);
       }
     });
 
