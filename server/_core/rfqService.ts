@@ -289,7 +289,33 @@ export interface AutoSendRfqResult {
 export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqResult> {
   const db = await dbPromise;
 
-  // ── Step 1: 查询飞书 Bitable 报价库 ──────────────────────────────────────────
+  // 尝试获取买家 userId，用于 WebSocket 进度推送
+  let buyerUserId: number | undefined;
+  try {
+    const demand = await db.query.sourcingDemands?.findFirst?.({ where: (d: any, { eq: eqFn }: any) => eqFn(d.id, input.demandId) });
+    buyerUserId = demand?.userId ?? input.buyerId;
+  } catch { buyerUserId = input.buyerId; }
+
+  // 工具函数：向买家推送进度
+  const pushProgress = async (stage: string, message: string, extra?: Record<string, any>) => {
+    if (!buyerUserId) return;
+    try {
+      const { sendRfqProgressToBuyer } = await import('./socketService');
+      sendRfqProgressToBuyer(buyerUserId, {
+        stage: stage as any,
+        demandId: input.demandId,
+        factoryId: input.factoryId,
+        message,
+        timestamp: new Date().toISOString(),
+        ...extra,
+      });
+    } catch { /* 推送失败不影响主流程 */ }
+  };
+
+  // 推送开始进度
+  await pushProgress('rfq_processing_started', 'AI 正在检索工厂报价库...', { estimatedMinutes: 15 });
+
+  // ── Step 1: 查询飞书 Bitable 报价库 ────────────────────────────────────────────
   let feishuQuotes: any[] = [];
   try {
     const { searchBitableQuotes } = await import('./feishuService');
@@ -298,6 +324,9 @@ export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqR
       category: input.category,
       maxResults: 5,
     });
+    if (feishuQuotes.length > 0) {
+      await pushProgress('rfq_data_found', `已从飞书报价库找到 ${feishuQuotes.length} 条匹配报价`, { estimatedMinutes: 3 });
+    }
   } catch (feishuErr) {
     console.warn('[autoSendRfq] Feishu search failed, falling back to Claw queue:', feishuErr);
   }
@@ -370,6 +399,31 @@ export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqR
     } catch (cardErr) {
       console.warn('[autoSendRfq] Failed to send Feishu card:', cardErr);
     }
+
+    // 推送 WebSocket 进度：报价已生成
+    await pushProgress('rfq_generated', '报价已生成，正在推送给您...', {
+      estimatedMinutes: 1,
+      inquiryId: rfqResult.inquiryId,
+      quoteData: {
+        unitPrice: bestQuote.unitPrice,
+        currency: bestQuote.currency ?? 'USD',
+        moq: bestQuote.moq,
+        leadTimeDays: bestQuote.leadTimeDays,
+      },
+    });
+
+    // 推送 WebSocket 进度：报价已发送给买家
+    setTimeout(async () => {
+      await pushProgress('rfq_sent_to_buyer', '报价已到达，请查看详情', {
+        inquiryId: rfqResult.inquiryId,
+        quoteData: {
+          unitPrice: bestQuote.unitPrice,
+          currency: bestQuote.currency ?? 'USD',
+          moq: bestQuote.moq,
+          leadTimeDays: bestQuote.leadTimeDays,
+        },
+      });
+    }, 1500);
 
     console.log(`✅ [autoSendRfq] Instant quote via Feishu for demand #${input.demandId}, inquiry #${rfqResult.inquiryId}`);
 

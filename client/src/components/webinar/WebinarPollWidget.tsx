@@ -341,7 +341,7 @@ export default function WebinarPollWidget({
       {/* 空状态 */}
       {activePolls.length === 0 && closedPolls.length === 0 && (
         <div className="text-center py-8 text-slate-600 text-sm">
-          {isHost ? "点击"创建投票"开始第一个投票" : "暂无进行中的投票"}
+          {isHost ? '点击"创建投票"开始第一个投票' : '暂无进行中的投票'}
         </div>
       )}
     </div>

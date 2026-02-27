@@ -191,3 +191,95 @@ export function sendHandshakeResponseToBuyer(buyerUserId: number, data: any) {
   });
   console.log(`📡 [Socket] Sent handshake_response to buyer ${buyerUserId} (${buyerSockets.length} sockets)`);
 }
+
+// ── RFQ 进度推送事件 ───────────────────────────────────────────────────────────
+
+export type RfqProgressStage =
+  | 'rfq_processing_started'   // AI 正在联络工厂
+  | 'rfq_data_found'           // 已从工厂报价库提取数据
+  | 'rfq_generated'            // 报价已生成，等待工厂确认
+  | 'rfq_confirmed'            // 报价已确认，即将推送买家
+  | 'rfq_sent_to_buyer'        // 报价已推送给买家
+  | 'rfq_timeout'              // 30 分钟超时
+  | 'rfq_failed';              // 报价生成失败
+
+export interface RfqProgressPayload {
+  stage: RfqProgressStage;
+  demandId: number;
+  factoryId: number;
+  inquiryId?: number;
+  message: string;
+  estimatedMinutes?: number;  // 预计还需多少分钟
+  quoteData?: {               // 报价已生成时携带
+    unitPrice: number;
+    currency: string;
+    moq: number;
+    leadTimeDays: number;
+  };
+  timestamp: string;
+}
+
+/**
+ * 向买家推送 RFQ 进度更新
+ */
+export function sendRfqProgressToBuyer(buyerUserId: number, payload: RfqProgressPayload) {
+  if (!io) return;
+  const sockets = Array.from(io.sockets.sockets.values());
+  const buyerSockets = sockets.filter(s => (s as any).userId === buyerUserId);
+  buyerSockets.forEach(s => {
+    s.emit('rfq_progress', payload);
+  });
+  console.log(`📡 [Socket] Sent rfq_progress [${payload.stage}] to buyer ${buyerUserId}`);
+}
+
+/**
+ * 向工厂推送 RFQ 任务通知（AI 已生成报价草稿，请确认）
+ */
+export function sendRfqDraftToFactory(factoryUserId: number, payload: {
+  inquiryId: number;
+  demandId: number;
+  buyerName?: string;
+  productName?: string;
+  quantity?: number;
+  draftQuote: {
+    unitPrice: number;
+    currency: string;
+    moq: number;
+    leadTimeDays: number;
+    tierPricing?: Array<{ qty: number; price: number }>;
+    notes?: string;
+  };
+  source: 'feishu' | 'ai_generated' | 'manual';
+  confidence?: number;  // AI 置信度 0-100
+}) {
+  if (!io) return;
+  const sockets = Array.from(io.sockets.sockets.values());
+  const factorySockets = sockets.filter(s => (s as any).userId === factoryUserId);
+  factorySockets.forEach(s => {
+    s.emit('rfq_draft_ready', payload);
+  });
+  console.log(`📡 [Socket] Sent rfq_draft_ready to factory user ${factoryUserId}`);
+}
+
+/**
+ * 向买家推送报价已收到通知
+ */
+export function sendQuoteReceivedToBuyer(buyerUserId: number, payload: {
+  inquiryId: number;
+  demandId: number;
+  factoryId: number;
+  factoryName: string;
+  unitPrice: number;
+  currency: string;
+  moq: number;
+  leadTimeDays: number;
+  validUntil?: string;
+}) {
+  if (!io) return;
+  const sockets = Array.from(io.sockets.sockets.values());
+  const buyerSockets = sockets.filter(s => (s as any).userId === buyerUserId);
+  buyerSockets.forEach(s => {
+    s.emit('quote_received', payload);
+  });
+  console.log(`📡 [Socket] Sent quote_received to buyer ${buyerUserId} (factory: ${payload.factoryName})`);
+}

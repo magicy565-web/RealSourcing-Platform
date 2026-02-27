@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSocket } from "@/hooks/useSocket";
+import { MatchingQuoteDisplay } from "@/components/matching/MatchingQuoteDisplay";
 import { ScoreRing } from "@/components/matching/ScoreRing";
 import { AMRDimensionBars } from "@/components/matching/AMRDimensionBars";
 import { AMRRadarChart, type AMRDimensions } from "@/components/matching/AMRRadarChart";
@@ -50,6 +51,18 @@ interface MatchResult {
   matchReasons?: string[];
   structuredReasons?: Array<{ icon: string; label: string; value: string; highlight: boolean }>;
   factoryId: number;
+  latestQuote?: {
+    id: number;
+    unitPrice: number;
+    currency: string;
+    moq: number;
+    leadTimeDays: number;
+    tierPricing?: Array<{ qty: number; unitPrice: number }>;
+    sampleAvailable?: boolean;
+    samplePrice?: number;
+    sampleLeadDays?: number;
+    createdAt: string;
+  };
   amrScore?: number;
   amrAcumen?: number;
   amrChannel?: number;
@@ -298,6 +311,17 @@ function MatchCard({ match, index, handshakeState, onRequestChat, onViewDetails,
               <span key={i} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 border border-blue-500/15 text-blue-400">{c}</span>
             ))}
             {certs.length > 4 && <span className="px-1.5 py-0.5 rounded text-[10px] text-gray-600">+{certs.length - 4}</span>}
+          </div>
+        )}
+
+        {/* Quote Display */}
+        {match.latestQuote && (
+          <div className="mb-4">
+            <MatchingQuoteDisplay
+              quote={match.latestQuote}
+              factoryName={name}
+              isNew={true}
+            />
           </div>
         )}
 

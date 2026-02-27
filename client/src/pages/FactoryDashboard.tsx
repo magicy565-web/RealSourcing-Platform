@@ -14,11 +14,12 @@ import {
   Award, Globe, Phone, Mail, Building2, Star, Eye,
   BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload,
   Play, Sparkles, ChevronRight, Save, RefreshCw,
-  Send, Search, Circle, WifiOff, Handshake, CheckCircle2, XCircle, ExternalLink
+  Send, Search, Circle, WifiOff, Handshake, CheckCircle2, XCircle, ExternalLink, DollarSign
 } from "lucide-react";
 import { useInquiryRTM } from "@/hooks/useInquiryRTM";
 import { useSocket } from "@/hooks/useSocket";
 import { AgentConfigTab } from "@/components/factories/AgentConfigTab";
+import { QuoteSubmitForm } from "@/components/factories/QuoteSubmitForm";
 
 // ── MeetingsTab Component ─────────────────────────────────────────────────────
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -309,6 +310,7 @@ export default function FactoryDashboard() {
   const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null);
   const [inquirySearchQuery, setInquirySearchQuery] = useState("");
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState<string>("all");
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -1071,7 +1073,42 @@ export default function FactoryDashboard() {
                     )}
                   </div>
                 </div>
-
+                {/* 报价提交表单 */}
+                {selectedInquiry?.status === "pending" && !showQuoteForm && (
+                  <div className="px-6 py-3 flex-shrink-0">
+                    <button
+                      onClick={() => setShowQuoteForm(true)}
+                      className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600/20 to-purple-700/20 border border-purple-500/30 hover:border-purple-500/50 transition-colors text-sm font-medium text-purple-300 flex items-center justify-center gap-2"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      提交报价
+                    </button>
+                  </div>
+                )}
+                {showQuoteForm && (
+                  <div className="px-6 py-4 flex-shrink-0 border-t border-white/10 bg-white/[0.02] max-h-[50vh] overflow-y-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-white">提交报价</h3>
+                      <button
+                        onClick={() => setShowQuoteForm(false)}
+                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                    <QuoteSubmitForm
+                      inquiryId={selectedInquiry.id}
+                      factoryId={factoryData?.id || 0}
+                      productName={selectedInquiry.product?.name}
+                      buyerName={selectedInquiry.buyer?.name}
+                      quantity={selectedInquiry.quantity}
+                      onSuccess={() => {
+                        setShowQuoteForm(false);
+                        refetchFactoryInquiries();
+                      }}
+                    />
+                  </div>
+                )}
                 {/* 消息列表 */}
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
                   {chatMessages.length === 0 ? (

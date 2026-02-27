@@ -40,6 +40,7 @@ import SourcingDemandDetail from "./pages/SourcingDemandDetail";
 import MatchingDashboard from "./pages/MatchingDashboard";
 import SourcingRoom from "./pages/SourcingRoom";
 import OpsAgentMonitor from "./pages/OpsAgentMonitor";
+import MyQuotes from "./pages/MyQuotes";
 
 function Router() {
   return (
@@ -209,6 +210,11 @@ function Router() {
       <Route path="/ops/agent-monitor">
         <ProtectedRoute>
           <OpsAgentMonitor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/my-quotes">
+        <ProtectedRoute>
+          <MyQuotes />
         </ProtectedRoute>
       </Route>
 

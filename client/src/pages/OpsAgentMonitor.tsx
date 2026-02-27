@@ -314,7 +314,7 @@ export default function OpsAgentMonitor() {
               ) : (
                 <div className="space-y-2 max-h-[600px] overflow-y-auto">
                   {jobs.map((job: any) => (
-                    <div key={job.id} className="p-3 rounded-xl bg-white/5 border border-white/8 flex items-center gap-3">
+                    <div key={job.id} className="p-3 rounded-xl bg-white/5 border border-white/8 flex items-center gap-3 group hover:bg-white/8 transition-all">
                       {/* Status indicator */}
                       <div className={cn(
                         'w-2 h-2 rounded-full flex-shrink-0',
