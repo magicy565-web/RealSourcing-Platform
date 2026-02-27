@@ -505,6 +505,13 @@ JSON 格式示例：
                 .sort((a: any, b: any) => parseFloat(b.overallScore || "0") - parseFloat(a.overallScore || "0"))
                 .slice(0, 3);
             }
+            // 按 id 去重，避免重复工厂
+            const seenIds = new Set<number>();
+            matched = matched.filter((f: any) => {
+              if (seenIds.has(f.id)) return false;
+              seenIds.add(f.id);
+              return true;
+            });
 
             // 基于用户预算生成合理单价
             const budgetStr = (mergedPrefs.budget || mergedPrefs.price || "") as string;
