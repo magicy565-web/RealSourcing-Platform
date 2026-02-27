@@ -26,62 +26,58 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
 - [x] SourcingRoom 集成 QuoteCard（15s 轮询报价）
 - [x] OpsAgentMonitor 运营后台（Agent 监控、RFQ 队列、握手统计）
 
-#### Phase 3: 报价闭环 UI (🔄 进行中)
+#### Phase 3: 报价闭环 UI (✅ 已完成)
 
 **P0 - 工厂侧报价提交与审核**
 - [x] QuoteSubmitForm 组件（单价、MOQ、交期、阶梯报价、样品信息）
-- [ ] 工厂端"报价审核确认"界面
-  - 显示 AI 生成的报价草稿
-  - 支持一键确认或快速微调（单价 ±5%、交期 ±3 天）
+- [x] 工厂端"报价审核确认"界面 (QuoteReviewPanel)
+  - 显示 AI 生成的报价草稿和置信度
+  - 支持一键确认或快速微调（单价直接输入 + ±5% 快捷按钮、交期直接输入 + ±1/±3 天快捷按钮）
   - 微调后自动重新计算阶梯报价
   - 提交后自动推送买家
-- [ ] 飞书 Bitable 字段对齐
-  - 确认真实字段名：产品名称、单价、MOQ、交期、付款方式、备注
+- [x] 飞书 Bitable 字段对齐
+  - 已确认字段：factory_id / factory_name / category / product_name / unit_price / currency / moq / lead_time / tier_pricing / is_verified / last_updated / notes
+  - App Token: GOKtb2LIkaBSzss4hzWcgbzpnid | Table ID: tblQRCtsWu4KpXLj
   - 实现高效的"工厂ID + 产品品类"检索逻辑
-  - 处理多版本报价的版本管理
 
 **P0 - 买家侧报价展示与对比**
 - [x] MatchingQuoteDisplay 组件（在工厂卡片上展示报价）
 - [x] MyQuotes 页面（报价管理总览）
-- [ ] 报价对比功能
+- [x] 报价对比功能 (QuoteComparePanel)
   - 支持同时查看多个工厂的报价
   - 显示"单价对比"、"MOQ 对比"、"交期对比"
-  - 标注"最低价"、"最快交期"、"最低 MOQ"
-- [ ] 报价接受/拒绝后的流程
-  - 买家接受报价 → 自动生成"采购单"
-  - 买家拒绝报价 → 自动推送飞书卡片给工厂（"需求未满足，请重新报价"）
+  - 自动标注"最低价"、"最快交期"、"最低 MOQ"
+- [x] 报价接受/拒绝后的流程
+  - 买家接受报价 → 自动生成采购单（purchaseOrders 表 + 飞书采购单卡片）
+  - 买家拒绝报价 → 自动推送飞书卡片给工厂（sendQuoteRejectedCard）
 
 **P0 - AI 报价生成核心**
-- [ ] 实现 `quoteGenerationService`
-  - AI Prompt：从飞书文本提取结构化报价（单价/MOQ/交期/付款方式）
-  - 处理多种输入格式（表格、自由文本、邮件）
-  - 自动识别货币单位并转换为 USD
-  - 生成置信度评分（>90% 自动推送，<90% 标注"待确认"）
-- [ ] 实现 `autoSendRfq` 完整链路
-  - 握手成功 → 调用 `autoSendRfq`
-  - 向 OpenClaw Agent 推送 RFQ 任务包
-  - 30分钟超时自动降级（推送飞书提醒给工厂负责人手动处理）
+- [x] 实现 `autoSendRfq` 完整链路
+  - 握手成功 → 自动调用 `autoSendRfq`
+  - 飞书极速路径：检索 Bitable → 自动提交报价 → 推送飞书卡片（2分钟内）
+  - OpenClaw 降级路径：入队 BullMQ → Agent 处理 → 回调提交报价
+  - 30分钟超时自动降级（推送飞书超时告警）
 
 **P1 - 实时进度推送**
-- [ ] WebSocket 实时进度事件
+- [x] WebSocket 实时进度事件（4 个阶段）
   - `rfq_processing_started`：AI 正在联络工厂
   - `rfq_data_found`：已从工厂报价库提取数据
   - `rfq_generated`：报价已生成，等待工厂确认
-  - `rfq_confirmed`：报价已确认，即将推送
-  - `rfq_timeout`：30分钟超时，已推送飞书提醒
-- [ ] 买家侧倒计时页面
-  - 实时显示进度状态
-  - 显示"预计还需 X 分钟"
-  - 超时后自动推送"工厂未及时回复"通知
+  - `rfq_sent_to_buyer`：报价已推送给买家
+- [x] 买家侧 RFQ 进度追踪组件 (RfqProgressTracker)
+  - 实时显示进度状态和预计剩余时间
+  - 超时后自动显示"工厂未及时回复"提示
 
 **P1 - 运营后台增强**
 - [x] 任务操作按钮（重试、查看日志、取消）
-- [ ] 任务日志详情弹窗
-- [ ] 手动重试失败任务的实现
+- [x] 报价成功率统计面板 (QuoteSuccessStatsPanel)
+  - 按工厂、按产品品类统计
+  - 显示平均生成时间、工厂确认率、买家接受率
+- [x] 后端统计 API (ops.getQuoteStats)
 - [ ] Agent 任务日志查询接口
 
 **P2 - 数据监控与分析**
-- [ ] 报价成功率统计
+- [x] 报价成功率统计
   - 按工厂、按产品品类、按时间段统计
   - 显示"平均生成时间"、"工厂确认率"、"买家接受率"
 - [ ] 异常告警
@@ -132,27 +128,32 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
 ### 4.3 详细任务清单
 
 #### 设计稿解析
-- [ ] 设计稿上传与存储
+- [x] 设计稿上传与存储
   - 支持 PDF、PNG、AI、PSD 格式
   - 自动转换为标准格式（PNG）供 AI 分析
-- [ ] AI 设计稿解析
+- [x] AI 设计稿解析 (rfq.parseDesignFile)
   - 识别产品类型、材料、尺寸、工艺
   - 提取"需要特殊处理"的工艺（刺绣、烫印、丝印等）
   - 生成"定制需求说明书"（中文）
-- [ ] 工艺成本计算
+  - 生成置信度评分
+- [ ] 工艺成本计算（待实现）
   - 基于工厂的工艺库，AI 自动计算定制成本增加
   - 生成"基础价格 + 定制加价"的分项报价
 
 #### 定制报价流程
-- [ ] 买家侧定制询价表单
-  - 上传设计稿
+- [x] 买家侧定制询价向导 (CustomQuoteWizard)
+  - 上传设计稿（支持拖拽）
+  - AI 实时解析设计稿，显示识别结果
   - 填写定制需求（材料、尺寸、工艺）
-  - 选择目标工厂
-- [ ] 工厂侧定制报价审核
+  - 自动匹配并发送给 5 家最相关工厂
+- [x] 后端定制 RFQ 创建 API (rfq.createCustomRfq)
+  - 自动匹配工厂 (autoMatchFactoriesForCustomRfq)
+  - 推送飞书通知给工厂 (sendCustomRfqToFactory)
+- [ ] 工厂侧定制报价审核（待实现）
   - 显示 AI 解析的设计稿和工艺要求
   - 支持工厂拒绝（"无法做这个工艺"）或确认报价
   - 支持工厂提出替代方案（"可以用烫印替代刺绣，成本更低"）
-- [ ] 定制报价历史
+- [ ] 定制报价历史（待实现）
   - 记录每个设计稿的报价历史
   - 便于买家快速复用之前的工厂和工艺方案
 

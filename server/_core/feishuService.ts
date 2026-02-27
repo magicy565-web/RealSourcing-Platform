@@ -492,3 +492,263 @@ export async function upsertBitableQuote(record: Omit<FeishuQuoteRecord, 'record
     return null;
   }
 }
+
+/**
+ * 向工厂发送"报价被拒绝"飞书卡片
+ * 当买家拒绝报价时触发，告知工厂原因并引导重新报价
+ */
+export async function sendQuoteRejectedCard(options: {
+  factoryId: number;
+  factoryName: string;
+  inquiryId: number;
+  demandId: number;
+  reason: string;
+  unitPrice: number;
+  currency: string;
+}): Promise<void> {
+  const { chatId } = getFeishuConfig();
+  if (!chatId) {
+    console.warn('[Feishu] No chat_id configured, skipping quote rejected card');
+    return;
+  }
+
+  const token = await getFeishuToken();
+  const appUrl = process.env.VITE_APP_URL ?? 'https://realsourcing.com';
+
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: '❌ 报价未被接受 — 请调整后重新报价' },
+      template: 'red',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**工厂**: ${options.factoryName}\n**询价 ID**: ${options.inquiryId}\n**您的报价**: ${options.currency} ${options.unitPrice.toFixed(2)}/unit\n\n**买家反馈**:\n> ${options.reason}`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: '💡 **建议**：您可以调整单价、MOQ 或交期后重新提交报价，或通过沟通室与买家直接沟通。',
+        },
+      },
+      {
+        tag: 'action',
+        actions: [
+          {
+            tag: 'button',
+            text: { tag: 'plain_text', content: '🔄 重新提交报价' },
+            type: 'primary',
+            url: `${appUrl}/factory/dashboard?tab=inquiries&inquiryId=${options.inquiryId}`,
+          },
+          {
+            tag: 'button',
+            text: { tag: 'plain_text', content: '💬 联系买家' },
+            type: 'default',
+            url: `${appUrl}/sourcing-room/${options.demandId}`,
+          },
+        ],
+      },
+      {
+        tag: 'note',
+        elements: [
+          {
+            tag: 'plain_text',
+            content: `需求 ID: ${options.demandId} | 询价 ID: ${options.inquiryId} | 由 RealSourcing 自动通知`,
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    await axios.post(
+      `${FEISHU_BASE_URL}/im/v1/messages?receive_id_type=chat_id`,
+      {
+        receive_id: chatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    console.log(`✅ [Feishu] Quote rejected card sent for inquiry ${options.inquiryId}`);
+  } catch (err: any) {
+    console.error('[Feishu] Quote rejected card error:', err.message);
+  }
+}
+
+/**
+ * 向运营群发送"采购单已创建"飞书卡片
+ * 当买家接受报价后自动生成采购单时触发
+ */
+export async function sendPurchaseOrderCreatedCard(options: {
+  poNumber: string;
+  buyerId: number;
+  buyerName?: string;
+  factoryId: number;
+  factoryName?: string;
+  productName?: string;
+  quantity?: number;
+  unitPrice: number;
+  totalAmount: number;
+  currency: string;
+  leadTimeDays: number;
+  expectedDelivery: Date;
+}): Promise<void> {
+  const { chatId } = getFeishuConfig();
+  if (!chatId) return;
+
+  const token = await getFeishuToken();
+  const appUrl = process.env.VITE_APP_URL ?? 'https://realsourcing.com';
+  const deliveryStr = options.expectedDelivery.toISOString().split('T')[0];
+
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `🎉 新采购单已创建 — ${options.poNumber}` },
+      template: 'green',
+    },
+    elements: [
+      {
+        tag: 'div',
+        fields: [
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**买家**\n${options.buyerName ?? `ID: ${options.buyerId}`}` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**工厂**\n${options.factoryName ?? `ID: ${options.factoryId}`}` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**产品**\n${options.productName ?? '未指定'}` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**数量**\n${options.quantity ?? 1} 件` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**单价**\n${options.currency} ${options.unitPrice.toFixed(2)}` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**总金额**\n${options.currency} ${options.totalAmount.toFixed(2)}` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**交期**\n${options.leadTimeDays} 天` },
+          },
+          {
+            is_short: true,
+            text: { tag: 'lark_md', content: `**预计交货**\n${deliveryStr}` },
+          },
+        ],
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [
+          {
+            tag: 'button',
+            text: { tag: 'plain_text', content: '📋 查看采购单详情' },
+            type: 'primary',
+            url: `${appUrl}/purchase-orders/${options.poNumber}`,
+          },
+        ],
+      },
+      {
+        tag: 'note',
+        elements: [
+          {
+            tag: 'plain_text',
+            content: `采购单号: ${options.poNumber} | 由 RealSourcing 自动生成`,
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    await axios.post(
+      `${FEISHU_BASE_URL}/im/v1/messages?receive_id_type=chat_id`,
+      {
+        receive_id: chatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    console.log(`✅ [Feishu] PO created card sent for ${options.poNumber}`);
+  } catch (err: any) {
+    console.error('[Feishu] PO created card error:', err.message);
+  }
+}
+
+
+// ── 4.3 定制报价：发送定制询价通知给工厂 ──────────────────────────────────────
+/**
+ * sendCustomRfqToFactory
+ * 当买家提交定制报价请求时，通过飞书卡片通知工厂
+ */
+export async function sendCustomRfqToFactory(params: {
+  factoryName: string;
+  productName: string;
+  rfqId: number;
+  description: string;
+}): Promise<void> {
+  const { chatId } = getFeishuConfig();
+  if (!chatId) {
+    console.warn('[Feishu] FEISHU_CHAT_ID not configured, skipping custom RFQ notification');
+    return;
+  }
+
+  const token = await getFeishuToken();
+
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: '🎨 新定制询价请求' },
+      template: 'purple',
+    },
+    elements: [
+      {
+        tag: 'div',
+        fields: [
+          { is_short: true, text: { tag: 'lark_md', content: `**工厂**\n${params.factoryName}` } },
+          { is_short: true, text: { tag: 'lark_md', content: `**询价单号**\nRFQ-${params.rfqId}` } },
+          { is_short: false, text: { tag: 'lark_md', content: `**产品**\n${params.productName}` } },
+          { is_short: false, text: { tag: 'lark_md', content: `**需求描述**\n${params.description}` } },
+        ],
+      },
+      { tag: 'hr' },
+      {
+        tag: 'note',
+        elements: [
+          { tag: 'plain_text', content: '⚡ 定制询价通常需要 1-3 个工作日报价，请尽快查看并回复' },
+        ],
+      },
+    ],
+  };
+
+  try {
+    await axios.post(
+      `${FEISHU_BASE_URL}/im/v1/messages?receive_id_type=chat_id`,
+      {
+        receive_id: chatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    console.log(`✅ [Feishu] Custom RFQ #${params.rfqId} notification sent to factory: ${params.factoryName}`);
+  } catch (e: any) {
+    console.warn('[Feishu] sendCustomRfqToFactory failed:', e.message);
+  }
+}

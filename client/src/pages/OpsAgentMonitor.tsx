@@ -21,6 +21,7 @@ import {
   Loader2, Filter, BarChart3, Handshake, Package,
   Zap, Database, Mail, ChevronRight
 } from 'lucide-react';
+import QuoteSuccessStatsPanel from '@/components/ops/QuoteSuccessStatsPanel';
 
 const JOB_STATUS_LABELS: Record<string, string> = {
   queued:     '排队中',
@@ -54,10 +55,12 @@ const CAPABILITY_ICONS: Record<string, React.ReactNode> = {
 };
 
 type JobStatusFilter = 'all' | 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+type ActiveTab = 'agents' | 'quotes';
 
 export default function OpsAgentMonitor() {
   const [, setLocation] = useLocation();
   const [jobFilter, setJobFilter] = useState<JobStatusFilter>('all');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('agents');
 
   const statsQuery = trpc.ops.getRfqStats.useQuery(undefined, { refetchInterval: 15000 });
   const handshakeStatsQuery = trpc.ops.getHandshakeStats.useQuery(undefined, { refetchInterval: 30000 });
@@ -110,6 +113,42 @@ export default function OpsAgentMonitor() {
             <RefreshCw className="w-3.5 h-3.5" />刷新
           </Button>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('agents')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'agents'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5 inline mr-1.5" />
+            Agent 监控
+          </button>
+          <button
+            onClick={() => setActiveTab('quotes')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'quotes'
+                ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />
+            报价成功率
+          </button>
+        </div>
+
+        {/* Quote Success Stats Tab */}
+        {activeTab === 'quotes' && (
+          <div className="bg-white/5 rounded-2xl border border-white/10 p-6">
+            <QuoteSuccessStatsPanel />
+          </div>
+        )}
+
+        {/* Agent Monitor Tab */}
+        {activeTab === 'agents' && <>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -386,6 +425,7 @@ export default function OpsAgentMonitor() {
             </div>
           </div>
         </div>
+        </> /* end agents tab */}
       </div>
     </div>
   );

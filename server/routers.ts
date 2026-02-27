@@ -2984,6 +2984,193 @@ Return ONLY valid JSON, no explanation.`;
         const { getRfqClawJobStatus } = await import("./_core/queue");
         return await getRfqClawJobStatus(input.demandId, input.factoryId);
       }),
+
+    /**
+     * 4.3 定制报价 — AI 解析设计稿
+     * 接收上传的设计稿 URL，调用 GPT-4o Vision 提取产品规格
+     */
+    parseDesignFile: protectedProcedure
+      .input(z.object({
+        fileUrls: z.array(z.string().url()).min(1).max(5),
+        fileTypes: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const OpenAI = (await import('openai')).default;
+        const client = new OpenAI();
+
+        // 构建 Vision 消息，支持多张图片
+        const imageMessages: any[] = input.fileUrls
+          .filter((_, i) => (input.fileTypes?.[i] ?? '').startsWith('image/'))
+          .slice(0, 4)
+          .map(url => ({
+            type: 'image_url',
+            image_url: { url, detail: 'high' },
+          }));
+
+        const systemPrompt = `You are a product specification expert for B2B manufacturing.
+Analyze the provided design files/images and extract structured product specifications.
+Return a JSON object with these fields:
+- productName: string (concise product name in English)
+- category: string (e.g. Apparel, Electronics, Furniture, Packaging, etc.)
+- material: string | null
+- dimensions: string | null (size/dimensions info)
+- color: string | null
+- quantity: number | null (if mentioned)
+- specialRequirements: string | null (certifications, special processes, etc.)
+- estimatedComplexity: 'simple' | 'medium' | 'complex'
+- suggestedLeadTime: number | null (days)
+- suggestedBudgetRange: { min: number, max: number, currency: 'USD' } | null
+- confidence: number (0-100, your confidence in the extraction)
+- rawNotes: string (brief notes about what you observed)
+Respond ONLY with valid JSON, no markdown.`;
+
+        const userContent: any[] = [
+          { type: 'text', text: 'Please analyze these design files and extract product specifications.' },
+          ...imageMessages,
+        ];
+
+        // 如果没有图片（PDF等），提供文本提示
+        if (imageMessages.length === 0) {
+          userContent[0] = {
+            type: 'text',
+            text: `The uploaded files are: ${input.fileUrls.join(', ')}. Please provide a best-effort specification based on the file names and context.`,
+          };
+        }
+
+        try {
+          const response = await client.chat.completions.create({
+            model: 'gpt-4.1-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
+            ],
+            max_tokens: 1000,
+            temperature: 0.2,
+          });
+
+          const raw = response.choices[0]?.message?.content ?? '{}';
+          // 清理可能的 markdown 代码块
+          const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(cleaned);
+
+          return {
+            productName: parsed.productName ?? 'Unknown Product',
+            category: parsed.category ?? 'General',
+            material: parsed.material ?? null,
+            dimensions: parsed.dimensions ?? null,
+            color: parsed.color ?? null,
+            quantity: parsed.quantity ?? null,
+            specialRequirements: parsed.specialRequirements ?? null,
+            estimatedComplexity: parsed.estimatedComplexity ?? 'medium',
+            suggestedLeadTime: parsed.suggestedLeadTime ?? null,
+            suggestedBudgetRange: parsed.suggestedBudgetRange ?? null,
+            confidence: Math.min(100, Math.max(0, parsed.confidence ?? 70)),
+            rawNotes: parsed.rawNotes ?? '',
+          };
+        } catch (e: any) {
+          console.error('[parseDesignFile] AI parse error:', e.message);
+          // 返回默认值，让用户手动填写
+          return {
+            productName: '',
+            category: 'General',
+            material: null,
+            dimensions: null,
+            color: null,
+            quantity: null,
+            specialRequirements: null,
+            estimatedComplexity: 'medium' as const,
+            suggestedLeadTime: null,
+            suggestedBudgetRange: null,
+            confidence: 0,
+            rawNotes: 'AI 解析失败，请手动填写规格信息。',
+          };
+        }
+      }),
+
+    /**
+     * 4.3 定制报价 — 创建定制 RFQ
+     * 基于 AI 解析的规格创建定制报价请求，并自动匹配工厂
+     */
+    createCustomRfq: protectedProcedure
+      .input(z.object({
+        demandId: z.number().optional(),
+        productName: z.string().min(1),
+        category: z.string(),
+        material: z.string().optional(),
+        dimensions: z.string().optional(),
+        color: z.string().optional(),
+        quantity: z.number().optional(),
+        specialRequirements: z.string().optional(),
+        estimatedComplexity: z.enum(['simple', 'medium', 'complex']).optional(),
+        suggestedLeadTime: z.number().optional(),
+        budgetMin: z.number().optional(),
+        budgetMax: z.number().optional(),
+        budgetCurrency: z.string().default('USD'),
+        designFileUrls: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { db } = await import('./_core/db');
+        const schema = await import('../drizzle/schema');
+
+        // 构建定制 RFQ 描述
+        const description = [
+          `产品：${input.productName}`,
+          input.material ? `材质：${input.material}` : null,
+          input.dimensions ? `尺寸：${input.dimensions}` : null,
+          input.color ? `颜色：${input.color}` : null,
+          input.quantity ? `数量：${input.quantity} 件` : null,
+          input.suggestedLeadTime ? `期望交期：${input.suggestedLeadTime} 天` : null,
+          input.budgetMin && input.budgetMax
+            ? `预算：${input.budgetCurrency} ${input.budgetMin}–${input.budgetMax}/件`
+            : null,
+          input.specialRequirements ? `特殊要求：${input.specialRequirements}` : null,
+          input.designFileUrls?.length
+            ? `设计稿：${input.designFileUrls.length} 个文件`
+            : null,
+        ].filter(Boolean).join('\n');
+
+        // 创建 RFQ 记录
+        const [rfq] = await db.insert(schema.rfqs).values({
+          demandId: input.demandId ?? null,
+          buyerId: ctx.user.id,
+          category: input.category,
+          productName: input.productName,
+          description,
+          quantity: input.quantity ?? null,
+          targetPrice: input.budgetMin ?? null,
+          currency: input.budgetCurrency,
+          leadTime: input.suggestedLeadTime ?? null,
+          status: 'pending',
+          isCustom: 1,
+          customSpecJson: JSON.stringify({
+            material: input.material,
+            dimensions: input.dimensions,
+            color: input.color,
+            complexity: input.estimatedComplexity,
+            budgetRange: input.budgetMin && input.budgetMax
+              ? { min: input.budgetMin, max: input.budgetMax, currency: input.budgetCurrency }
+              : null,
+            designFileUrls: input.designFileUrls ?? [],
+            specialRequirements: input.specialRequirements,
+          }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any).returning();
+
+        console.log(`✅ [CustomRFQ] Created custom RFQ #${rfq.id} for user ${ctx.user.id}: ${input.productName}`);
+
+        // 异步触发工厂匹配（不阻塞响应）
+        setImmediate(async () => {
+          try {
+            const { autoMatchFactoriesForCustomRfq } = await import('./_core/rfqService');
+            await autoMatchFactoriesForCustomRfq(rfq.id, input.category);
+          } catch (e) {
+            console.warn('[CustomRFQ] Auto-match failed:', e);
+          }
+        });
+
+        return { rfqId: rfq.id, status: 'created' };
+      }),
   }),
 
   // ─── Knowledge Base Management API ────────────────────────────────────────────
@@ -3497,6 +3684,102 @@ Return ONLY valid JSON, no explanation.`;
           rejected: rejected[0]?.count ?? 0,
           acceptRate: total[0]?.count ? Math.round((accepted[0]?.count ?? 0) / total[0].count * 100) : 0,
         };
+      }),
+    /** 获取报价成功率统计（运营后台核心指标） */
+    getQuoteSuccessStats: protectedProcedure
+      .query(async () => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { count, eq, gte, avg, sql } = await import('drizzle-orm');
+        const db = await dbPromise;
+
+        const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [
+          totalQuotes,
+          pendingQuotes,
+          acceptedQuotes,
+          rejectedQuotes,
+          quotesLast7d,
+          quotesLast30d,
+          totalPOs,
+        ] = await Promise.all([
+          db.select({ count: count() }).from(schema.rfqQuotes),
+          db.select({ count: count() }).from(schema.rfqQuotes).where(eq(schema.rfqQuotes.status, 'pending')),
+          db.select({ count: count() }).from(schema.rfqQuotes).where(eq(schema.rfqQuotes.status, 'accepted')),
+          db.select({ count: count() }).from(schema.rfqQuotes).where(eq(schema.rfqQuotes.status, 'rejected')),
+          db.select({ count: count() }).from(schema.rfqQuotes).where(gte(schema.rfqQuotes.createdAt, since7d)),
+          db.select({ count: count() }).from(schema.rfqQuotes).where(gte(schema.rfqQuotes.createdAt, since30d)),
+          db.select({ count: count() }).from(schema.purchaseOrders),
+        ]);
+
+        const total = totalQuotes[0]?.count ?? 0;
+        const accepted = acceptedQuotes[0]?.count ?? 0;
+        const rejected = rejectedQuotes[0]?.count ?? 0;
+        const responded = accepted + rejected;
+
+        return {
+          // 总报价数
+          totalQuotes: total,
+          pendingQuotes: pendingQuotes[0]?.count ?? 0,
+          acceptedQuotes: accepted,
+          rejectedQuotes: rejected,
+          // 成功率
+          buyerAcceptRate: responded > 0 ? Math.round(accepted / responded * 100) : 0,
+          responseRate: total > 0 ? Math.round(responded / total * 100) : 0,
+          // 近期活跃度
+          quotesLast7d: quotesLast7d[0]?.count ?? 0,
+          quotesLast30d: quotesLast30d[0]?.count ?? 0,
+          // 采购单数
+          totalPurchaseOrders: totalPOs[0]?.count ?? 0,
+          // 转化率（采购单 / 报价总数）
+          conversionRate: total > 0 ? Math.round((totalPOs[0]?.count ?? 0) / total * 100) : 0,
+        };
+      }),
+    /** 获取按工厂分组的报价统计 */
+    getQuoteStatsByFactory: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(50).default(10) }))
+      .query(async ({ input }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { count, eq, desc, sql } = await import('drizzle-orm');
+        const db = await dbPromise;
+
+        // 按工厂分组统计报价数量和接受率
+        const stats = await db
+          .select({
+            factoryId: schema.rfqQuotes.factoryId,
+            total: count(),
+            accepted: sql<number>`SUM(CASE WHEN ${schema.rfqQuotes.status} = 'accepted' THEN 1 ELSE 0 END)`,
+            rejected: sql<number>`SUM(CASE WHEN ${schema.rfqQuotes.status} = 'rejected' THEN 1 ELSE 0 END)`,
+            pending: sql<number>`SUM(CASE WHEN ${schema.rfqQuotes.status} = 'pending' THEN 1 ELSE 0 END)`,
+          })
+          .from(schema.rfqQuotes)
+          .groupBy(schema.rfqQuotes.factoryId)
+          .orderBy(desc(count()))
+          .limit(input.limit);
+
+        // 获取工厂名称
+        const factoryIds = stats.map(s => s.factoryId);
+        const factories = factoryIds.length > 0
+          ? await db.query.factories.findMany({
+              where: (f, { inArray }) => inArray(f.id, factoryIds),
+            })
+          : [];
+        const factoryMap = new Map(factories.map(f => [f.id, f.name]));
+
+        return stats.map(s => ({
+          factoryId: s.factoryId,
+          factoryName: factoryMap.get(s.factoryId) ?? `工厂 #${s.factoryId}`,
+          total: Number(s.total),
+          accepted: Number(s.accepted),
+          rejected: Number(s.rejected),
+          pending: Number(s.pending),
+          acceptRate: Number(s.total) > 0
+            ? Math.round(Number(s.accepted) / Number(s.total) * 100)
+            : 0,
+        }));
       }),
   }),
 });

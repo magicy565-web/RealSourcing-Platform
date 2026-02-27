@@ -157,7 +157,16 @@ export async function submitQuote(input: SubmitQuoteInput) {
   });
 }
 
-// ── 买家接受报价 ───────────────────────────────────────────────────────────────
+// ── 生成采购单号 ─────────────────────────────────────────────────────
+
+function generatePoNumber(): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.floor(Math.random() * 9000) + 1000;
+  return `PO-${date}-${rand}`;
+}
+
+// ── 买家接受报价 ─────────────────────────────────────────────────────
 
 export async function acceptQuote(inquiryId: number, buyerId: number, feedback?: string) {
   const db = await dbPromise;
@@ -172,6 +181,11 @@ export async function acceptQuote(inquiryId: number, buyerId: number, feedback?:
     });
 
     if (!quote) throw new Error('Quote not found or unauthorized');
+
+    // 查询询价单，获取产品信息
+    const inquiry = await tx.query.inquiries.findFirst({
+      where: eq(schema.inquiries.id, inquiryId),
+    });
 
     // 更新报价状态
     await tx.update(schema.rfqQuotes)
@@ -188,22 +202,52 @@ export async function acceptQuote(inquiryId: number, buyerId: number, feedback?:
       .set({ status: 'accepted', updatedAt: new Date() } as any)
       .where(eq(schema.inquiries.id, inquiryId));
 
-    // 通知工厂
+    // 自动生成采购单
+    const poNumber = generatePoNumber();
+    const leadTimeDays = quote.leadTimeDays ?? 30;
+    const expectedDelivery = new Date();
+    expectedDelivery.setDate(expectedDelivery.getDate() + leadTimeDays);
+
+    const [poResult] = await tx.insert(schema.purchaseOrders).values({
+      poNumber,
+      buyerId,
+      factoryId: quote.factoryId,
+      inquiryId,
+      rfqQuoteId: quote.id,
+      demandId: quote.demandId ?? undefined,
+      productName: (inquiry as any)?.notes ?? 'Product',
+      quantity: inquiry?.quantity ?? 1,
+      unitPrice: quote.unitPrice ?? '0',
+      totalAmount: quote.unitPrice && inquiry?.quantity
+        ? String(parseFloat(quote.unitPrice) * inquiry.quantity)
+        : quote.unitPrice ?? '0',
+      currency: quote.currency ?? 'USD',
+      leadTimeDays,
+      expectedDelivery,
+      paymentTerms: quote.paymentTerms ?? undefined,
+      shippingTerms: quote.shippingTerms ?? undefined,
+      tierPricing: quote.tierPricing ?? undefined,
+      status: 'draft',
+      buyerNotes: feedback ?? undefined,
+      factoryNotes: quote.factoryNotes ?? undefined,
+    } as any);
+
+    // 通知工厂（报价被接受）
     await tx.insert(schema.notifications).values({
       userId: 0, // 路由层填充工厂 userId
       factoryId: quote.factoryId,
       type: 'quote_accepted',
       title: 'Quote Accepted! 🎊',
-      message: `The buyer has accepted your quote. Consider scheduling a Webinar to discuss next steps.`,
-      data: JSON.stringify({ inquiryId }),
+      message: `The buyer has accepted your quote. A Purchase Order (${poNumber}) has been created. Consider scheduling a Webinar to discuss next steps.`,
+      data: JSON.stringify({ inquiryId, poNumber }),
       isRead: 0,
     } as any);
 
-    return { success: true, nextStep: 'schedule_webinar' };
+    return { success: true, nextStep: 'schedule_webinar', poNumber };
   });
 }
 
-// ── 买家拒绝报价 ───────────────────────────────────────────────────────────────
+// ── 买家拒绝报价 ─────────────────────────────────────────────────────
 
 export async function rejectQuote(inquiryId: number, buyerId: number, reason?: string) {
   const db = await dbPromise;
@@ -230,7 +274,30 @@ export async function rejectQuote(inquiryId: number, buyerId: number, reason?: s
     .set({ status: 'closed', updatedAt: new Date() } as any)
     .where(eq(schema.inquiries.id, inquiryId));
 
+  // 异步推送飞书卡片给工厂（非阻塞）
+  setImmediate(async () => {
+    try {
+      const { sendQuoteRejectedCard } = await import('./feishuService');
+      // 查询工厂名称
+      const factory = await db.query.factories.findFirst({
+        where: eq(schema.factories.id, quote.factoryId),
+      });
+      await sendQuoteRejectedCard({
+        factoryId: quote.factoryId,
+        factoryName: factory?.name ?? `工厂 #${quote.factoryId}`,
+        inquiryId,
+        demandId: quote.demandId ?? 0,
+        reason: reason ?? '买家未说明原因',
+        unitPrice: parseFloat(quote.unitPrice ?? '0'),
+        currency: quote.currency ?? 'USD',
+      });
+    } catch (e: any) {
+      console.warn('[rejectQuote] Feishu card push failed (non-critical):', e.message);
+    }
+  });
+
   return { success: true };
+}true };
 }
 
 // ── 获取报价详情 ───────────────────────────────────────────────────────────────
@@ -569,4 +636,57 @@ export async function getRFQsByDemand(demandId: number) {
     where: eq(schema.rfqQuotes.demandId, demandId),
     orderBy: [desc(schema.rfqQuotes.createdAt)],
   });
+}
+
+// ── 4.3 定制报价：自动匹配工厂 ─────────────────────────────────────────────────
+/**
+ * autoMatchFactoriesForCustomRfq
+ * 根据定制 RFQ 的类别，自动匹配最相关的工厂并发送 RFQ 通知
+ */
+export async function autoMatchFactoriesForCustomRfq(rfqId: number, category: string) {
+  const db = await dbPromise;
+
+  // 查询匹配工厂（按类别，最多 5 家）
+  const factories = await db.query.factories.findMany({
+    where: (f: any, { like }: any) => like(f.category, `%${category}%`),
+    limit: 5,
+    orderBy: (f: any, { desc: descFn }: any) => [descFn(f.verificationScore)],
+  }).catch(() => [] as any[]);
+
+  if (factories.length === 0) {
+    console.log(`[CustomRFQ] No factories found for category: ${category}`);
+    return;
+  }
+
+  console.log(`[CustomRFQ] Auto-matching RFQ #${rfqId} with ${factories.length} factories`);
+
+  // 为每家工厂创建报价记录并发送飞书通知
+  for (const factory of factories) {
+    try {
+      await db.insert(schema.rfqQuotes).values({
+        rfqId,
+        factoryId: factory.id,
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any).catch(() => null);
+
+      // 发送飞书通知
+      try {
+        const { sendCustomRfqToFactory } = await import('./feishuService');
+        await sendCustomRfqToFactory({
+          factoryName: factory.name,
+          productName: category,
+          rfqId,
+          description: `定制询价单 #${rfqId}`,
+        });
+      } catch (e) {
+        console.warn(`[CustomRFQ] Feishu notify failed for factory ${factory.id}:`, e);
+      }
+    } catch (e) {
+      console.warn(`[CustomRFQ] Failed for factory ${factory.id}:`, e);
+    }
+  }
+
+  console.log(`✅ [CustomRFQ] RFQ #${rfqId} matched ${factories.length} factories`);
 }

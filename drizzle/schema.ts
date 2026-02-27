@@ -922,3 +922,40 @@ export const sourcingRoomMessages = mysqlTable("sourcing_room_messages", {
 });
 export type SourcingRoomMessage = typeof sourcingRoomMessages.$inferSelect;
 export type InsertSourcingRoomMessage = typeof sourcingRoomMessages.$inferInsert;
+
+// ─── Purchase Orders (采购单) ─────────────────────────────────────────────────
+// 买家接受报价后自动生成的采购单
+// 状态流转：draft → confirmed → in_production → shipped → completed / cancelled
+export const purchaseOrders = mysqlTable("purchase_orders", {
+  id:              int("id").primaryKey().autoincrement(),
+  poNumber:        varchar("poNumber", { length: 50 }).notNull().unique(),  // PO-20260227-001
+  buyerId:         int("buyerId").notNull(),
+  factoryId:       int("factoryId").notNull(),
+  inquiryId:       int("inquiryId"),
+  rfqQuoteId:      int("rfqQuoteId"),
+  demandId:        int("demandId"),
+  // 产品信息
+  productName:     varchar("productName", { length: 255 }),
+  quantity:        int("quantity"),
+  unitPrice:       decimal("unitPrice", { precision: 10, scale: 2 }),
+  totalAmount:     decimal("totalAmount", { precision: 15, scale: 2 }),
+  currency:        varchar("currency", { length: 10 }).default("USD"),
+  // 交期与条款
+  leadTimeDays:    int("leadTimeDays"),
+  expectedDelivery: datetime("expectedDelivery", { mode: "date", fsp: 3 }),
+  paymentTerms:    varchar("paymentTerms", { length: 255 }),
+  shippingTerms:   varchar("shippingTerms", { length: 100 }),
+  // 阶梯报价快照（JSON）
+  tierPricing:     json("tierPricing"),
+  // 状态
+  status:          varchar("status", { length: 30 }).notNull().default("draft"),
+  // 备注
+  buyerNotes:      text("buyerNotes"),
+  factoryNotes:    text("factoryNotes"),
+  // 时间戳
+  confirmedAt:     datetime("confirmedAt", { mode: "date", fsp: 3 }),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
