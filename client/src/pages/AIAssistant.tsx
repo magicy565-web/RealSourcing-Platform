@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyerSidebar from "@/components/BuyerSidebar";
-import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import {
-  Paperclip, Image as ImageIcon, Link2, Send, ArrowRight,
+  Paperclip, Image as ImageIcon, Link2, Send,
   Building2, ScanSearch, Video, ShieldCheck, Star, MapPin,
   Clock, Package, CheckCircle2, Sparkles, MessageSquare, Zap, TrendingUp,
+  ArrowRight, FileText, Handshake, ChevronRight,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -47,6 +47,7 @@ interface Message {
   phase?: Phase;
   quotes?: QuoteCard[];
   isTyping?: boolean;
+  isSummary?: boolean; // 是否是需求确认消息
 }
 
 // ─── Guide cards ──────────────────────────────────────────────────────────────
@@ -107,9 +108,185 @@ function TypingIndicator() {
   );
 }
 
+// ─── PostQuoteFlow ─────────────────────────────────────────────────────────────
+// 报价后的后续流程可视化：握手 → 发送 RFQ → 预约会议
+function PostQuoteFlow({ quote, onAction }: {
+  quote: QuoteCard;
+  onAction: (action: "inquiry" | "meeting" | "sample") => void;
+}) {
+  const [step, setStep] = useState<"idle" | "inquiry_sent" | "meeting_booked" | "sample_requested">("idle");
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+
+  const steps = [
+    {
+      id: "inquiry",
+      icon: <Handshake size={14} />,
+      label: "发送询盘",
+      sublabel: "握手建立联系",
+      color: "#10b981",
+      done: step !== "idle",
+    },
+    {
+      id: "rfq",
+      icon: <FileText size={14} />,
+      label: "发送 RFQ",
+      sublabel: "正式报价请求",
+      color: "#0ea5e9",
+      done: step === "meeting_booked" || step === "sample_requested",
+    },
+    {
+      id: "meeting",
+      icon: <Video size={14} />,
+      label: "预约会议",
+      sublabel: "视频确认细节",
+      color: "#7c3aed",
+      done: step === "meeting_booked",
+    },
+  ];
+
+  return (
+    <div style={{
+      marginTop: 10,
+      background: "rgba(8,8,20,0.6)",
+      border: "1px solid rgba(124,58,237,0.2)",
+      borderRadius: 12, padding: "14px 16px",
+    }}>
+      <div style={{ color: "#64748b", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", marginBottom: 12 }}>
+        后续流程
+      </div>
+      {/* Step flow */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {steps.map((s, i) => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: s.done ? `${s.color}20` : "rgba(255,255,255,0.03)",
+              border: `1px solid ${s.done ? s.color + "60" : "rgba(255,255,255,0.08)"}`,
+              borderRadius: 8, padding: "5px 10px",
+              transition: "all 0.3s",
+            }}>
+              <span style={{ color: s.done ? s.color : "#475569" }}>{s.icon}</span>
+              <div>
+                <div style={{ color: s.done ? s.color : "#64748b", fontSize: 11, fontWeight: 700 }}>{s.label}</div>
+                <div style={{ color: "#334155", fontSize: 10 }}>{s.sublabel}</div>
+              </div>
+              {s.done && <CheckCircle2 size={11} color={s.color} />}
+            </div>
+            {i < steps.length - 1 && (
+              <ChevronRight size={12} color="#1e293b" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Action buttons */}
+      {step === "idle" && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onMouseEnter={() => setHoveredBtn("inquiry")}
+            onMouseLeave={() => setHoveredBtn(null)}
+            onClick={() => { setStep("inquiry_sent"); onAction("inquiry"); }}
+            style={{
+              flex: 1,
+              background: hoveredBtn === "inquiry" ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.12)",
+              border: "1px solid rgba(16,185,129,0.4)",
+              color: "#34d399", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+              cursor: "pointer", fontWeight: 700, transition: "all 0.2s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}
+          >
+            <Handshake size={12} />握手 · 发送询盘
+          </button>
+          <button
+            onMouseEnter={() => setHoveredBtn("meeting")}
+            onMouseLeave={() => setHoveredBtn(null)}
+            onClick={() => { setStep("meeting_booked"); onAction("meeting"); }}
+            style={{
+              flex: 1,
+              background: hoveredBtn === "meeting" ? "rgba(124,58,237,0.25)" : "rgba(124,58,237,0.12)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              color: "#c4b5fd", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+              cursor: "pointer", fontWeight: 700, transition: "all 0.2s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}
+          >
+            <Video size={12} />预约视频会议
+          </button>
+        </div>
+      )}
+
+      {step === "inquiry_sent" && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{
+            flex: 1,
+            background: "rgba(16,185,129,0.08)",
+            border: "1px solid rgba(16,185,129,0.3)",
+            borderRadius: 9, padding: "8px 12px",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <CheckCircle2 size={13} color="#34d399" />
+            <span style={{ color: "#34d399", fontSize: 12, fontWeight: 600 }}>询盘已发送！等待工厂回复</span>
+          </div>
+          <button
+            onMouseEnter={() => setHoveredBtn("rfq")}
+            onMouseLeave={() => setHoveredBtn(null)}
+            onClick={() => { setStep("meeting_booked"); onAction("meeting"); }}
+            style={{
+              flex: 1,
+              background: hoveredBtn === "rfq" ? "rgba(14,165,233,0.25)" : "rgba(14,165,233,0.12)",
+              border: "1px solid rgba(14,165,233,0.4)",
+              color: "#38bdf8", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+              cursor: "pointer", fontWeight: 700, transition: "all 0.2s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}
+          >
+            <FileText size={12} />发送正式 RFQ
+          </button>
+          <button
+            onMouseEnter={() => setHoveredBtn("meeting2")}
+            onMouseLeave={() => setHoveredBtn(null)}
+            onClick={() => { setStep("meeting_booked"); onAction("meeting"); }}
+            style={{
+              flex: 1,
+              background: hoveredBtn === "meeting2" ? "rgba(124,58,237,0.25)" : "rgba(124,58,237,0.12)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              color: "#c4b5fd", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+              cursor: "pointer", fontWeight: 700, transition: "all 0.2s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}
+          >
+            <Video size={12} />预约会议
+          </button>
+        </div>
+      )}
+
+      {step === "meeting_booked" && (
+        <div style={{
+          background: "rgba(124,58,237,0.08)",
+          border: "1px solid rgba(124,58,237,0.3)",
+          borderRadius: 9, padding: "10px 14px",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <CheckCircle2 size={14} color="#a78bfa" />
+          <div>
+            <div style={{ color: "#c4b5fd", fontSize: 12, fontWeight: 700 }}>会议已预约！</div>
+            <div style={{ color: "#475569", fontSize: 11 }}>工厂将在 24 小时内确认时间，您会收到邮件通知</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── QuoteCardItem ────────────────────────────────────────────────────────────
-function QuoteCardItem({ quote }: { quote: QuoteCard }) {
+function QuoteCardItem({ quote, showFlow = false }: { quote: QuoteCard; showFlow?: boolean }) {
   const [hovered, setHovered] = useState(false);
+  const [showPostFlow, setShowPostFlow] = useState(false);
+
+  const handleAction = (action: "inquiry" | "meeting" | "sample") => {
+    console.log(`Action: ${action} for factory: ${quote.factoryName}`);
+  };
+
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -118,7 +295,7 @@ function QuoteCardItem({ quote }: { quote: QuoteCard }) {
         background: hovered ? "rgba(124,58,237,0.13)" : "rgba(124,58,237,0.07)",
         border: `1px solid ${hovered ? "rgba(124,58,237,0.55)" : "rgba(124,58,237,0.22)"}`,
         borderRadius: 14, padding: "16px 18px", marginBottom: 10,
-        transition: "all 0.2s", cursor: "pointer",
+        transition: "all 0.2s",
       }}
     >
       {/* Header */}
@@ -218,22 +395,39 @@ function QuoteCardItem({ quote }: { quote: QuoteCard }) {
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button style={{
-          flex: 1, background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.4)",
-          color: "#c4b5fd", borderRadius: 9, padding: "7px 12px", fontSize: 12,
-          cursor: "pointer", fontWeight: 600,
-        }}>
-          <Video size={11} style={{ display: "inline", marginRight: 5 }} />预约会议
-        </button>
-        <button style={{
-          flex: 1, background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
-          color: "#34d399", borderRadius: 9, padding: "7px 12px", fontSize: 12,
-          cursor: "pointer", fontWeight: 600,
-        }}>
-          <MessageSquare size={11} style={{ display: "inline", marginRight: 5 }} />发送询盘
-        </button>
-      </div>
+      {!showPostFlow ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowPostFlow(true)}
+            style={{
+              flex: 2, background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
+              color: "#34d399", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+              cursor: "pointer", fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}
+          >
+            <Handshake size={12} />握手 · 开始合作
+          </button>
+          <button style={{
+            flex: 1, background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.4)",
+            color: "#c4b5fd", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+            cursor: "pointer", fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+          }}>
+            <Video size={11} />预约会议
+          </button>
+          <button style={{
+            flex: 1, background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
+            color: "#38bdf8", borderRadius: 9, padding: "8px 12px", fontSize: 12,
+            cursor: "pointer", fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+          }}>
+            <MessageSquare size={11} />询盘
+          </button>
+        </div>
+      ) : (
+        <PostQuoteFlow quote={quote} onAction={handleAction} />
+      )}
     </div>
   );
 }
@@ -304,7 +498,6 @@ export default function AIAssistant() {
     if (!content || isLoading) return;
     setInputValue("");
 
-    // If no session started yet, start one first then send
     if (!hasStarted) {
       setHasStarted(true);
     }
@@ -331,13 +524,17 @@ export default function AIAssistant() {
         sessionState,
       });
 
+      const resultPhase = (result.phase as Phase) || sessionState.currentPhase;
+      const isSummaryPhase = sessionState.currentPhase === "summary" || resultPhase === "summary";
+
       setMessages(prev => prev.filter(m => m.id !== typingId).concat({
         id: `ai-${Date.now()}`,
         role: "assistant",
         content: result.content || "",
         timestamp: new Date(),
-        phase: (result.phase as Phase) || sessionState.currentPhase,
+        phase: resultPhase,
         quotes: result.quotes as QuoteCard[] | undefined,
+        isSummary: isSummaryPhase && !result.quotes,
       }));
       const updatedState: SessionState = {
         currentPhase: ((result.sessionState as any)?.currentPhase as Phase) || sessionState.currentPhase,
@@ -426,7 +623,7 @@ export default function AIAssistant() {
               transition: "all 0.2s",
             }}
           >
-            <Send size={13} /> Send
+            <Send size={13} /> 发送
           </button>
         </div>
       </div>
@@ -451,7 +648,7 @@ export default function AIAssistant() {
           { Icon: TrendingUp, label: "30 min", sub: "收到报价", color: "#0ea5e9" },
           { Icon: Video, label: "随时", sub: "预约采购会议", color: "#10b981" },
         ].map((item, i) => (
-          <React.Fragment key={i}>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{
               display: "flex", alignItems: "center", gap: 7,
               background: "rgba(255,255,255,0.04)",
@@ -463,7 +660,7 @@ export default function AIAssistant() {
               <span style={{ color: "#64748b", fontSize: 12 }}>{item.sub}</span>
             </div>
             {i < 2 && <div style={{ color: "#1e293b", fontSize: 16 }}>—</div>}
-          </React.Fragment>
+          </div>
         ))}
       </div>
 
@@ -539,13 +736,11 @@ export default function AIAssistant() {
                 el.style.background = "rgba(12,12,24,0.7)";
               }}
             >
-              {/* Bottom glow */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
                 background: `linear-gradient(90deg, transparent, ${card.color}, transparent)`,
                 opacity: 0.5,
               }} />
-              {/* Image */}
               <img
                 src={card.img} alt={card.title}
                 style={{
@@ -555,7 +750,6 @@ export default function AIAssistant() {
                 }}
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
-              {/* Text */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ color: card.color, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 3 }}>
                   STEP {card.step}
@@ -567,7 +761,6 @@ export default function AIAssistant() {
                   WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                 }}>{card.desc}</div>
               </div>
-              {/* Step watermark */}
               <div style={{
                 position: "absolute", top: 8, right: 12,
                 color: `${card.color}18`, fontSize: 28, fontWeight: 900,
@@ -605,6 +798,30 @@ export default function AIAssistant() {
             borderRadius: 99, transition: "width 0.6s ease",
           }} />
         </div>
+        {/* Phase steps */}
+        <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+          {(["了解需求", "价格预算", "交期", "定制", "数量", "资质", "确认", "报价"] as string[]).map((label, i) => {
+            const phases: Phase[] = ["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes"];
+            const phaseIdx = phases.indexOf(currentPhase);
+            const isDone = i < phaseIdx;
+            const isCurrent = i === phaseIdx;
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 4,
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: isCurrent ? 700 : 500,
+                  color: isDone ? "#10b981" : isCurrent ? "#a78bfa" : "#1e293b",
+                  padding: "2px 6px", borderRadius: 5,
+                  background: isCurrent ? "rgba(124,58,237,0.15)" : "transparent",
+                }}>
+                  {isDone && "✓ "}{label}
+                </span>
+                {i < 7 && <span style={{ color: "#1e293b", fontSize: 10 }}>›</span>}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Messages */}
@@ -624,7 +841,7 @@ export default function AIAssistant() {
                 <Sparkles size={13} color="#fff" />
               </div>
             )}
-            <div style={{ maxWidth: "72%" }}>
+            <div style={{ maxWidth: "75%" }}>
               {msg.isTyping ? (
                 <div style={{
                   background: "rgba(12,12,24,0.85)",
@@ -656,6 +873,33 @@ export default function AIAssistant() {
                     ) : msg.content}
                   </div>
 
+                  {/* Summary confirm button */}
+                  {msg.isSummary && (
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        onClick={() => handleSend("确认，信息正确，请开始匹配工厂")}
+                        disabled={isLoading}
+                        style={{
+                          width: "100%",
+                          background: isLoading ? "rgba(124,58,237,0.2)" : "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                          border: "none", borderRadius: 10, padding: "11px 20px",
+                          color: "#fff", fontSize: 13, fontWeight: 700,
+                          cursor: isLoading ? "not-allowed" : "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                          transition: "all 0.2s",
+                          boxShadow: isLoading ? "none" : "0 4px 20px rgba(124,58,237,0.35)",
+                        }}
+                      >
+                        <Sparkles size={14} />
+                        确认需求，开始 AI 匹配工厂
+                        <ArrowRight size={14} />
+                      </button>
+                      <div style={{ textAlign: "center", color: "#334155", fontSize: 11, marginTop: 6 }}>
+                        或继续输入修改需求
+                      </div>
+                    </div>
+                  )}
+
                   {/* Quote cards */}
                   {msg.quotes && msg.quotes.length > 0 && (
                     <div style={{ marginTop: 12 }}>
@@ -666,7 +910,26 @@ export default function AIAssistant() {
                         <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
                         为您匹配到 {msg.quotes.length} 家供应商
                       </div>
-                      {msg.quotes.map(q => <QuoteCardItem key={q.quoteId} quote={q} />)}
+                      {msg.quotes.map(q => <QuoteCardItem key={q.quoteId} quote={q} showFlow />)}
+
+                      {/* Next steps banner */}
+                      <div style={{
+                        marginTop: 14,
+                        background: "rgba(16,185,129,0.06)",
+                        border: "1px solid rgba(16,185,129,0.2)",
+                        borderRadius: 12, padding: "12px 16px",
+                        display: "flex", alignItems: "center", gap: 10,
+                      }}>
+                        <CheckCircle2 size={16} color="#34d399" />
+                        <div>
+                          <div style={{ color: "#34d399", fontSize: 12, fontWeight: 700 }}>
+                            匹配完成！下一步
+                          </div>
+                          <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
+                            点击「握手 · 开始合作」发送询盘 → 工厂 24h 内回复 → 预约视频会议确认细节
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
