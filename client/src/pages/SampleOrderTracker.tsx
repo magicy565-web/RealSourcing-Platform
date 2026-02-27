@@ -84,8 +84,11 @@ function OrderProgress({ status }: { status: string }) {
 // ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({ order, onSelect }: { order: any; onSelect: (id: number) => void }) {
   const images: string[] = Array.isArray(order.product?.images)
-    ? order.product.images
-    : (typeof order.product?.images === "string" ? JSON.parse(order.product.images || "[]") : []);
+    ? (order.product.images as string[])
+    : (() => {
+        if (typeof order.product?.images !== "string" || !order.product.images) return [];
+        try { const p = JSON.parse(order.product.images); return Array.isArray(p) ? p : []; } catch { return []; }
+      })();
   const productImage = images[0] || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&h=100&fit=crop";
 
   return (
@@ -151,7 +154,10 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
 
   const images: string[] = Array.isArray(order.product?.images)
     ? (order.product.images as string[])
-    : (typeof order.product?.images === "string" ? JSON.parse(order.product.images || "[]") : []);
+    : (() => {
+        if (typeof order.product?.images !== "string" || !order.product.images) return [];
+        try { const p = JSON.parse(order.product.images); return Array.isArray(p) ? p : []; } catch { return []; }
+      })();
   const productImage = images[0] || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop";
 
   return (

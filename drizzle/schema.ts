@@ -1069,3 +1069,247 @@ export const factoryScores = mysqlTable("factory_scores", {
 });
 export type FactoryScore = typeof factoryScores.$inferSelect;
 export type InsertFactoryScore = typeof factoryScores.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── 5.0 Commander Core Tables ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Commander Phones (5.0: 指挥官手机设备注册) ───────────────────────────────
+export const commanderPhones = mysqlTable("commander_phones", {
+  id:             int("id").primaryKey().autoincrement(),
+  factoryId:      int("factoryId").notNull(),
+  userId:         int("userId").notNull(),
+  deviceName:     varchar("deviceName", { length: 100 }),
+  activationCode: varchar("activationCode", { length: 32 }).notNull().unique(),
+  isActivated:    tinyint("isActivated").notNull().default(0),
+  activatedAt:    datetime("activatedAt", { mode: "date", fsp: 3 }),
+  wechatOpenId:   varchar("wechatOpenId", { length: 64 }),
+  wechatNickname: varchar("wechatNickname", { length: 100 }),
+  wechatBoundAt:  datetime("wechatBoundAt", { mode: "date", fsp: 3 }),
+  deviceModel:    varchar("deviceModel", { length: 100 }),
+  lastActiveAt:   datetime("lastActiveAt", { mode: "date", fsp: 3 }),
+  status:         varchar("status", { length: 20 }).notNull().default("pending"),
+  createdAt:      datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:      datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type CommanderPhone = typeof commanderPhones.$inferSelect;
+export type InsertCommanderPhone = typeof commanderPhones.$inferInsert;
+
+// ─── OpenClaw Instances (5.0: 云端数字员工实例) ───────────────────────────────
+export const openclawInstances = mysqlTable("openclaw_instances", {
+  id:              int("id").primaryKey().autoincrement(),
+  factoryId:       int("factoryId"),
+  instanceType:    varchar("instanceType", { length: 20 }).notNull().default("standard"),
+  instanceName:    varchar("instanceName", { length: 100 }),
+  region:          varchar("region", { length: 50 }).default("cn-hangzhou"),
+  status:          varchar("status", { length: 20 }).notNull().default("offline"),
+  agentId:         varchar("agentId", { length: 64 }).unique(),
+  cpuUsage:        decimal("cpuUsage", { precision: 5, scale: 2 }).default("0.00"),
+  memoryUsage:     decimal("memoryUsage", { precision: 5, scale: 2 }).default("0.00"),
+  activeTaskCount: int("activeTaskCount").notNull().default(0),
+  totalTaskCount:  int("totalTaskCount").notNull().default(0),
+  lastHeartbeatAt: datetime("lastHeartbeatAt", { mode: "date", fsp: 3 }),
+  provisionedAt:   datetime("provisionedAt", { mode: "date", fsp: 3 }),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type OpenclawInstance = typeof openclawInstances.$inferSelect;
+export type InsertOpenclawInstance = typeof openclawInstances.$inferInsert;
+
+// ─── OpenClaw Accounts (5.0: 托管账号管理) ───────────────────────────────────
+export const openclawAccounts = mysqlTable("openclaw_accounts", {
+  id:               int("id").primaryKey().autoincrement(),
+  factoryId:        int("factoryId").notNull(),
+  instanceId:       int("instanceId"),
+  platform:         varchar("platform", { length: 50 }).notNull(),
+  accountUsername:  varchar("accountUsername", { length: 200 }).notNull(),
+  encryptedSession: text("encryptedSession"),
+  sessionExpiresAt: datetime("sessionExpiresAt", { mode: "date", fsp: 3 }),
+  healthStatus:     varchar("healthStatus", { length: 20 }).notNull().default("unknown"),
+  lastCheckedAt:    datetime("lastCheckedAt", { mode: "date", fsp: 3 }),
+  lastSuccessAt:    datetime("lastSuccessAt", { mode: "date", fsp: 3 }),
+  errorMessage:     text("errorMessage"),
+  isActive:         tinyint("isActive").notNull().default(1),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type OpenclawAccount = typeof openclawAccounts.$inferSelect;
+export type InsertOpenclawAccount = typeof openclawAccounts.$inferInsert;
+
+// ─── Commander Tasks (5.0: 指挥台任务中心) ───────────────────────────────────
+export const commanderTasks = mysqlTable("commander_tasks", {
+  id:              int("id").primaryKey().autoincrement(),
+  factoryId:       int("factoryId").notNull(),
+  userId:          int("userId").notNull(),
+  instanceId:      int("instanceId"),
+  taskType:        varchar("taskType", { length: 50 }).notNull(),
+  taskTitle:       varchar("taskTitle", { length: 200 }).notNull(),
+  taskParams:      json("taskParams"),
+  status:          varchar("status", { length: 20 }).notNull().default("pending"),
+  progress:        int("progress").notNull().default(0),
+  progressMessage: varchar("progressMessage", { length: 500 }),
+  creditCost:      int("creditCost").notNull().default(0),
+  creditRefunded:  tinyint("creditRefunded").notNull().default(0),
+  resultSummary:   text("resultSummary"),
+  resultData:      json("resultData"),
+  errorMessage:    text("errorMessage"),
+  startedAt:       datetime("startedAt", { mode: "date", fsp: 3 }),
+  completedAt:     datetime("completedAt", { mode: "date", fsp: 3 }),
+  bullJobId:       varchar("bullJobId", { length: 100 }),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type CommanderTask = typeof commanderTasks.$inferSelect;
+export type InsertCommanderTask = typeof commanderTasks.$inferInsert;
+
+// ─── Inbound Leads (5.0: 入站询盘/线索) ──────────────────────────────────────
+export const inboundLeads = mysqlTable("inbound_leads", {
+  id:              int("id").primaryKey().autoincrement(),
+  factoryId:       int("factoryId").notNull(),
+  commanderTaskId: int("commanderTaskId"),
+  source:          varchar("source", { length: 50 }).notNull(),
+  platform:        varchar("platform", { length: 50 }),
+  externalId:      varchar("externalId", { length: 200 }),
+  buyerName:       varchar("buyerName", { length: 200 }),
+  buyerCompany:    varchar("buyerCompany", { length: 200 }),
+  buyerCountry:    varchar("buyerCountry", { length: 100 }),
+  buyerEmail:      varchar("buyerEmail", { length: 320 }),
+  buyerPhone:      varchar("buyerPhone", { length: 50 }),
+  buyerLinkedin:   varchar("buyerLinkedin", { length: 500 }),
+  productCategory: varchar("productCategory", { length: 100 }),
+  originalContent: text("originalContent"),
+  aiSummary:       text("aiSummary"),
+  qualityScore:    int("qualityScore").notNull().default(0),
+  intentScore:     int("intentScore").notNull().default(0),
+  status:          varchar("status", { length: 20 }).notNull().default("new"),
+  isRead:          tinyint("isRead").notNull().default(0),
+  readAt:          datetime("readAt", { mode: "date", fsp: 3 }),
+  inquiryTime:     datetime("inquiryTime", { mode: "date", fsp: 3 }),
+  wechatNotified:  tinyint("wechatNotified").notNull().default(0),
+  notifiedAt:      datetime("notifiedAt", { mode: "date", fsp: 3 }),
+  feishuArchived:  tinyint("feishuArchived").notNull().default(0),
+  feishuRecordId:  varchar("feishuRecordId", { length: 100 }),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type InboundLead = typeof inboundLeads.$inferSelect;
+export type InsertInboundLead = typeof inboundLeads.$inferInsert;
+
+// ─── Lead Replies (5.0: 询盘回复记录) ────────────────────────────────────────
+export const leadReplies = mysqlTable("lead_replies", {
+  id:                int("id").primaryKey().autoincrement(),
+  leadId:            int("leadId").notNull(),
+  factoryId:         int("factoryId").notNull(),
+  userId:            int("userId").notNull(),
+  chineseContent:    text("chineseContent").notNull(),
+  englishContent:    text("englishContent"),
+  translationStatus: varchar("translationStatus", { length: 20 }).notNull().default("pending"),
+  sendStatus:        varchar("sendStatus", { length: 20 }).notNull().default("draft"),
+  sentAt:            datetime("sentAt", { mode: "date", fsp: 3 }),
+  sendError:         text("sendError"),
+  clawJobId:         varchar("clawJobId", { length: 100 }),
+  isApproved:        tinyint("isApproved").notNull().default(0),
+  approvedAt:        datetime("approvedAt", { mode: "date", fsp: 3 }),
+  createdAt:         datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:         datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type LeadReply = typeof leadReplies.$inferSelect;
+export type InsertLeadReply = typeof leadReplies.$inferInsert;
+
+// ─── Credit Ledger (5.0: 积分流水账本) ───────────────────────────────────────
+export const creditLedger = mysqlTable("credit_ledger", {
+  id:             int("id").primaryKey().autoincrement(),
+  factoryId:      int("factoryId").notNull(),
+  userId:         int("userId").notNull(),
+  txType:         varchar("txType", { length: 30 }).notNull(),
+  amount:         int("amount").notNull(),
+  balanceAfter:   int("balanceAfter").notNull(),
+  description:    varchar("description", { length: 500 }),
+  relatedTaskId:  int("relatedTaskId"),
+  relatedOrderId: varchar("relatedOrderId", { length: 100 }),
+  paymentMethod:  varchar("paymentMethod", { length: 30 }),
+  paymentAmount:  decimal("paymentAmount", { precision: 10, scale: 2 }),
+  createdAt:      datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
+export type InsertCreditLedgerEntry = typeof creditLedger.$inferInsert;
+
+// ─── Digital Assets (5.0: 工厂数字资产快照) ──────────────────────────────────
+export const digitalAssets = mysqlTable("digital_assets", {
+  id:                      int("id").primaryKey().autoincrement(),
+  factoryId:               int("factoryId").notNull().unique(),
+  geoScore:                int("geoScore").notNull().default(0),
+  geoScoreHistory:         json("geoScoreHistory"),
+  lastGeoScanAt:           datetime("lastGeoScanAt", { mode: "date", fsp: 3 }),
+  alibabaProfileUrl:       varchar("alibabaProfileUrl", { length: 500 }),
+  linkedinProfileUrl:      varchar("linkedinProfileUrl", { length: 500 }),
+  websiteUrl:              varchar("websiteUrl", { length: 500 }),
+  thomasnetUrl:            varchar("thomasnetUrl", { length: 500 }),
+  totalContentPieces:      int("totalContentPieces").notNull().default(0),
+  totalDirectoryListings:  int("totalDirectoryListings").notNull().default(0),
+  totalAiCitations:        int("totalAiCitations").notNull().default(0),
+  schemaOrgData:           json("schemaOrgData"),
+  schemaLastUpdatedAt:     datetime("schemaLastUpdatedAt", { mode: "date", fsp: 3 }),
+  lastMonthlyReportAt:     datetime("lastMonthlyReportAt", { mode: "date", fsp: 3 }),
+  monthlyReportUrl:        varchar("monthlyReportUrl", { length: 500 }),
+  createdAt:               datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:               datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type DigitalAsset = typeof digitalAssets.$inferSelect;
+export type InsertDigitalAsset = typeof digitalAssets.$inferInsert;
+
+// ─── Factory Credits (5.0: 工厂积分余额) ─────────────────────────────────────
+export const factoryCredits = mysqlTable("factory_credits", {
+  id:                int("id").primaryKey().autoincrement(),
+  factoryId:         int("factoryId").notNull().unique(),
+  balance:           int("balance").notNull().default(0),
+  totalRecharged:    int("totalRecharged").notNull().default(0),
+  totalConsumed:     int("totalConsumed").notNull().default(0),
+  lastRechargeAt:    datetime("lastRechargeAt", { mode: "date", fsp: 3 }),
+  lowBalanceAlerted: tinyint("lowBalanceAlerted").notNull().default(0),
+  createdAt:         datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:         datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryCredit = typeof factoryCredits.$inferSelect;
+export type InsertFactoryCredit = typeof factoryCredits.$inferInsert;
+
+// ─── Factory FTGI Documents (FTGI验厂文档) ────────────────────────────────────
+export const factoryFtgiDocuments = mysqlTable("factory_ftgi_documents", {
+  id:          int("id").primaryKey().autoincrement(),
+  factoryId:   int("factoryId").notNull(),
+  docType:     varchar("docType", { length: 50 }).notNull(), // image|certification|transaction|customs|other
+  fileName:    varchar("fileName", { length: 500 }).notNull(),
+  fileUrl:     varchar("fileUrl", { length: 1000 }).notNull(),
+  fileSize:    int("fileSize"),
+  mimeType:    varchar("mimeType", { length: 100 }),
+  parseStatus: varchar("parseStatus", { length: 20 }).notNull().default("pending"), // pending|processing|done|failed
+  parsedJson:  json("parsedJson"),
+  parseError:  text("parseError"),
+  uploadedBy:  int("uploadedBy").notNull(),
+  createdAt:   datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:   datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryFtgiDocument = typeof factoryFtgiDocuments.$inferSelect;
+export type InsertFactoryFtgiDocument = typeof factoryFtgiDocuments.$inferInsert;
+
+// ─── Factory FTGI Scores (FTGI综合评分) ───────────────────────────────────────
+export const factoryFtgiScores = mysqlTable("factory_ftgi_scores", {
+  id:            int("id").primaryKey().autoincrement(),
+  factoryId:     int("factoryId").notNull().unique(),
+  d1Trust:       varchar("d1Trust", { length: 20 }),       // 信任维度
+  d2Fulfillment: varchar("d2Fulfillment", { length: 20 }), // 履约维度
+  d3Market:      varchar("d3Market", { length: 20 }),      // 市场维度
+  d4Ecosystem:   varchar("d4Ecosystem", { length: 20 }),   // 生态维度
+  d5Community:   varchar("d5Community", { length: 20 }),   // 社区维度
+  rawScore:      varchar("rawScore", { length: 20 }),
+  aiCoefficient: varchar("aiCoefficient", { length: 20 }),
+  ftgiScore:     varchar("ftgiScore", { length: 20 }),
+  scoreDetails:  json("scoreDetails"),
+  status:        varchar("status", { length: 20 }).notNull().default("pending"), // pending|calculating|done|failed
+  errorMessage:  text("errorMessage"),
+  calculatedAt:  datetime("calculatedAt", { mode: "date", fsp: 3 }),
+  createdAt:     datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:     datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryFtgiScore = typeof factoryFtgiScores.$inferSelect;
+export type InsertFactoryFtgiScore = typeof factoryFtgiScores.$inferInsert;

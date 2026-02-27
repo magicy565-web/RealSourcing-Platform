@@ -87,7 +87,11 @@ export default function CustomRfqReviewPanel({ rfq, onClose, onSubmitted }: Cust
   const [counterProposal, setCounterProposal] = useState('');
   const [counterPrice, setCounterPrice] = useState('');
 
-  const spec: CustomRfqSpec = rfq.customSpecJson ? JSON.parse(rfq.customSpecJson) : {};
+  // 防御性解析：customSpecJson 格式不规范时不白屏，降级为空对象
+  const spec: CustomRfqSpec = (() => {
+    if (!rfq.customSpecJson) return {};
+    try { return JSON.parse(rfq.customSpecJson) as CustomRfqSpec; } catch { return {}; }
+  })();
   const complexity = spec.complexity ?? 'medium';
   const complexityInfo = COMPLEXITY_LABELS[complexity];
 

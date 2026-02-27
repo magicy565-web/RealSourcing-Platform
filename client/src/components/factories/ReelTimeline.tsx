@@ -10,4 +10,189 @@ export interface Keyframe {
   color?: "purple" | "indigo" | "blue" | "emerald" | "amber";
 }
 
-interface ReelTimelineProps {\n  duration: number; // 视频总时长（秒）\n  currentTime: number; // 当前播放时间\n  keyframes?: Keyframe[]; // 关键帧列表\n  onSeek?: (time: number) => void; // 跳转到指定时间\n  className?: string;\n}\n\n/**\n * ReelTimeline 组件\n * \n * 特性：\n * - 智能进度条，支持拖拽跳转\n * - 关键帧锚点标注\n * - 悬停预览时间\n * - 黑紫色霓虹效果\n * - 响应式设计\n */\nexport function ReelTimeline({\n  duration,\n  currentTime,\n  keyframes = [],\n  onSeek,\n  className = \"\",\n}: ReelTimelineProps) {\n  const containerRef = useRef<HTMLDivElement>(null);\n  const [hoveredTime, setHoveredTime] = useState<number | null>(null);\n  const [isDragging, setIsDragging] = useState(false);\n\n  // ── 格式化时间 ────────────────────────────────────────────────────────────\n  const formatTime = (seconds: number) => {\n    const mins = Math.floor(seconds / 60);\n    const secs = Math.floor(seconds % 60);\n    return `${mins}:${secs.toString().padStart(2, \"0\")}`;\n  };\n\n  // ── 处理进度条点击和拖拽 ──────────────────────────────────────────────────\n  const handleMouseDown = () => {\n    setIsDragging(true);\n  };\n\n  const handleMouseUp = () => {\n    setIsDragging(false);\n  };\n\n  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {\n    if (!containerRef.current) return;\n\n    const rect = containerRef.current.getBoundingClientRect();\n    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));\n    const time = percent * duration;\n\n    setHoveredTime(time);\n\n    if (isDragging) {\n      onSeek?.(time);\n    }\n  };\n\n  const handleMouseLeave = () => {\n    setHoveredTime(null);\n    setIsDragging(false);\n  };\n\n  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {\n    if (!containerRef.current) return;\n    const rect = containerRef.current.getBoundingClientRect();\n    const percent = (e.clientX - rect.left) / rect.width;\n    onSeek?.(percent * duration);\n  };\n\n  // ── 计算关键帧位置 ────────────────────────────────────────────────────────\n  const keyframePositions = keyframes.map((kf) => ({\n    ...kf,\n    percent: (kf.timestamp / duration) * 100,\n  }));\n\n  const progressPercent = (currentTime / duration) * 100;\n  const hoverPercent = hoveredTime !== null ? (hoveredTime / duration) * 100 : null;\n\n  // ── 颜色映射 ──────────────────────────────────────────────────────────────\n  const colorMap = {\n    purple: \"bg-purple-500\",\n    indigo: \"bg-indigo-500\",\n    blue: \"bg-blue-500\",\n    emerald: \"bg-emerald-500\",\n    amber: \"bg-amber-500\",\n  };\n\n  return (\n    <div className={`w-full space-y-2 ${className}`}>\n      {/* 进度条 */}\n      <div\n        ref={containerRef}\n        className=\"relative h-8 bg-white/10 rounded-lg overflow-hidden group cursor-pointer\"\n        onMouseDown={handleMouseDown}\n        onMouseUp={handleMouseUp}\n        onMouseMove={handleMouseMove}\n        onMouseLeave={handleMouseLeave}\n        onClick={handleClick}\n      >\n        {/* 背景轨道 */}\n        <div className=\"absolute inset-0 bg-gradient-to-r from-white/5 via-white/10 to-white/5\" />\n\n        {/* 关键帧标记 */}\n        {keyframePositions.map((kf, idx) => (\n          <div\n            key={idx}\n            className=\"absolute top-0 bottom-0 flex flex-col items-center justify-center group/keyframe\"\n            style={{ left: `${kf.percent}%` }}\n          >\n            {/* 竖线 */}\n            <div\n              className={`w-0.5 h-full transition-all group-hover/keyframe:h-full ${\n                colorMap[kf.color || \"purple\"]\n              } opacity-60 group-hover/keyframe:opacity-100`}\n            />\n\n            {/* 悬停时显示标签 */}\n            <div className=\"absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/keyframe:opacity-100 transition-opacity\">\n              <div className=\"px-2 py-1 rounded bg-black/80 backdrop-blur-sm border border-white/20 text-xs text-white whitespace-nowrap\">\n                {kf.icon && <span className=\"mr-1\">{kf.icon}</span>}\n                {kf.label}\n              </div>\n            </div>\n          </div>\n        ))}\n\n        {/* 进度填充 */}\n        <div\n          className=\"absolute top-0 bottom-0 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-100\"\n          style={{ width: `${progressPercent}%` }}\n        />\n\n        {/* 悬停预览线 */}\n        {hoverPercent !== null && (\n          <div\n            className=\"absolute top-0 bottom-0 w-0.5 bg-white/50 pointer-events-none\"\n            style={{ left: `${hoverPercent}%` }}\n          />\n        )}\n\n        {/* 进度指示点 */}\n        <div\n          className=\"absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white shadow-lg shadow-purple-500/50 transition-all\"\n          style={{\n            left: `${progressPercent}%`,\n            opacity: isDragging ? 1 : 0.7,\n            transform: `translate(-50%, -50%) scale(${isDragging ? 1.2 : 1})`,\n          }}\n        />\n      </div>\n\n      {/* 时间标签 */}\n      <div className=\"flex items-center justify-between text-xs text-white/60 px-1\">\n        <span>{formatTime(currentTime)}</span>\n        {hoveredTime !== null && (\n          <span className=\"text-purple-400 font-medium\">{formatTime(hoveredTime)}</span>\n        )}\n        <span>{formatTime(duration)}</span>\n      </div>\n\n      {/* 关键帧标签行 */}\n      {keyframePositions.length > 0 && (\n        <div className=\"flex flex-wrap gap-1.5 text-xs\">\n          {keyframePositions.map((kf, idx) => (\n            <button\n              key={idx}\n              onClick={() => onSeek?.(kf.timestamp)}\n              className={`px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${\n                colorMap[kf.color || \"purple\"]\n              } bg-opacity-20 border-opacity-50 text-white/80 hover:text-white hover:bg-opacity-30`}\n              title={`跳转到 ${formatTime(kf.timestamp)}`}\n            >\n              {kf.icon && <span className=\"mr-1\">{kf.icon}</span>}\n              {kf.label}\n            </button>\n          ))}\n        </div>\n      )}\n    </div>\n  );\n}\n\nexport default ReelTimeline;\n
+interface ReelTimelineProps {
+  duration: number; // 视频总时长（秒）
+  currentTime: number; // 当前播放时间
+  keyframes?: Keyframe[]; // 关键帧列表
+  onSeek?: (time: number) => void; // 跳转到指定时间
+  className?: string;
+}
+
+/**
+ * ReelTimeline 组件
+ * 
+ * 特性：
+ * - 智能进度条，支持拖拽跳转
+ * - 关键帧锚点标注
+ * - 悬停预览时间
+ * - 黑紫色霓虹效果
+ * - 响应式设计
+ */
+export function ReelTimeline({
+  duration,
+  currentTime,
+  keyframes = [],
+  onSeek,
+  className = "",
+}: ReelTimelineProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // ── 格式化时间 ────────────────────────────────────────────────────────────
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // ── 处理进度条点击和拖拽 ──────────────────────────────────────────────────
+  const handleMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const time = percent * duration;
+
+    setHoveredTime(time);
+
+    if (isDragging) {
+      onSeek?.(time);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredTime(null);
+    setIsDragging(false);
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    onSeek?.(percent * duration);
+  };
+
+  // ── 计算关键帧位置 ────────────────────────────────────────────────────────
+  const keyframePositions = keyframes.map((kf) => ({
+    ...kf,
+    percent: (kf.timestamp / duration) * 100,
+  }));
+
+  const progressPercent = (currentTime / duration) * 100;
+  const hoverPercent = hoveredTime !== null ? (hoveredTime / duration) * 100 : null;
+
+  // ── 颜色映射 ──────────────────────────────────────────────────────────────
+  const colorMap = {
+    purple: "bg-purple-500",
+    indigo: "bg-indigo-500",
+    blue: "bg-blue-500",
+    emerald: "bg-emerald-500",
+    amber: "bg-amber-500",
+  };
+
+  return (
+    <div className={`w-full space-y-2 ${className}`}>
+      {/* 进度条 */}
+      <div
+        ref={containerRef}
+        className="relative h-8 bg-white/10 rounded-lg overflow-hidden group cursor-pointer"
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+      >
+        {/* 背景轨道 */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/10 to-white/5" />
+
+        {/* 关键帧标记 */}
+        {keyframePositions.map((kf, idx) => (
+          <div
+            key={idx}
+            className="absolute top-0 bottom-0 flex flex-col items-center justify-center group/keyframe"
+            style={{ left: `${kf.percent}%` }}
+          >
+            {/* 竖线 */}
+            <div
+              className={`w-0.5 h-full transition-all group-hover/keyframe:h-full ${
+                colorMap[kf.color || "purple"]
+              } opacity-60 group-hover/keyframe:opacity-100`}
+            />
+
+            {/* 悬停时显示标签 */}
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/keyframe:opacity-100 transition-opacity">
+              <div className="px-2 py-1 rounded bg-black/80 backdrop-blur-sm border border-white/20 text-xs text-white whitespace-nowrap">
+                {kf.icon && <span className="mr-1">{kf.icon}</span>}
+                {kf.label}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* 进度填充 */}
+        <div
+          className="absolute top-0 bottom-0 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-100"
+          style={{ width: `${progressPercent}%` }}
+        />
+
+        {/* 悬停预览线 */}
+        {hoverPercent !== null && (
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-white/50 pointer-events-none"
+            style={{ left: `${hoverPercent}%` }}
+          />
+        )}
+
+        {/* 进度指示点 */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white shadow-lg shadow-purple-500/50 transition-all"
+          style={{
+            left: `${progressPercent}%`,
+            opacity: isDragging ? 1 : 0.7,
+            transform: `translate(-50%, -50%) scale(${isDragging ? 1.2 : 1})`,
+          }}
+        />
+      </div>
+
+      {/* 时间标签 */}
+      <div className="flex items-center justify-between text-xs text-white/60 px-1">
+        <span>{formatTime(currentTime)}</span>
+        {hoveredTime !== null && (
+          <span className="text-purple-400 font-medium">{formatTime(hoveredTime)}</span>
+        )}
+        <span>{formatTime(duration)}</span>
+      </div>
+
+      {/* 关键帧标签行 */}
+      {keyframePositions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          {keyframePositions.map((kf, idx) => (
+            <button
+              key={idx}
+              onClick={() => onSeek?.(kf.timestamp)}
+              className={`px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
+                colorMap[kf.color || "purple"]
+              } bg-opacity-20 border-opacity-50 text-white/80 hover:text-white hover:bg-opacity-30`}
+              title={`跳转到 ${formatTime(kf.timestamp)}`}
+            >
+              {kf.icon && <span className="mr-1">{kf.icon}</span>}
+              {kf.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ReelTimeline;
+

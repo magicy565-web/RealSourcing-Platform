@@ -297,7 +297,6 @@ export async function rejectQuote(inquiryId: number, buyerId: number, reason?: s
   });
 
   return { success: true };
-}true };
 }
 
 // ── 获取报价详情 ───────────────────────────────────────────────────────────────

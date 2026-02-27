@@ -215,8 +215,16 @@ export default function FactoryDetail() {
   const details = factory.details;
   const products = factory.products || [];
   const reviews = factory.reviews || [];
-  const certifications: string[] = Array.isArray(details?.certifications)
-    ? (details.certifications as string[]) : [];
+  // 防御性解析：数据库可能存储 JSON 字符串或已解析的数组
+  const certifications: string[] = (() => {
+    const raw = details?.certifications;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === "string") {
+      try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+    }
+    return [];
+  })();
 
   const filteredProducts = activeTab === "all" ? products : products.filter((p) => p.category === activeTab);
   const displayedProducts = showAllProducts ? filteredProducts : filteredProducts.slice(0, 6);

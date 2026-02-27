@@ -74,6 +74,11 @@ const guideCards = [
   },
 ];
 
+// ─── Phase 白名单工具（双重防御：前端同样验证 API 返回的 phase）────────────────
+const VALID_PHASES_FE: readonly Phase[] = ["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"];
+const toSafePhase = (raw: unknown, fallback: Phase = "welcome"): Phase =>
+  VALID_PHASES_FE.includes(raw as Phase) ? (raw as Phase) : fallback;
+
 // ─── Phase config ─────────────────────────────────────────────────────────────
 const PHASE_PROGRESS: Record<Phase, number> = {
   welcome: 5, price: 20, leadtime: 35, customization: 50,
@@ -473,7 +478,8 @@ export default function AIAssistant() {
         phase: (result.phase as Phase) || "welcome",
       }]);
       const newState: SessionState = {
-        currentPhase: ((result.sessionState as any)?.currentPhase as Phase) || "welcome",
+        // 使用白名单过滤，防止 API 返回非法 phase 污染前端状态
+        currentPhase: toSafePhase((result.sessionState as any)?.currentPhase, "welcome"),
         preferences: (result.sessionState as any)?.preferences || {},
         conversationHistory: (result.sessionState as any)?.conversationHistory || [],
       };
@@ -536,9 +542,8 @@ export default function AIAssistant() {
         quotes: result.quotes as QuoteCard[] | undefined,
         isSummary: isSummaryPhase && !result.quotes,
       }));
-      const VALID_PHASES_FE: Phase[] = ["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"];
-      const rawPhase = (result.sessionState as any)?.currentPhase;
-      const safePhase: Phase = VALID_PHASES_FE.includes(rawPhase as Phase) ? (rawPhase as Phase) : sessionState.currentPhase;
+      // 白名单过滤（复用顶层 toSafePhase，与后端 VALID_PHASES 保持同步）
+      const safePhase: Phase = toSafePhase((result.sessionState as any)?.currentPhase, sessionState.currentPhase);
       const updatedState: SessionState = {
         currentPhase: safePhase,
         preferences: (result.sessionState as any)?.preferences || sessionState.preferences,

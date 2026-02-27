@@ -1114,3 +1114,252 @@ export async function getDemandWithParameters(demandId: number) {
     .then(r => r[0] ?? null);
   return { demand, params };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── 5.0 Commander DB Functions ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Commander Tasks ──────────────────────────────────────────────────────────
+export async function createCommanderTask(data: schema.InsertCommanderTask) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.commanderTasks).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getCommanderTaskById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.commanderTasks)
+    .where(eq(schema.commanderTasks.id, id));
+  return rows[0] ?? null;
+}
+
+export async function getCommanderTasksByFactory(factoryId: number, options?: {
+  status?: string;
+  taskType?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const database = await dbPromise;
+  const conditions = [eq(schema.commanderTasks.factoryId, factoryId)];
+  if (options?.status) conditions.push(eq(schema.commanderTasks.status, options.status));
+  if (options?.taskType) conditions.push(eq(schema.commanderTasks.taskType, options.taskType));
+  return database.select().from(schema.commanderTasks)
+    .where(and(...conditions))
+    .orderBy(desc(schema.commanderTasks.createdAt))
+    .limit(options?.limit ?? 20)
+    .offset(options?.offset ?? 0);
+}
+
+export async function updateCommanderTask(id: number, data: Partial<schema.InsertCommanderTask>) {
+  const database = await dbPromise;
+  await database.update(schema.commanderTasks)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(schema.commanderTasks.id, id));
+  return { success: true };
+}
+
+// ─── Inbound Leads ────────────────────────────────────────────────────────────
+export async function createInboundLead(data: schema.InsertInboundLead) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.inboundLeads).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getInboundLeadById(id: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.inboundLeads)
+    .where(eq(schema.inboundLeads.id, id));
+  return rows[0] ?? null;
+}
+
+export async function getInboundLeadsByFactory(factoryId: number, options?: {
+  status?: string;
+  isRead?: boolean;
+  limit?: number;
+  offset?: number;
+}) {
+  const database = await dbPromise;
+  const conditions = [eq(schema.inboundLeads.factoryId, factoryId)];
+  if (options?.status) conditions.push(eq(schema.inboundLeads.status, options.status));
+  if (options?.isRead !== undefined) {
+    conditions.push(eq(schema.inboundLeads.isRead, options.isRead ? 1 : 0));
+  }
+  return database.select().from(schema.inboundLeads)
+    .where(and(...conditions))
+    .orderBy(desc(schema.inboundLeads.createdAt))
+    .limit(options?.limit ?? 20)
+    .offset(options?.offset ?? 0);
+}
+
+export async function updateInboundLead(id: number, data: Partial<schema.InsertInboundLead>) {
+  const database = await dbPromise;
+  await database.update(schema.inboundLeads)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(schema.inboundLeads.id, id));
+  return { success: true };
+}
+
+export async function getInboundLeadStats(factoryId: number) {
+  const database = await dbPromise;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [totalRows, unreadRows, todayRows] = await Promise.all([
+    database.select({ count: sql<number>`COUNT(*)` }).from(schema.inboundLeads)
+      .where(eq(schema.inboundLeads.factoryId, factoryId)),
+    database.select({ count: sql<number>`COUNT(*)` }).from(schema.inboundLeads)
+      .where(and(eq(schema.inboundLeads.factoryId, factoryId), eq(schema.inboundLeads.isRead, 0))),
+    database.select({ count: sql<number>`COUNT(*)` }).from(schema.inboundLeads)
+      .where(and(
+        eq(schema.inboundLeads.factoryId, factoryId),
+        sql`${schema.inboundLeads.createdAt} >= ${today}`
+      )),
+  ]);
+  return {
+    total: Number(totalRows[0]?.count ?? 0),
+    unread: Number(unreadRows[0]?.count ?? 0),
+    today: Number(todayRows[0]?.count ?? 0),
+  };
+}
+
+// ─── Lead Replies ─────────────────────────────────────────────────────────────
+export async function createLeadReply(data: schema.InsertLeadReply) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.leadReplies).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function getLeadRepliesByLead(leadId: number) {
+  const database = await dbPromise;
+  return database.select().from(schema.leadReplies)
+    .where(eq(schema.leadReplies.leadId, leadId))
+    .orderBy(desc(schema.leadReplies.createdAt));
+}
+
+export async function updateLeadReply(id: number, data: Partial<schema.InsertLeadReply>) {
+  const database = await dbPromise;
+  await database.update(schema.leadReplies)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(schema.leadReplies.id, id));
+  return { success: true };
+}
+
+// ─── Factory Credits ──────────────────────────────────────────────────────────
+export async function getFactoryCredit(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.factoryCredits)
+    .where(eq(schema.factoryCredits.factoryId, factoryId));
+  return rows[0] ?? null;
+}
+
+export async function ensureFactoryCredit(factoryId: number): Promise<schema.FactoryCredit> {
+  const database = await dbPromise;
+  const existing = await getFactoryCredit(factoryId);
+  if (existing) return existing;
+  await database.insert(schema.factoryCredits).values({ factoryId, balance: 0 });
+  return (await getFactoryCredit(factoryId))!;
+}
+
+export async function deductFactoryCredit(factoryId: number, userId: number, amount: number, description: string, relatedTaskId?: number): Promise<{ success: boolean; balanceAfter: number; error?: string }> {
+  const database = await dbPromise;
+  const credit = await ensureFactoryCredit(factoryId);
+  if (credit.balance < amount) {
+    return { success: false, balanceAfter: credit.balance, error: '积分余额不足' };
+  }
+  const balanceAfter = credit.balance - amount;
+  await database.update(schema.factoryCredits)
+    .set({ balance: balanceAfter, totalConsumed: credit.totalConsumed + amount, updatedAt: new Date() } as any)
+    .where(eq(schema.factoryCredits.factoryId, factoryId));
+  await database.insert(schema.creditLedger).values({
+    factoryId, userId,
+    txType: 'task_deduct',
+    amount: -amount,
+    balanceAfter,
+    description,
+    relatedTaskId: relatedTaskId ?? null,
+  } as any);
+  return { success: true, balanceAfter };
+}
+
+export async function rechargeFactoryCredit(factoryId: number, userId: number, amount: number, description: string, relatedOrderId?: string, paymentMethod?: string, paymentAmount?: number): Promise<{ balanceAfter: number }> {
+  const database = await dbPromise;
+  const credit = await ensureFactoryCredit(factoryId);
+  const balanceAfter = credit.balance + amount;
+  await database.update(schema.factoryCredits)
+    .set({ balance: balanceAfter, totalRecharged: credit.totalRecharged + amount, lastRechargeAt: new Date(), lowBalanceAlerted: 0, updatedAt: new Date() } as any)
+    .where(eq(schema.factoryCredits.factoryId, factoryId));
+  await database.insert(schema.creditLedger).values({
+    factoryId, userId,
+    txType: 'recharge',
+    amount,
+    balanceAfter,
+    description,
+    relatedOrderId: relatedOrderId ?? null,
+    paymentMethod: paymentMethod ?? null,
+    paymentAmount: paymentAmount?.toString() ?? null,
+  } as any);
+  return { balanceAfter };
+}
+
+export async function getCreditLedger(factoryId: number, limit = 20, offset = 0) {
+  const database = await dbPromise;
+  return database.select().from(schema.creditLedger)
+    .where(eq(schema.creditLedger.factoryId, factoryId))
+    .orderBy(desc(schema.creditLedger.createdAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+// ─── Digital Assets ───────────────────────────────────────────────────────────
+export async function getDigitalAsset(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.digitalAssets)
+    .where(eq(schema.digitalAssets.factoryId, factoryId));
+  return rows[0] ?? null;
+}
+
+export async function upsertDigitalAsset(factoryId: number, data: Partial<schema.InsertDigitalAsset>) {
+  const database = await dbPromise;
+  const existing = await getDigitalAsset(factoryId);
+  if (existing) {
+    await database.update(schema.digitalAssets)
+      .set({ ...data, updatedAt: new Date() } as any)
+      .where(eq(schema.digitalAssets.factoryId, factoryId));
+    return { created: false };
+  } else {
+    await database.insert(schema.digitalAssets).values({ factoryId, ...data } as any);
+    return { created: true };
+  }
+}
+
+// ─── Commander Phones ─────────────────────────────────────────────────────────
+export async function getCommanderPhoneByFactory(factoryId: number) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.commanderPhones)
+    .where(eq(schema.commanderPhones.factoryId, factoryId));
+  return rows[0] ?? null;
+}
+
+export async function getCommanderPhoneByWechatOpenId(wechatOpenId: string) {
+  const database = await dbPromise;
+  const rows = await database.select().from(schema.commanderPhones)
+    .where(eq(schema.commanderPhones.wechatOpenId, wechatOpenId));
+  return rows[0] ?? null;
+}
+
+export async function createCommanderPhone(data: schema.InsertCommanderPhone) {
+  const database = await dbPromise;
+  const result = await database.insert(schema.commanderPhones).values(data);
+  const id = (result as any)[0]?.insertId ?? 0;
+  return { id };
+}
+
+export async function updateCommanderPhone(id: number, data: Partial<schema.InsertCommanderPhone>) {
+  const database = await dbPromise;
+  await database.update(schema.commanderPhones)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(schema.commanderPhones.id, id));
+  return { success: true };
+}
