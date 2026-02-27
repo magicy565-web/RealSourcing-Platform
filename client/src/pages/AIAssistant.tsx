@@ -536,10 +536,16 @@ export default function AIAssistant() {
         quotes: result.quotes as QuoteCard[] | undefined,
         isSummary: isSummaryPhase && !result.quotes,
       }));
+      const VALID_PHASES_FE: Phase[] = ["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"];
+      const rawPhase = (result.sessionState as any)?.currentPhase;
+      const safePhase: Phase = VALID_PHASES_FE.includes(rawPhase as Phase) ? (rawPhase as Phase) : sessionState.currentPhase;
       const updatedState: SessionState = {
-        currentPhase: ((result.sessionState as any)?.currentPhase as Phase) || sessionState.currentPhase,
+        currentPhase: safePhase,
         preferences: (result.sessionState as any)?.preferences || sessionState.preferences,
-        conversationHistory: (result.sessionState as any)?.conversationHistory || sessionState.conversationHistory,
+        conversationHistory: ((result.sessionState as any)?.conversationHistory || sessionState.conversationHistory).map((h: any) => ({
+          role: (h.role === "user" || h.role === "assistant") ? h.role : "assistant",
+          content: String(h.content || ""),
+        })),
       };
       setSessionState(updatedState);
       setProgressPercent(result.progressPercent || 0);

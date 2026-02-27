@@ -463,11 +463,14 @@ JSON 格式示例：
         let extractedPrefs: Record<string, unknown> = {};
         let quotes: unknown[] | undefined;
 
+        const VALID_PHASES = ["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"] as const;
         const stateMatch = rawContent.match(/<!--STATE:\s*({[\s\S]*?})\s*-->/);
         if (stateMatch) {
           try {
             const stateData = JSON.parse(stateMatch[1]);
-            nextPhase = stateData.nextPhase || currentPhase;
+            const rawNextPhase = stateData.nextPhase || currentPhase;
+            // 白名单过滤：防止 AI 返回非法 phase 值导致下一轮 zod 验证失败
+            nextPhase = (VALID_PHASES as readonly string[]).includes(rawNextPhase) ? rawNextPhase : currentPhase;
             progressPercent = stateData.progressPercent || progressPercent;
             extractedPrefs = stateData.extractedPrefs || {};
           } catch (_) {}
