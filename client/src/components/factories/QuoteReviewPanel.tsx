@@ -16,7 +16,8 @@ import {
   AlertTriangle, Sparkles, Send
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+
 
 interface TierPrice {
   qty: number;
@@ -81,24 +82,21 @@ export function QuoteReviewPanel({
   onConfirmed,
   onDismiss,
 }: QuoteReviewPanelProps) {
-  const { toast } = useToast();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedQuote, setEditedQuote] = useState<DraftQuote>({ ...draftQuote });
   const [isConfirming, setIsConfirming] = useState(false);
 
   const submitQuoteMutation = trpc.rfq.submitQuote.useMutation({
     onSuccess: () => {
-      toast({
-        title: "✅ 报价已确认并发送",
+      toast.success("✅ 报价已确认并发送", {
         description: `报价已成功推送给买家${buyerName ? ` ${buyerName}` : ""}，对方将在几秒内收到通知。`,
       });
       onConfirmed?.();
     },
     onError: (err) => {
-      toast({
-        title: "提交失败",
+      toast.error("提交失败", {
         description: err.message,
-        variant: "destructive",
       });
       setIsConfirming(false);
     },

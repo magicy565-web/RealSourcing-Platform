@@ -3,7 +3,7 @@
  * 功能：议价成功率、AI 置信度趋势、工厂评分排行、历史成交数据学习效果
  */
 import { useState } from "react";
-import { trpc } from "../../utils/trpc";
+import { trpc } from "@/lib/trpc";
 import {
   TrendingUp, TrendingDown, BarChart3, Star,
   MessageSquare, CheckCircle, XCircle, RefreshCw,

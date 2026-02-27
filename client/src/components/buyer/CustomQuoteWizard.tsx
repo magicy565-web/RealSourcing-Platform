@@ -10,7 +10,7 @@
  */
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { trpc } from '../../utils/trpc';
+import { trpc } from '@/lib/trpc';
 import {
   Upload, FileImage, FileText, X, CheckCircle2, Loader2,
   Sparkles, ChevronRight, ChevronLeft, Send, AlertCircle,

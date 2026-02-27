@@ -15,7 +15,8 @@ import {
   XCircle, ChevronDown, ChevronUp, Star, Zap, TrendingDown
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+
 
 interface TierPrice {
   qty: number;
@@ -255,29 +256,25 @@ export function QuoteComparePanel({
   onQuoteAccepted,
   onQuoteRejected,
 }: QuoteComparePanelProps) {
-  const { toast } = useToast();
   const badges = useMemo(() => getBadges(quotes), [quotes]);
 
   const acceptMutation = trpc.rfq.acceptQuote.useMutation({
     onSuccess: (_, vars) => {
-      toast({
-        title: "✅ 报价已接受",
-        description: "已通知工厂，可以开始安排生产。",
-      });
+      toast.success("✅ 报价已接受", { description: "已通知工厂，可以开始安排生产。" });
       onQuoteAccepted?.(vars.inquiryId);
     },
     onError: (err) => {
-      toast({ title: "操作失败", description: err.message, variant: "destructive" });
+      toast.error("操作失败", { description: err.message });
     },
   });
 
   const rejectMutation = trpc.rfq.rejectQuote.useMutation({
     onSuccess: (_, vars) => {
-      toast({ title: "报价已拒绝", description: "已通知工厂。" });
+      toast("报价已拒绝", { description: "已通知工厂。" });
       onQuoteRejected?.(vars.inquiryId);
     },
     onError: (err) => {
-      toast({ title: "操作失败", description: err.message, variant: "destructive" });
+      toast.error("操作失败", { description: err.message });
     },
   });
 

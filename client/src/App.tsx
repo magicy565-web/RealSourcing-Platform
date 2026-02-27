@@ -41,6 +41,7 @@ import MatchingDashboard from "./pages/MatchingDashboard";
 import SourcingRoom from "./pages/SourcingRoom";
 import OpsAgentMonitor from "./pages/OpsAgentMonitor";
 import MyQuotes from "./pages/MyQuotes";
+import CustomQuoteHistory from "./pages/CustomQuoteHistory";
 
 function Router() {
   return (
@@ -215,6 +216,11 @@ function Router() {
       <Route path="/my-quotes">
         <ProtectedRoute>
           <MyQuotes />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/custom-quote-history">
+        <ProtectedRoute>
+          <CustomQuoteHistory />
         </ProtectedRoute>
       </Route>
 

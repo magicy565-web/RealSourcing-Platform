@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { trpc } from "../../utils/trpc";
+import { trpc } from "@/lib/trpc";
 import {
   MessageSquare, TrendingDown, Clock, Package,
   CheckCircle, XCircle, ChevronRight, Sparkles,

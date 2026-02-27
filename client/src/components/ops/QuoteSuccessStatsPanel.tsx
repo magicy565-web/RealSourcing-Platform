@@ -4,7 +4,7 @@
  * 展示核心业务指标：总报价数、接受率、转化率、工厂排行
  */
 import { motion } from 'framer-motion';
-import { trpc } from '../../utils/trpc';
+import { trpc } from '@/lib/trpc';
 
 interface StatCardProps {
   label: string;
