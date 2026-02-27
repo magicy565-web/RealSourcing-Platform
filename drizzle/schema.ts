@@ -818,8 +818,14 @@ export const clawAgentStatus = mysqlTable("claw_agent_status", {
   version:              varchar("version", { length: 50 }),
   // 部署环境：aliyun_wuying（阿里云无影）| local | docker
   deployEnv:            varchar("deployEnv", { length: 50 }).default("aliyun_wuying"),
+  deployEnvDetail:      varchar("deployEnvDetail", { length: 255 }),
   ipAddress:            varchar("ipAddress", { length: 50 }),
   lastHeartbeatAt:      datetime("lastHeartbeatAt", { mode: "date", fsp: 3 }),
+  // 关联工厂（4.1 新增）
+  factoryId:            int("factoryId"),
+  factoryName:          varchar("factoryName", { length: 255 }),
+  // Agent 能力声明（4.1 新增）：[{type, isConfigured, priority, config}]
+  capabilities:         json("capabilities"),
   // 当前正在处理的任务数
   activeJobs:           int("activeJobs").notNull().default(0),
   // 累计处理任务总数

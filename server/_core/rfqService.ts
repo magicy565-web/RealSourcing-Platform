@@ -384,21 +384,58 @@ export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqR
     };
   }
 
-  // ── Step 3: 飞书无数据 → 入队 BullMQ rfq-claw-queue ─────────────────────────
+  // ── Step 3: 飞书无数据 → 优先推送给在线 Agent，同时入队 BullMQ ───────────────
   try {
+    const now = new Date();
+    const taskId = `rfq-claw-${input.demandId}-${input.factoryId}-${now.getTime()}`;
+    const expiresAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+
+    // Step 3a: 检查工厂是否有在线 Agent，优先推送任务
+    let agentPushed = false;
+    try {
+      const { pushTaskToAgent, isAgentOnlineForFactory } = await import('./clawAgentRouter');
+      if (isAgentOnlineForFactory(input.factoryId)) {
+        const rfqTask = {
+          taskId,
+          taskType: 'fetch_quote' as const,
+          priority: 'normal' as const,
+          demandId: input.demandId,
+          factoryId: input.factoryId,
+          buyerId: input.buyerId,
+          matchResultId: input.matchResultId,
+          productName: input.productName ?? '',
+          category: input.category ?? '',
+          quantity: input.quantity,
+          enqueuedAt: now.toISOString(),
+          expiresAt,
+          retryCount: 0,
+          maxRetries: 3,
+        };
+        agentPushed = pushTaskToAgent(input.factoryId, rfqTask);
+        if (agentPushed) {
+          console.log(`🤖 [autoSendRfq] Task pushed to online agent for factory #${input.factoryId}`);
+        }
+      }
+    } catch (agentErr) {
+      console.warn('[autoSendRfq] Agent push failed (non-critical):', agentErr);
+    }
+
+    // Step 3b: 同时入队 BullMQ（作为保底机制）
     const { rfqClawQueue } = await import('./queue');
     const jobId = `rfq-claw-${input.demandId}-${input.factoryId}`;
 
     const job = await rfqClawQueue.add(
       'fetch-quote',
       {
+        taskId,
         demandId: input.demandId,
         factoryId: input.factoryId,
         matchResultId: input.matchResultId,
         buyerId: input.buyerId,
         category: input.category,
         productName: input.productName,
-        enqueuedAt: new Date().toISOString(),
+        enqueuedAt: now.toISOString(),
+        agentPushed,
       },
       {
         jobId,
@@ -431,12 +468,14 @@ export async function autoSendRfq(input: AutoSendRfqInput): Promise<AutoSendRfqR
       });
     } catch { /* 告警失败不影响主流程 */ }
 
-    console.log(`📥 [autoSendRfq] Queued to rfq-claw-queue for demand #${input.demandId}, jobId: ${job.id}`);
+    console.log(`📥 [autoSendRfq] Queued to rfq-claw-queue for demand #${input.demandId}, jobId: ${job.id}, agentPushed: ${agentPushed}`);
 
     return {
       mode: 'claw_queued',
       jobId: job.id ?? jobId,
-      message: 'AI 正在联络工厂，预计 30 分钟内获得报价',
+      message: agentPushed
+        ? '已推送给工厂 AI 助手，预计 30 分钟内获得报价'
+        : 'AI 正在联络工厂，预计 30 分钟内获得报价',
     };
   } catch (queueErr) {
     console.error('[autoSendRfq] Queue failed, falling back to manual:', queueErr);

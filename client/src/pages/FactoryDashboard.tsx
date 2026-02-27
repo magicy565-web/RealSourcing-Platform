@@ -409,13 +409,24 @@ export default function FactoryDashboard() {
     onSuccess: (result: any) => {
       refetchHandshakes();
       if (result?.roomSlug) {
-        toast.success('✅ Accepted! Sourcing room is ready.', {
-          action: { label: 'Enter Room', onClick: () => setLocation(`/sourcing-room/${result.roomSlug}`) },
-          duration: 10000,
+        // 4.1: 显示 RFQ 触发状态
+        const rfqMode = (result as any)?.rfqMode;
+        const rfqMsg = (result as any)?.rfqMessage ?? 'AI 正在联络工厂，预计 30 分钟内获得报价';
+        const rfqDesc = rfqMode === 'feishu_instant'
+          ? '🚀 已从飞书报价库获取报价，2 分钟内完成匹配'
+          : rfqMode === 'claw_queued'
+          ? `🤖 ${rfqMsg}`
+          : rfqMode === 'manual_fallback'
+          ? '📋 询价单已创建，等待手动填写报价'
+          : undefined;
+        toast.success('✅ 已接受！沟通室已就绪', {
+          description: rfqDesc,
+          action: { label: '进入沟通室', onClick: () => setLocation(`/sourcing-room/${result.roomSlug}`) },
+          duration: 12000,
         });
       }
     },
-    onError: (err: any) => toast.error('Failed to accept: ' + err.message),
+    onError: (err: any) => toast.error('接受失败: ' + err.message),
   });
   const rejectHandshakeMutation = trpc.knowledge.rejectHandshake.useMutation({
     onSuccess: () => { refetchHandshakes(); toast.success('Request declined.'); },

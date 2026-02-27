@@ -37,6 +37,15 @@ export interface HandshakeResult {
   handshakeId?: number;
   roomSlug?: string;
   error?: string;
+  // 4.1 新增：用于 WebSocket 通知和 autoSendRfq 触发
+  factoryId?: number;
+  factoryName?: string;
+  buyerUserId?: number;
+  demandId?: number;
+  matchResultId?: number;
+  // autoSendRfq 触发结果
+  rfqMode?: 'feishu_instant' | 'claw_queued' | 'manual_fallback' | 'skipped';
+  rfqMessage?: string;
 }
 
 // ── 核心函数 ──────────────────────────────────────────────────────────────────
@@ -237,7 +246,46 @@ export async function acceptHandshakeRequest(
     );
   }
 
-  return { success: true, handshakeId, roomSlug };
+  // 7. 触发 autoSendRfq（30 分钟报价流程）
+  let rfqMode: HandshakeResult['rfqMode'] = 'skipped';
+  let rfqMessage: string | undefined;
+  if (demand) {
+    setImmediate(async () => {
+      try {
+        const { autoSendRfq } = await import('./rfqService');
+        const rfqResult = await autoSendRfq({
+          demandId: handshake.demandId,
+          factoryId: handshake.factoryId,
+          matchResultId: handshake.matchResultId ?? 0,
+          buyerId: handshake.buyerId,
+          category: (demand as any).productionCategory ?? undefined,
+          productName: (demand as any).productName ?? undefined,
+          quantity: (demand as any).estimatedQuantity
+            ? parseInt((demand as any).estimatedQuantity, 10) || undefined
+            : undefined,
+          notes: `[握手接受后自动触发 | 沟通室: ${roomSlug}]`,
+        });
+        console.log(`🚀 [Handshake] autoSendRfq triggered for demand #${handshake.demandId}: mode=${rfqResult.mode}`);
+      } catch (rfqErr) {
+        console.warn('[Handshake] autoSendRfq trigger failed (non-critical):', rfqErr);
+      }
+    });
+    rfqMode = 'claw_queued'; // 乐观预测，实际结果由 setImmediate 内部决定
+    rfqMessage = '报价请求已发送，预计 30 分钟内获得报价';
+  }
+
+  return {
+    success: true,
+    handshakeId,
+    roomSlug,
+    factoryId: handshake.factoryId,
+    factoryName: factory.name,
+    buyerUserId: handshake.buyerId,
+    demandId: handshake.demandId,
+    matchResultId: handshake.matchResultId ?? undefined,
+    rfqMode,
+    rfqMessage,
+  };
 }
 
 /**

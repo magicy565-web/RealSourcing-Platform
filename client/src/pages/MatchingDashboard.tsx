@@ -624,12 +624,29 @@ export default function MatchingDashboard() {
       });
     });
 
+    // 4.1: 监听 Open Claw Agent 报价到达事件
+    socket.on("quote_received", (data: any) => {
+      if (data.demandId !== demandId) return;
+      const priceDisplay = data.unitPrice
+        ? `${data.currency ?? 'USD'} ${Number(data.unitPrice).toFixed(2)}/unit`
+        : '';
+      const sourceLabel = data.source === 'feishu_bitable'
+        ? '飞书报价库'
+        : data.source === 'claw_agent'
+        ? 'AI 助手'
+        : data.source ?? 'AI';
+      toast.success(`🎉 收到报价！`, {
+        description: `来源：${sourceLabel}${priceDisplay ? ` · ${priceDisplay}` : ''}${data.moq ? ` · MOQ: ${data.moq}` : ''}`,
+        duration: 15000,
+      });
+    });
     return () => {
       socket.off("match_complete");
       socket.off("match_expired");
       socket.off("handshake_accepted");
       socket.off("handshake_rejected");
       socket.off("handshake_expired");
+      socket.off("quote_received");
       socket.emit("leave_demand_room", { demandId });
     };
   }, [socket, demandId]);
