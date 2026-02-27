@@ -457,7 +457,7 @@ JSON 格式示例：
         ];
 
         const llmResult = await invokeLLM({ messages, maxTokens: 800 });
-        const rawContent = (llmResult.content as string) || "抱歉，我暂时无法处理您的请求，请稍后再试。";
+        const rawContent = (llmResult.choices?.[0]?.message?.content as string) || "抱歉，我暂时无法处理您的请求，请稍后再试。";
 
         let nextPhase = currentPhase;
         let progressPercent = 10;
