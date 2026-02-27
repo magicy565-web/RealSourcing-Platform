@@ -100,6 +100,198 @@ import {
   generateEmbedding, buildEmbeddingText, findSimilarDemands, isEmbeddingError
 } from "./_core/vectorSearchService";
 
+// ─── FTGI 路由 ────────────────────────────────────────────────────────────────
+const ftgiRouter = router({
+  // 获取工厂 FTGI 评分
+  getScore: protectedProcedure
+    .input(z.object({ factoryId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      const { getFtgiScore } = await import('./_core/ftgiService');
+      const factoryId = input.factoryId ?? (await (await import('./db')).getFactoryByUserId(ctx.user.id))?.id;
+      if (!factoryId) return null;
+      return getFtgiScore(factoryId);
+    }),
+  // 获取工厂上传的 FTGI 文档列表
+  getDocuments: protectedProcedure
+    .input(z.object({ factoryId: z.number().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      const { getFtgiDocuments } = await import('./_core/ftgiService');
+      const factoryId = input?.factoryId ?? (await (await import('./db')).getFactoryByUserId(ctx.user.id))?.id;
+      if (!factoryId) return [];
+      return getFtgiDocuments(factoryId);
+    }),
+  // 注册文档记录
+  registerDocument: protectedProcedure
+    .input(z.object({
+      docType:  z.enum(['image', 'certification', 'transaction', 'customs', 'other']),
+      fileName: z.string().min(1).max(500),
+      fileUrl:  z.string().url(),
+      fileMime: z.string().max(100).optional(),
+      fileSize: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { createFtgiDocument, parseDocumentToJson } = await import('./_core/ftgiService');
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
+      const result = await createFtgiDocument({
+        factoryId:   factory.id,
+        docType:     input.docType,
+        fileName:    input.fileName,
+        fileUrl:     input.fileUrl,
+        mimeType:    input.fileMime,
+        fileSize:    input.fileSize,
+        uploadedBy:  ctx.user.id,
+        parseStatus: 'pending',
+      });
+      const docId = (result as any).insertId as number;
+      // 异步触发 AI 解析（非阻塞）
+      setImmediate(() => parseDocumentToJson(docId, input.fileUrl, input.docType, input.fileName).catch(console.error));
+      return { docId, success: true };
+    }),
+  // 删除文档
+  deleteDocument: protectedProcedure
+    .input(z.object({ docId: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      const { deleteFtgiDocument } = await import('./_core/ftgiService');
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
+      await deleteFtgiDocument(input.docId, factory.id);
+      return { success: true };
+    }),
+  // 触发 FTGI 评分计算
+  triggerCalculation: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const { calculateFtgiScore } = await import('./_core/ftgiService');
+      const factory = await getFactoryByUserId(ctx.user.id);
+      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
+      // 异步计算（非阻塞）
+      setImmediate(() => calculateFtgiScore(factory.id).catch(console.error));
+      return { success: true, message: 'FTGI 评分计算已启动，预计 30-60 秒完成' };
+    }),
+  // FTGI 排行榜
+  leaderboard: publicProcedure
+    .input(z.object({
+      limit:     z.number().min(1).max(200).default(50),
+      certLevel: z.string().optional(),
+      minScore:  z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const { getFtgiLeaderboard } = await import('./_core/ftgiService');
+      return getFtgiLeaderboard({ limit: input.limit, certLevel: input.certLevel, minScore: input.minScore });
+    }),
+});
+
+// ─── Human Scores 路由 ─────────────────────────────────────────────────────────
+
+// ─── Human Scores 路由 ─────────────────────────────────────────────────────────
+const humanScoresRouter = router({
+  // 获取工厂综合人工评分
+  getScore: publicProcedure
+    .input(z.object({ factoryId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = await (await import('./db')).dbPromise;
+      const schema = await import('../drizzle/schema');
+      const { eq } = await import('drizzle-orm');
+      const score = await db.query.factoryScores.findFirst({
+        where: eq(schema.factoryScores.factoryId, input.factoryId),
+      });
+      return score ? {
+        humanScore:         parseFloat(score.overallScore ?? '0'),
+        ftgiContribution:   parseFloat(score.qualityScore ?? '0'),
+        scoreFromReviews:   parseFloat(score.serviceScore ?? '0'),
+        scoreFromWebinars:  parseFloat(score.deliveryScore ?? '0'),
+        scoreFromExperts:   parseFloat(score.priceCompetitiveness ?? '0'),
+        reviewCount:        score.totalReviews,
+        webinarVoteCount:   0,
+        expertReviewCount:  0,
+      } : null;
+    }),
+  // 兼容别名
+  getHumanScore: publicProcedure
+    .input(z.object({ factoryId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = await (await import('./db')).dbPromise;
+      const schema = await import('../drizzle/schema');
+      const { eq } = await import('drizzle-orm');
+      return db.query.factoryScores.findFirst({
+        where: eq(schema.factoryScores.factoryId, input.factoryId),
+      });
+    }),
+  // 获取工厂评价列表
+  getReviews: publicProcedure
+    .input(z.object({ factoryId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      return getFactoryReviews(input.factoryId);
+    }),
+  // 添加工厂评价
+  addReview: protectedProcedure
+    .input(z.object({
+      factoryId:          z.number().int().positive(),
+      orderId:            z.number().int().positive().optional(),
+      quality:            z.number().min(1).max(5),
+      service:            z.number().min(1).max(5),
+      delivery:           z.number().min(1).max(5),
+      communication:      z.number().min(1).max(5),
+      priceValue:         z.number().min(1).max(5),
+      comment:            z.string().max(2000).optional(),
+      isVerifiedPurchase: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const avgRating = Math.round((input.quality + input.service + input.delivery + input.communication + input.priceValue) / 5);
+      await createFactoryReview({ factoryId: input.factoryId, userId: ctx.user.id, rating: avgRating, comment: input.comment });
+      return { success: true };
+    }),
+  // 获取专家评审列表
+  getExpertReviews: publicProcedure
+    .input(z.object({ factoryId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      return getFactoryReviews(input.factoryId);
+    }),
+  // 添加专家评审
+  addExpertReview: protectedProcedure
+    .input(z.object({
+      factoryId:        z.number().int().positive(),
+      scoreInnovation:  z.number().min(1).max(10),
+      scoreManagement:  z.number().min(1).max(10),
+      scorePotential:   z.number().min(1).max(10),
+      summary:          z.string().min(20).max(5000),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const avgRating = Math.round((input.scoreInnovation + input.scoreManagement + input.scorePotential) / 3 / 2);
+      await createFactoryReview({ factoryId: input.factoryId, userId: ctx.user.id, rating: avgRating, comment: input.summary });
+      return { success: true };
+    }),
+  // ── Webinar 投票功能 ──────────────────────────────────────────────────────
+  createPoll: protectedProcedure
+    .input(z.object({
+      webinarId: z.number().int().positive(),
+      factoryId: z.number().int().positive().optional(),
+      question:  z.string().min(1).max(500),
+      options:   z.array(z.string().min(1).max(200)).min(2).max(10),
+      pollType:  z.string().max(50).optional(),
+    }))
+    .mutation(async () => {
+      // TODO: 投票表尚未创建，先返回 mock 数据保持前端可用
+      return { pollId: Date.now(), success: true };
+    }),
+  getPolls: publicProcedure
+    .input(z.object({ webinarId: z.number().int().positive() }))
+    .query(async () => [] as unknown[]),
+  submitVote: protectedProcedure
+    .input(z.object({
+      pollId:         z.number().int().positive(),
+      selectedOption: z.number().int().min(0),
+    }))
+    .mutation(async () => ({ success: true })),
+  closePoll: protectedProcedure
+    .input(z.object({ pollId: z.number().int().positive() }))
+    .mutation(async () => ({ success: true })),
+  getPollResults: publicProcedure
+    .input(z.object({ pollId: z.number().int().positive() }))
+    .query(async () => ({ options: [] as { label: string; count: number; percent: number }[] })),
+});
+
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -1258,6 +1450,62 @@ ${transcriptSample}
   }),
 
   // ── Meetings ──────────────────────────────────────────────────────────────────
+  // ── 询盘、RFQ 和会议预约的真实业务流程 ──────────────────────────────────────────
+  inquiry: router({
+    send: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        demandId: z.number(),
+        matchResultId: z.number().optional(),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { createHandshakeRequest } = await import('./_core/handshakeService');
+          const result = await createHandshakeRequest({
+            demandId: input.demandId,
+            factoryId: input.factoryId,
+            buyerId: ctx.user.id,
+            matchResultId: input.matchResultId,
+            buyerMessage: input.message,
+          });
+          return { success: result.success, handshakeId: result.handshakeId };
+        } catch (error) {
+          console.error('Failed to send inquiry:', error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '发送询盘失败' });
+        }
+      }),
+  }),
+  rfq: router({
+    send: protectedProcedure
+      .input(z.object({
+        factoryId: z.number(),
+        demandId: z.number(),
+        matchResultId: z.number(),
+        quantity: z.number().optional(),
+        destination: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { sendRFQ } = await import('./_core/rfqService');
+          const result = await sendRFQ({
+            demandId: input.demandId,
+            factoryId: input.factoryId,
+            matchResultId: input.matchResultId,
+            buyerId: ctx.user.id,
+            quantity: input.quantity,
+            destination: input.destination,
+            notes: input.notes,
+          });
+          return { success: result.success, inquiryId: result.inquiryId };
+        } catch (error) {
+          console.error('Failed to send RFQ:', error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '发送 RFQ 失败' });
+        }
+      }),
+  }),
+
   meetings: router({
     byId: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -3170,7 +3418,7 @@ Respond ONLY with valid JSON, no markdown.`;
         designFileUrls: z.array(z.string()).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { db } = await import('./_core/db');
+        const { db } = await import('./db');
         const schema = await import('../drizzle/schema');
 
         // 构建定制 RFQ 描述
@@ -4153,197 +4401,8 @@ Respond ONLY with valid JSON, no markdown.`;
           buyerNotes: input.notes,
           status: 'pending',
         });
-      }),
+       }),
   }),
-});
-
-// ─── FTGI 路由 ────────────────────────────────────────────────────────────────
-export const ftgiRouter = router({
-  // 获取工厂 FTGI 评分
-  getScore: protectedProcedure
-    .input(z.object({ factoryId: z.number().optional() }))
-    .query(async ({ input, ctx }) => {
-      const { getFtgiScore } = await import('./_core/ftgiService');
-      const factoryId = input.factoryId ?? (await (await import('./db')).getFactoryByUserId(ctx.user.id))?.id;
-      if (!factoryId) return null;
-      return getFtgiScore(factoryId);
-    }),
-  // 获取工厂上传的 FTGI 文档列表
-  getDocuments: protectedProcedure
-    .input(z.object({ factoryId: z.number().optional() }).optional())
-    .query(async ({ input, ctx }) => {
-      const { getFtgiDocuments } = await import('./_core/ftgiService');
-      const factoryId = input?.factoryId ?? (await (await import('./db')).getFactoryByUserId(ctx.user.id))?.id;
-      if (!factoryId) return [];
-      return getFtgiDocuments(factoryId);
-    }),
-  // 注册文档记录
-  registerDocument: protectedProcedure
-    .input(z.object({
-      docType:  z.enum(['image', 'certification', 'transaction', 'customs', 'other']),
-      fileName: z.string().min(1).max(500),
-      fileUrl:  z.string().url(),
-      fileMime: z.string().max(100).optional(),
-      fileSize: z.number().int().positive().optional(),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const { createFtgiDocument, parseDocumentToJson } = await import('./_core/ftgiService');
-      const factory = await getFactoryByUserId(ctx.user.id);
-      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
-      const result = await createFtgiDocument({
-        factoryId:   factory.id,
-        docType:     input.docType,
-        fileName:    input.fileName,
-        fileUrl:     input.fileUrl,
-        mimeType:    input.fileMime,
-        fileSize:    input.fileSize,
-        uploadedBy:  ctx.user.id,
-        parseStatus: 'pending',
-      });
-      const docId = (result as any).insertId as number;
-      // 异步触发 AI 解析（非阻塞）
-      setImmediate(() => parseDocumentToJson(docId, input.fileUrl, input.docType, input.fileName).catch(console.error));
-      return { docId, success: true };
-    }),
-  // 删除文档
-  deleteDocument: protectedProcedure
-    .input(z.object({ docId: z.number().int().positive() }))
-    .mutation(async ({ input, ctx }) => {
-      const { deleteFtgiDocument } = await import('./_core/ftgiService');
-      const factory = await getFactoryByUserId(ctx.user.id);
-      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
-      await deleteFtgiDocument(input.docId, factory.id);
-      return { success: true };
-    }),
-  // 触发 FTGI 评分计算
-  triggerCalculation: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      const { calculateFtgiScore } = await import('./_core/ftgiService');
-      const factory = await getFactoryByUserId(ctx.user.id);
-      if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
-      // 异步计算（非阻塞）
-      setImmediate(() => calculateFtgiScore(factory.id).catch(console.error));
-      return { success: true, message: 'FTGI 评分计算已启动，预计 30-60 秒完成' };
-    }),
-  // FTGI 排行榜
-  leaderboard: publicProcedure
-    .input(z.object({
-      limit:     z.number().min(1).max(200).default(50),
-      certLevel: z.string().optional(),
-      minScore:  z.number().optional(),
-    }))
-    .query(async ({ input }) => {
-      const { getFtgiLeaderboard } = await import('./_core/ftgiService');
-      return getFtgiLeaderboard({ limit: input.limit, certLevel: input.certLevel, minScore: input.minScore });
-    }),
-});
-
-// ─── Human Scores 路由 ─────────────────────────────────────────────────────────
-export const humanScoresRouter = router({
-  // 获取工厂综合人工评分
-  getScore: publicProcedure
-    .input(z.object({ factoryId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      const db = await (await import('./db')).dbPromise;
-      const schema = await import('../drizzle/schema');
-      const { eq } = await import('drizzle-orm');
-      const score = await db.query.factoryScores.findFirst({
-        where: eq(schema.factoryScores.factoryId, input.factoryId),
-      });
-      return score ? {
-        humanScore:         parseFloat(score.overallScore ?? '0'),
-        ftgiContribution:   parseFloat(score.qualityScore ?? '0'),
-        scoreFromReviews:   parseFloat(score.serviceScore ?? '0'),
-        scoreFromWebinars:  parseFloat(score.deliveryScore ?? '0'),
-        scoreFromExperts:   parseFloat(score.priceCompetitiveness ?? '0'),
-        reviewCount:        score.totalReviews,
-        webinarVoteCount:   0,
-        expertReviewCount:  0,
-      } : null;
-    }),
-  // 兼容别名
-  getHumanScore: publicProcedure
-    .input(z.object({ factoryId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      const db = await (await import('./db')).dbPromise;
-      const schema = await import('../drizzle/schema');
-      const { eq } = await import('drizzle-orm');
-      return db.query.factoryScores.findFirst({
-        where: eq(schema.factoryScores.factoryId, input.factoryId),
-      });
-    }),
-  // 获取工厂评价列表
-  getReviews: publicProcedure
-    .input(z.object({ factoryId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      return getFactoryReviews(input.factoryId);
-    }),
-  // 添加工厂评价
-  addReview: protectedProcedure
-    .input(z.object({
-      factoryId:          z.number().int().positive(),
-      orderId:            z.number().int().positive().optional(),
-      quality:            z.number().min(1).max(5),
-      service:            z.number().min(1).max(5),
-      delivery:           z.number().min(1).max(5),
-      communication:      z.number().min(1).max(5),
-      priceValue:         z.number().min(1).max(5),
-      comment:            z.string().max(2000).optional(),
-      isVerifiedPurchase: z.boolean().optional().default(false),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const avgRating = Math.round((input.quality + input.service + input.delivery + input.communication + input.priceValue) / 5);
-      await createFactoryReview({ factoryId: input.factoryId, userId: ctx.user.id, rating: avgRating, comment: input.comment });
-      return { success: true };
-    }),
-  // 获取专家评审列表
-  getExpertReviews: publicProcedure
-    .input(z.object({ factoryId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      return getFactoryReviews(input.factoryId);
-    }),
-  // 添加专家评审
-  addExpertReview: protectedProcedure
-    .input(z.object({
-      factoryId:        z.number().int().positive(),
-      scoreInnovation:  z.number().min(1).max(10),
-      scoreManagement:  z.number().min(1).max(10),
-      scorePotential:   z.number().min(1).max(10),
-      summary:          z.string().min(20).max(5000),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const avgRating = Math.round((input.scoreInnovation + input.scoreManagement + input.scorePotential) / 3 / 2);
-      await createFactoryReview({ factoryId: input.factoryId, userId: ctx.user.id, rating: avgRating, comment: input.summary });
-      return { success: true };
-    }),
-  // ── Webinar 投票功能 ──────────────────────────────────────────────────────
-  createPoll: protectedProcedure
-    .input(z.object({
-      webinarId: z.number().int().positive(),
-      factoryId: z.number().int().positive().optional(),
-      question:  z.string().min(1).max(500),
-      options:   z.array(z.string().min(1).max(200)).min(2).max(10),
-      pollType:  z.string().max(50).optional(),
-    }))
-    .mutation(async () => {
-      // TODO: 投票表尚未创建，先返回 mock 数据保持前端可用
-      return { pollId: Date.now(), success: true };
-    }),
-  getPolls: publicProcedure
-    .input(z.object({ webinarId: z.number().int().positive() }))
-    .query(async () => [] as unknown[]),
-  submitVote: protectedProcedure
-    .input(z.object({
-      pollId:         z.number().int().positive(),
-      selectedOption: z.number().int().min(0),
-    }))
-    .mutation(async () => ({ success: true })),
-  closePoll: protectedProcedure
-    .input(z.object({ pollId: z.number().int().positive() }))
-    .mutation(async () => ({ success: true })),
-  getPollResults: publicProcedure
-    .input(z.object({ pollId: z.number().int().positive() }))
-    .query(async () => ({ options: [] as { label: string; count: number; percent: number }[] })),
 });
 
 export type AppRouter = typeof appRouter;

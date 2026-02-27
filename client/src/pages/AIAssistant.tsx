@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyerSidebar from "@/components/BuyerSidebar";
+import QuoteCardRedesigned from "@/components/factories/QuoteCardRedesigned";
 import ReactMarkdown from "react-markdown";
 import {
   Paperclip, Image as ImageIcon, Link2, Send,
@@ -921,7 +922,7 @@ export default function AIAssistant() {
                         <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
                         为您匹配到 {msg.quotes.length} 家供应商
                       </div>
-                      {msg.quotes.map(q => <QuoteCardItem key={q.quoteId} quote={q} showFlow />)}
+                      {msg.quotes.map(q => <QuoteCardRedesigned key={q.quoteId} quote={q} />)}
 
                       {/* Next steps banner */}
                       <div style={{
