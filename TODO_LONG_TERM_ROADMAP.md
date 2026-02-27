@@ -74,15 +74,21 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
   - 按工厂、按产品品类统计
   - 显示平均生成时间、工厂确认率、买家接受率
 - [x] 后端统计 API (ops.getQuoteStats)
-- [ ] Agent 任务日志查询接口
+- [x] Agent 任务日志查询接口
+  - `ops.getJobDetail`：单个任务详细日志（入队→推送→处理→完成/失败/超时）
+  - `ops.retryJob`：手动重试失败/超时/取消的任务
+  - `ops.cancelJob`：取消排队中或处理中的任务
 
 **P2 - 数据监控与分析**
 - [x] 报价成功率统计
   - 按工厂、按产品品类、按时间段统计
-  - 显示"平均生成时间"、"工厂确认率"、"买家接受率"
-- [ ] 异常告警
-  - 工厂超时未回复 → 自动推送飞书提醒
-  - AI 生成失败 → 自动降级到人工处理
+  - 显示“平均生成时间”、“工厂确认率”、“买家接受率”
+- [x] 异常告警（`alertService.ts`）
+  - 工厂超时未回复 → 自动推送飞书提醒，自动重试（最多 3 次）
+  - AI 生成失败 → 自动降级到人工处理 + 飞书告警卡片
+  - 连续失败 ≥ 3 次 → Agent 降级告警（飞书红色卡片）
+  - WebSocket 实时推送告警到运营后台
+  - 服务启动时自动开启扫描（每 5 分钟扫描一次）
 
 ---
 
@@ -136,9 +142,10 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
   - 提取"需要特殊处理"的工艺（刺绣、烫印、丝印等）
   - 生成"定制需求说明书"（中文）
   - 生成置信度评分
-- [ ] 工艺成本计算（待实现）
-  - 基于工厂的工艺库，AI 自动计算定制成本增加
-  - 生成"基础价格 + 定制加价"的分项报价
+- [x] 工艺成本计算（`CraftCostCalculator.tsx`）
+  - 支持 15+ 工艺类型（刷印、刺绣、烫印、水洗等）
+  - 自动计算定制加价，生成分项报价明细
+  - 支持批量计算（按数量梯度降价）
 
 #### 定制报价流程
 - [x] 买家侧定制询价向导 (CustomQuoteWizard)
@@ -149,12 +156,14 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
 - [x] 后端定制 RFQ 创建 API (rfq.createCustomRfq)
   - 自动匹配工厂 (autoMatchFactoriesForCustomRfq)
   - 推送飞书通知给工厂 (sendCustomRfqToFactory)
-- [ ] 工厂侧定制报价审核（待实现）
+- [x] 工厂侧定制报价审核（`CustomRfqReviewPanel.tsx`）
   - 显示 AI 解析的设计稿和工艺要求
-  - 支持工厂拒绝（"无法做这个工艺"）或确认报价
-  - 支持工厂提出替代方案（"可以用烫印替代刺绣，成本更低"）
-- [ ] 定制报价历史（待实现）
+  - 支持工厂拒绝（“无法做这个工艺”）或确认报价
+  - 支持工厂提出替代方案（“可以用烫印替代刺绣，成本更低”）
+  - 集成 `CraftCostCalculator` 工艺成本计算
+- [x] 定制报价历史（`CustomQuoteHistory.tsx`）
   - 记录每个设计稿的报价历史
+  - 支持按状态筛选、搜索、查看设计稿预览
   - 便于买家快速复用之前的工厂和工艺方案
 
 ---
@@ -305,41 +314,45 @@ AI 模型持续学习
 
 ---
 
-## 📝 当前状态（4.4 已完成）
+## 📝 当前状态（4.1 + 4.3 + 4.4 全部完成）
 
 > 最后更新：2026-02-27
 
 ### ✅ 已完成（全部）
 
-**4.1 Phase 1-3 + 4.3 + 4.4 全部完成**
+**4.1 Phase 1-3（全部）+ 4.3（全部）+ 4.4（全部）已完成**
 
 **工厂侧**
 - [x] `QuoteSubmitForm`、`QuoteReviewPanel`（单价/交期直接输入 + 快捷按鈕）
 - [x] `NegotiationReplyPanel`（议价确认、拒绝、提出替代方案）
+- [x] `CustomRfqReviewPanel`（定制报价审核，集成工艺成本计算）
+- [x] `CraftCostCalculator`（15+ 工艺类型，分项报价明细）
 
 **买家侧**
 - [x] `MatchingQuoteDisplay`、`MyQuotes`、`RfqProgressTracker`、`QuoteComparePanel`
 - [x] `NegotiationPanel`（发起议价请求、查看 AI 反提案、接受/拒绝）
 - [x] `CustomQuoteWizard`（设计稿上传 + AI 解析 + 自动匹配工厂）
+- [x] `CustomQuoteHistory`（定制报价历史，支持筛选/搜索/设计稿预览）
 
 **后端与服务**
 - [x] `negotiationService.ts`（AI 议价核心：反提案生成、工厂评分、成交记录）
+- [x] `alertService.ts`（异常告警 + 自动降级，服务启动时自动开启）
 - [x] `rfqService.ts`：`autoSendRfq` 完整链路 + WebSocket 进度推送
 - [x] 飞书 Bitable 字段对齐（App Token: `GOKtb2LIkaBSzss4hzWcgbzpnid`， Table ID: `tblQRCtsWu4KpXLj`）
 - [x] 报价接受后自动生成采购单 + 飞书卡片
 - [x] 报价拒绝后自动推送飞书卡片给工厂
+- [x] `ops.getJobDetail` / `ops.retryJob` / `ops.cancelJob`（Agent 任务日志查询接口）
 
 **数据库**
-- [x] 新增 4 张表：`negotiation_sessions`、`negotiation_rounds`、`transaction_history`、`factory_scores`、`purchaseOrders`
+- [x] 新增 5 张表：`negotiation_sessions`、`negotiation_rounds`、`transaction_history`、`factory_scores`、`purchaseOrders`
 
 **运营后台**
 - [x] `QuoteSuccessStatsPanel`（报价成功率统计）
 - [x] `NegotiationStatsPanel`（议价成功率、AI 置信度、数据飞轮状态）
-- [x] OpsAgentMonitor 新增"议价分析" Tab
+- [x] OpsAgentMonitor 新增“议价分析” Tab
 
 ### ⏳ 待开始（5.0 阶段）
 - [ ] 4.2 阶段：跳过（暂不开发 ERP/阿里国际站集成）
-- [ ] 4.3 待完成：工厂侧定制报价审核界面、定制报价历史、工艺成本计算
 - [ ] 5.0 阶段：OpenClaw 主动推送 + Dropshipping 选品助手
 
 ---

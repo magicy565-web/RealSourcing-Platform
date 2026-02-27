@@ -198,6 +198,11 @@ async function startServer() {
   initBrowserWorker();
   // 启动 Open Claw Agent 心跳监测（每分钟检查一次）
   startHeartbeatMonitor();
+  // 4.1: 启动 Agent 异常告警扫描器（超时检测 + 自动降级）
+  import('./alertService').then(({ startAlertScanner }) => {
+    startAlertScanner();
+    console.log('[Alert] Agent alert scanner started (timeout detection + auto-degradation)');
+  }).catch(e => console.error('[Alert] Failed to start alert scanner:', e));
 
   // 初始化 BullMQ Queue Workers（工厂匹配 + Embedding 生成）
   // Redis 不可用时降级为同步模式，不影响主服务启动

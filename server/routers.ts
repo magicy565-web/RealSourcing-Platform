@@ -3737,6 +3737,103 @@ Respond ONLY with valid JSON, no markdown.`;
           conversionRate: total > 0 ? Math.round((totalPOs[0]?.count ?? 0) / total * 100) : 0,
         };
       }),
+    /** 获取单个 Agent 任务的详细日志 */
+    getJobDetail: protectedProcedure
+      .input(z.object({ jobId: z.string() }))
+      .query(async ({ input }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const [job] = await db
+          .select()
+          .from(schema.rfqClawJobs)
+          .where(eq(schema.rfqClawJobs.jobId, input.jobId))
+          .limit(1);
+        if (!job) throw new Error('Job not found');
+        // 构建日志条目（基于任务状态和时间戳推算）
+        const logs: { time: string; level: string; message: string }[] = [];
+        if (job.enqueuedAt) logs.push({ time: job.enqueuedAt.toISOString(), level: 'info', message: `任务入队 [jobId=${job.jobId}]` });
+        if (job.agentPushed) logs.push({ time: (job.startedAt ?? job.enqueuedAt).toISOString(), level: 'info', message: `已推送给 Agent [agentId=${job.agentId ?? 'unknown'}]` });
+        if (job.startedAt) logs.push({ time: job.startedAt.toISOString(), level: 'info', message: `Agent ${job.assignedAgentId ?? job.agentId ?? 'unknown'} 开始处理` });
+        if (job.status === 'completed' && job.completedAt) {
+          const durationMs = job.completedAt.getTime() - (job.startedAt?.getTime() ?? job.enqueuedAt.getTime());
+          logs.push({ time: job.completedAt.toISOString(), level: 'success', message: `任务完成，耗时 ${Math.round(durationMs / 1000)}s` });
+        } else if (job.status === 'failed') {
+          logs.push({ time: (job.completedAt ?? new Date()).toISOString(), level: 'error', message: `任务失败：${job.failureReason ?? '未知原因'}` });
+          if (job.retryCount > 0) logs.push({ time: new Date().toISOString(), level: 'warn', message: `已重试 ${job.retryCount} 次` });
+        } else if (job.status === 'timeout') {
+          logs.push({ time: new Date().toISOString(), level: 'error', message: '任务超时（超过 30 分钟）' });
+          if (job.timeoutAlertSent) logs.push({ time: new Date().toISOString(), level: 'warn', message: '超时告警已发送' });
+        } else if (job.status === 'cancelled') {
+          logs.push({ time: (job.completedAt ?? new Date()).toISOString(), level: 'warn', message: `任务已取消：${job.failureReason ?? '运营手动取消'}` });
+        }
+        return { job, logs };
+      }),
+    /** 手动重试失败的任务 */
+    retryJob: protectedProcedure
+      .input(z.object({ jobId: z.string() }))
+      .mutation(async ({ input }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const [job] = await db
+          .select()
+          .from(schema.rfqClawJobs)
+          .where(eq(schema.rfqClawJobs.jobId, input.jobId))
+          .limit(1);
+        if (!job) throw new Error('Job not found');
+        if (!['failed', 'timeout', 'cancelled'].includes(job.status)) {
+          throw new Error(`无法重试状态为 ${job.status} 的任务`);
+        }
+        // 重置任务状态并重新入队
+        await db
+          .update(schema.rfqClawJobs)
+          .set({
+            status: 'queued',
+            retryCount: job.retryCount + 1,
+            failureReason: null,
+            startedAt: null,
+            completedAt: null,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(schema.rfqClawJobs.jobId, input.jobId));
+        // 重新触发 autoSendRfq
+        setImmediate(async () => {
+          try {
+            const { autoSendRfq } = await import('./_core/rfqService');
+            await autoSendRfq({
+              demandId: job.demandId,
+              factoryId: job.factoryId,
+              matchResultId: job.matchResultId ?? 0,
+              buyerId: job.buyerId,
+            });
+          } catch (e) {
+            console.error('[retryJob] retry failed:', e);
+          }
+        });
+        return { success: true, newRetryCount: job.retryCount + 1 };
+      }),
+    /** 取消排队中或处理中的任务 */
+    cancelJob: protectedProcedure
+      .input(z.object({ jobId: z.string(), reason: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        await db
+          .update(schema.rfqClawJobs)
+          .set({
+            status: 'cancelled',
+            failureReason: input.reason ?? '运营手动取消',
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(schema.rfqClawJobs.jobId, input.jobId));
+        return { success: true };
+      }),
     /** 获取按工厂分组的报价统计 */
     getQuoteStatsByFactory: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(50).default(10) }))
