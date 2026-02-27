@@ -159,7 +159,7 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
 
 ---
 
-## 🎯 4.4 阶段：动态议价 AI + 历史成交数据学习
+## 🎯 4.4 阶段：动态议价 AI + 历史成交数据学习 (✅ 已完成)
 
 ### 核心目标
 平台开始具备"定价智能"，支持自动议价和智能降价建议。
@@ -167,27 +167,36 @@ OpenClaw 是部署在工厂侧的 **AI 超级员工**，RealSourcing 是它的 *
 ### 4.4 详细任务清单
 
 #### 动态议价
-- [ ] 买家议价请求处理
-  - 买家提出"能否降价 10%？"
-  - AI 分析工厂的历史成交价、当前产能、库存积压情况
-  - 自动生成"可以，但 MOQ 提高到 200 件"的反提案
-  - 工厂一键确认或手动调整
-- [ ] 智能降价建议
-  - 当工厂库存积压时，AI 自动推荐降价幅度
-  - 当买家的订单量达到某个阈值时，AI 自动推荐阶梯优惠
-- [ ] 谈判历史学习
-  - 记录"哪些条款被接受/拒绝"
-  - AI 学习工厂的谈判风格（是否愿意降价、是否愿意提高 MOQ 等）
+- [x] 买家议价请求处理 (`NegotiationPanel`)
+  - 买家填写议价请求、目标单价/MOQ/交期
+  - AI 分析工厂历史成交数据，生成反提案（`negotiationService.ts`）
+  - 自动生成 accept/counter/reject 三种策略和置信度评分
+  - 工厂通过 `NegotiationReplyPanel` 一键确认或提出替代方案
+- [x] 智能降价建议
+  - AI 基于历史成交价格弹性自动计算可接受降价幅度
+  - 反提案中包含"增加 MOQ 换取降价"的折中方案
+- [x] 谈判历史学习
+  - `negotiation_rounds` 表记录每轮谈判详情
+  - AI 推理依据包含工厂历史谈判风格分析
 
 #### 历史成交数据学习
-- [ ] 成交数据收集
-  - 记录"报价 vs 最终成交价"的差异
-  - 记录"承诺交期 vs 实际交期"的差异
-  - 记录"买家评价"（质量、服务、交期）
-- [ ] AI 模型持续学习
-  - 基于历史数据，AI 逐步调整报价策略
-  - 报价越来越准确，谈判建议越来越有效
-  - 工厂评分越来越真实
+- [x] 成交数据收集 (`transaction_history` 表)
+  - 记录"报价 vs 最终成交价"的差异（`priceDiscountPct`）
+  - 记录"承诺交期 vs 实际交期"的差异（`actualLeadDays`）
+  - 记录"买家评价"（质量、服务、交期三维评分）
+- [x] AI 模型持续学习
+  - 每次成交后自动更新 `factory_scores`（综合评分）
+  - 下次议价时 AI 优先参考该工厂的历史价格弹性
+  - 工厂评分越来越真实（基于实际成交数据）
+
+#### 新增组件与服务
+- [x] `negotiationService.ts` - AI 议价核心服务（反提案生成、工厂评分更新、成交记录）
+- [x] `NegotiationPanel.tsx` - 买家侧议价请求 + 反提案展示
+- [x] `NegotiationReplyPanel.tsx` - 工厂侧议价确认 + 替代方案提交
+- [x] `NegotiationStatsPanel.tsx` - 运营后台议价成功率、AI 置信度、数据飞轮状态
+- [x] 数据库新增 4 张表：`negotiation_sessions`、`negotiation_rounds`、`transaction_history`、`factory_scores`
+- [x] `negotiation` 路由（9 个 API：create、getSession、getBuyerSessions、getFactoryPendingSessions、factoryRespond、buyerRespond、submitReview、getFactoryScore、getStats）
+- [x] OpsAgentMonitor 新增"议价分析" Tab（集成 NegotiationStatsPanel）
 
 ---
 
@@ -296,36 +305,42 @@ AI 模型持续学习
 
 ---
 
-## 📝 当前状态（4.1 Phase 3）
+## 📝 当前状态（4.4 已完成）
 
 > 最后更新：2026-02-27
 
-### ✅ 已完成
+### ✅ 已完成（全部）
+
+**4.1 Phase 1-3 + 4.3 + 4.4 全部完成**
 
 **工厂侧**
-- [x] `QuoteSubmitForm` 组件（单价、MOQ、交期、阶梯报价、样品信息）
-- [x] `QuoteReviewPanel` 组件（AI 报价草稿审核、一键确认、微调单价xb15%、交期xb13天）
-- [x] `FactoryDashboard` 集成 QuoteSubmitForm
+- [x] `QuoteSubmitForm`、`QuoteReviewPanel`（单价/交期直接输入 + 快捷按鈕）
+- [x] `NegotiationReplyPanel`（议价确认、拒绝、提出替代方案）
 
 **买家侧**
-- [x] `MatchingQuoteDisplay` 组件（在工厂卡片上展示报价）
-- [x] `MyQuotes` 页面（报价管理总览、状态筛选、搜索）
-- [x] `RfqProgressTracker` 组件（实时进度追踪、预计剩余时间、超时提示）
-- [x] `QuoteComparePanel` 组件（多工厂报价对比、标注最低价/最快交期/最低 MOQ）
+- [x] `MatchingQuoteDisplay`、`MyQuotes`、`RfqProgressTracker`、`QuoteComparePanel`
+- [x] `NegotiationPanel`（发起议价请求、查看 AI 反提案、接受/拒绝）
+- [x] `CustomQuoteWizard`（设计稿上传 + AI 解析 + 自动匹配工厂）
 
-**后端与实时推送**
-- [x] `socketService.ts` 新增 RFQ 进度推送函数（`sendRfqProgressToBuyer`、`sendRfqDraftToFactory`、`sendQuoteReceivedToBuyer`）
-- [x] `rfqService.ts` 在 autoSendRfq 中插入 WebSocket 进度推送（开始/数据找到/报价生成/已发送）
-- [x] 飞书 Bitable 字段对齐确认（App Token: `GOKtb2LIkaBSzss4hzWcgbzpnid`， Table ID: `tblQRCtsWu4KpXLj`）
-- [x] `.env.example` 更新（新增 `FEISHU_BITABLE_APP_TOKEN`、`FEISHU_BITABLE_TABLE_ID`、`FEISHU_CHAT_ID`）
-- [x] OpsAgentMonitor 操作增强（重试失败任务、查看任务日志、取消排队任务）
+**后端与服务**
+- [x] `negotiationService.ts`（AI 议价核心：反提案生成、工厂评分、成交记录）
+- [x] `rfqService.ts`：`autoSendRfq` 完整链路 + WebSocket 进度推送
+- [x] 飞书 Bitable 字段对齐（App Token: `GOKtb2LIkaBSzss4hzWcgbzpnid`， Table ID: `tblQRCtsWu4KpXLj`）
+- [x] 报价接受后自动生成采购单 + 飞书卡片
+- [x] 报价拒绝后自动推送飞书卡片给工厂
 
-### ⏳ 待开始（Phase 4）
-- [ ] 报价接受后自动生成采购单
-- [ ] 报价拒绝后自动推送飞书卡片给工厂
-- [ ] 运营后台报价成功率统计
+**数据库**
+- [x] 新增 4 张表：`negotiation_sessions`、`negotiation_rounds`、`transaction_history`、`factory_scores`、`purchaseOrders`
+
+**运营后台**
+- [x] `QuoteSuccessStatsPanel`（报价成功率统计）
+- [x] `NegotiationStatsPanel`（议价成功率、AI 置信度、数据飞轮状态）
+- [x] OpsAgentMonitor 新增"议价分析" Tab
+
+### ⏳ 待开始（5.0 阶段）
 - [ ] 4.2 阶段：跳过（暂不开发 ERP/阿里国际站集成）
-- [ ] 4.3+ 阶段：定制报价、动态议价、主动推送
+- [ ] 4.3 待完成：工厂侧定制报价审核界面、定制报价历史、工艺成本计算
+- [ ] 5.0 阶段：OpenClaw 主动推送 + Dropshipping 选品助手
 
 ---
 

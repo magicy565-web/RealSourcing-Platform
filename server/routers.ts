@@ -3782,5 +3782,191 @@ Respond ONLY with valid JSON, no markdown.`;
         }));
       }),
   }),
+
+  // ─── Negotiation (4.4: 动态议价) ────────────────────────────────────────────
+  negotiation: router({
+    // 买家发起议价请求
+    create: protectedProcedure
+      .input(z.object({
+        rfqQuoteId: z.number(),
+        factoryId: z.number(),
+        demandId: z.number().optional(),
+        buyerRequest: z.string().min(1),
+        targetPrice: z.number().optional(),
+        targetMoq: z.number().optional(),
+        targetLeadTime: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createNegotiationSession } = await import("./_core/negotiationService");
+        const result = await createNegotiationSession({
+          ...input,
+          buyerId: ctx.user.id,
+        });
+        return result;
+      }),
+
+    // 获取议价会话详情（含所有轮次）
+    getSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input }) => {
+        const { negotiationSessions, negotiationRounds } = await import("../drizzle/schema");
+        const { eq, desc } = await import("drizzle-orm");
+        const { db } = await import("./_core/index");
+        const [session] = await db
+          .select()
+          .from(negotiationSessions)
+          .where(eq(negotiationSessions.id, input.sessionId))
+          .limit(1);
+        if (!session) throw new Error("Session not found");
+        const rounds = await db
+          .select()
+          .from(negotiationRounds)
+          .where(eq(negotiationRounds.sessionId, input.sessionId))
+          .orderBy(desc(negotiationRounds.roundNumber));
+        return { session, rounds };
+      }),
+
+    // 获取买家所有议价会话
+    getBuyerSessions: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { negotiationSessions } = await import("../drizzle/schema");
+        const { eq, desc } = await import("drizzle-orm");
+        const { db } = await import("./_core/index");
+        return db
+          .select()
+          .from(negotiationSessions)
+          .where(eq(negotiationSessions.buyerId, ctx.user.id))
+          .orderBy(desc(negotiationSessions.createdAt))
+          .limit(50);
+      }),
+
+    // 获取工厂所有待处理议价
+    getFactoryPendingSessions: protectedProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { negotiationSessions } = await import("../drizzle/schema");
+        const { eq, and, inArray, desc } = await import("drizzle-orm");
+        const { db } = await import("./_core/index");
+        return db
+          .select()
+          .from(negotiationSessions)
+          .where(and(
+            eq(negotiationSessions.factoryId, input.factoryId),
+            inArray(negotiationSessions.status, ["factory_reviewing", "counter_proposed"])
+          ))
+          .orderBy(desc(negotiationSessions.createdAt));
+      }),
+
+    // 工厂回应议价
+    factoryRespond: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        action: z.enum(["accepted", "rejected", "counter"]),
+        responseMessage: z.string(),
+        counterPrice: z.number().optional(),
+        counterMoq: z.number().optional(),
+        counterLeadTime: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { factoryRespondToNegotiation } = await import("./_core/negotiationService");
+        await factoryRespondToNegotiation(
+          input.sessionId,
+          input.action,
+          input.responseMessage,
+          input.counterPrice,
+          input.counterMoq,
+          input.counterLeadTime
+        );
+        return { success: true };
+      }),
+
+    // 买家回应工厂反提案
+    buyerRespond: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        action: z.enum(["accepted", "rejected"]),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { buyerRespondToCounter } = await import("./_core/negotiationService");
+        await buyerRespondToCounter(input.sessionId, input.action, input.message);
+        return { success: true };
+      }),
+
+    // 提交买家评价
+    submitReview: protectedProcedure
+      .input(z.object({
+        transactionId: z.number(),
+        qualityScore: z.number().min(1).max(5),
+        serviceScore: z.number().min(1).max(5),
+        deliveryScore: z.number().min(1).max(5),
+        review: z.string().optional(),
+        actualLeadDays: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { submitBuyerReview } = await import("./_core/negotiationService");
+        await submitBuyerReview(input);
+        return { success: true };
+      }),
+
+    // 获取工厂评分
+    getFactoryScore: publicProcedure
+      .input(z.object({ factoryId: z.number() }))
+      .query(async ({ input }) => {
+        const { factoryScores } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const { db } = await import("./_core/index");
+        const [score] = await db
+          .select()
+          .from(factoryScores)
+          .where(eq(factoryScores.factoryId, input.factoryId))
+          .limit(1);
+        return score ?? null;
+      }),
+
+    // 运营后台：议价统计
+    getStats: protectedProcedure
+      .query(async () => {
+        const { negotiationSessions, transactionHistory } = await import("../drizzle/schema");
+        const { count, avg, sql: drizzleSql } = await import("drizzle-orm");
+        const { db } = await import("./_core/index");
+        const [stats] = await db
+          .select({
+            total: count(negotiationSessions.id),
+            accepted: drizzleSql<number>`SUM(CASE WHEN ${negotiationSessions.status} = 'accepted' THEN 1 ELSE 0 END)`,
+            rejected: drizzleSql<number>`SUM(CASE WHEN ${negotiationSessions.status} = 'rejected' THEN 1 ELSE 0 END)`,
+            avgRounds: avg(negotiationSessions.roundCount),
+            avgConfidence: avg(negotiationSessions.aiConfidence),
+          })
+          .from(negotiationSessions);
+        const [txStats] = await db
+          .select({
+            totalTx: count(transactionHistory.id),
+            avgDiscount: avg(transactionHistory.priceDiscountPct),
+            negotiatedTx: drizzleSql<number>`SUM(CASE WHEN ${transactionHistory.wasNegotiated} = 1 THEN 1 ELSE 0 END)`,
+          })
+          .from(transactionHistory);
+        return {
+          sessions: {
+            total: Number(stats?.total) || 0,
+            accepted: Number(stats?.accepted) || 0,
+            rejected: Number(stats?.rejected) || 0,
+            successRate: Number(stats?.total) > 0
+              ? Math.round(Number(stats?.accepted) / Number(stats?.total) * 100)
+              : 0,
+            avgRounds: Number(stats?.avgRounds) || 0,
+            avgAiConfidence: Number(stats?.avgConfidence) || 0,
+          },
+          transactions: {
+            total: Number(txStats?.totalTx) || 0,
+            negotiated: Number(txStats?.negotiatedTx) || 0,
+            avgPriceDiscount: Number(txStats?.avgDiscount) || 0,
+            negotiationRate: Number(txStats?.totalTx) > 0
+              ? Math.round(Number(txStats?.negotiatedTx) / Number(txStats?.totalTx) * 100)
+              : 0,
+          },
+        };
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;

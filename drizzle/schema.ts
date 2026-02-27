@@ -959,3 +959,113 @@ export const purchaseOrders = mysqlTable("purchase_orders", {
 });
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
+
+// ─── Negotiation Sessions (4.4: 动态议价) ────────────────────────────────────
+// 买家发起议价请求后创建的议价会话
+// 状态: pending → ai_generating → factory_reviewing → accepted / rejected / counter_proposed → closed
+export const negotiationSessions = mysqlTable("negotiation_sessions", {
+  id:               int("id").primaryKey().autoincrement(),
+  rfqQuoteId:       int("rfqQuoteId").notNull(),
+  buyerId:          int("buyerId").notNull(),
+  factoryId:        int("factoryId").notNull(),
+  demandId:         int("demandId"),
+  inquiryId:        int("inquiryId"),
+  buyerRequest:     text("buyerRequest").notNull(),
+  targetPrice:      decimal("targetPrice", { precision: 10, scale: 2 }),
+  targetMoq:        int("targetMoq"),
+  targetLeadTime:   int("targetLeadTime"),
+  originalPrice:    decimal("originalPrice", { precision: 10, scale: 2 }),
+  originalMoq:      int("originalMoq"),
+  originalLeadTime: int("originalLeadTime"),
+  originalCurrency: varchar("originalCurrency", { length: 10 }).default("USD"),
+  aiAnalysis:       json("aiAnalysis"),
+  aiConfidence:     decimal("aiConfidence", { precision: 5, scale: 2 }),
+  status:           varchar("status", { length: 30 }).notNull().default("pending"),
+  finalPrice:       decimal("finalPrice", { precision: 10, scale: 2 }),
+  finalMoq:         int("finalMoq"),
+  finalLeadTime:    int("finalLeadTime"),
+  roundCount:       int("roundCount").notNull().default(0),
+  resolvedAt:       datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type NegotiationSession = typeof negotiationSessions.$inferSelect;
+export type InsertNegotiationSession = typeof negotiationSessions.$inferInsert;
+
+// ─── Negotiation Rounds (4.4: 议价轮次记录) ──────────────────────────────────
+export const negotiationRounds = mysqlTable("negotiation_rounds", {
+  id:               int("id").primaryKey().autoincrement(),
+  sessionId:        int("sessionId").notNull(),
+  roundNumber:      int("roundNumber").notNull().default(1),
+  initiatedBy:      varchar("initiatedBy", { length: 20 }).notNull().default("buyer"),
+  proposedPrice:    decimal("proposedPrice", { precision: 10, scale: 2 }),
+  proposedMoq:      int("proposedMoq"),
+  proposedLeadTime: int("proposedLeadTime"),
+  proposedTerms:    text("proposedTerms"),
+  isAiGenerated:    tinyint("isAiGenerated").notNull().default(0),
+  aiReasoning:      text("aiReasoning"),
+  responseBy:       varchar("responseBy", { length: 20 }),
+  responseAction:   varchar("responseAction", { length: 20 }),
+  responseMessage:  text("responseMessage"),
+  respondedAt:      datetime("respondedAt", { mode: "date", fsp: 3 }),
+  feishuMsgId:      varchar("feishuMsgId", { length: 100 }),
+  createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type NegotiationRound = typeof negotiationRounds.$inferSelect;
+export type InsertNegotiationRound = typeof negotiationRounds.$inferInsert;
+
+// ─── Transaction History (4.4: 历史成交数据) ─────────────────────────────────
+export const transactionHistory = mysqlTable("transaction_history", {
+  id:                   int("id").primaryKey().autoincrement(),
+  purchaseOrderId:      int("purchaseOrderId").notNull(),
+  buyerId:              int("buyerId").notNull(),
+  factoryId:            int("factoryId").notNull(),
+  rfqQuoteId:           int("rfqQuoteId"),
+  negotiationSessionId: int("negotiationSessionId"),
+  quotedPrice:          decimal("quotedPrice", { precision: 10, scale: 2 }),
+  finalPrice:           decimal("finalPrice", { precision: 10, scale: 2 }),
+  priceDiscountPct:     decimal("priceDiscountPct", { precision: 5, scale: 2 }),
+  quotedLeadDays:       int("quotedLeadDays"),
+  actualLeadDays:       int("actualLeadDays"),
+  leadTimeVarianceDays: int("leadTimeVarianceDays"),
+  quantity:             int("quantity"),
+  totalAmount:          decimal("totalAmount", { precision: 15, scale: 2 }),
+  currency:             varchar("currency", { length: 10 }).default("USD"),
+  productCategory:      varchar("productCategory", { length: 100 }),
+  qualityScore:         decimal("qualityScore", { precision: 3, scale: 1 }),
+  serviceScore:         decimal("serviceScore", { precision: 3, scale: 1 }),
+  deliveryScore:        decimal("deliveryScore", { precision: 3, scale: 1 }),
+  overallScore:         decimal("overallScore", { precision: 3, scale: 1 }),
+  buyerReview:          text("buyerReview"),
+  reviewedAt:           datetime("reviewedAt", { mode: "date", fsp: 3 }),
+  negotiationRounds:    int("negotiationRounds").default(0),
+  wasNegotiated:        tinyint("wasNegotiated").notNull().default(0),
+  completedAt:          datetime("completedAt", { mode: "date", fsp: 3 }),
+  createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type TransactionHistory = typeof transactionHistory.$inferSelect;
+export type InsertTransactionHistory = typeof transactionHistory.$inferInsert;
+
+// ─── Factory Scores (4.4: 工厂动态评分) ──────────────────────────────────────
+export const factoryScores = mysqlTable("factory_scores", {
+  id:                     int("id").primaryKey().autoincrement(),
+  factoryId:              int("factoryId").notNull().unique(),
+  overallScore:           decimal("overallScore", { precision: 4, scale: 2 }).default("0.00"),
+  qualityScore:           decimal("qualityScore", { precision: 4, scale: 2 }).default("0.00"),
+  serviceScore:           decimal("serviceScore", { precision: 4, scale: 2 }).default("0.00"),
+  deliveryScore:          decimal("deliveryScore", { precision: 4, scale: 2 }).default("0.00"),
+  priceCompetitiveness:   decimal("priceCompetitiveness", { precision: 5, scale: 2 }).default("0.00"),
+  avgNegotiationRounds:   decimal("avgNegotiationRounds", { precision: 4, scale: 2 }).default("0.00"),
+  avgPriceFlexibility:    decimal("avgPriceFlexibility", { precision: 5, scale: 2 }).default("0.00"),
+  negotiationSuccessRate: decimal("negotiationSuccessRate", { precision: 5, scale: 2 }).default("0.00"),
+  onTimeDeliveryRate:     decimal("onTimeDeliveryRate", { precision: 5, scale: 2 }).default("0.00"),
+  avgLeadTimeVariance:    decimal("avgLeadTimeVariance", { precision: 5, scale: 2 }).default("0.00"),
+  totalTransactions:      int("totalTransactions").notNull().default(0),
+  totalReviews:           int("totalReviews").notNull().default(0),
+  negotiationStyle:       json("negotiationStyle"),
+  lastCalculatedAt:       datetime("lastCalculatedAt", { mode: "date", fsp: 3 }),
+  createdAt:              datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:              datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type FactoryScore = typeof factoryScores.$inferSelect;
+export type InsertFactoryScore = typeof factoryScores.$inferInsert;

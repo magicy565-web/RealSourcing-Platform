@@ -22,6 +22,7 @@ import {
   Zap, Database, Mail, ChevronRight
 } from 'lucide-react';
 import QuoteSuccessStatsPanel from '@/components/ops/QuoteSuccessStatsPanel';
+import NegotiationStatsPanel from '@/components/ops/NegotiationStatsPanel';
 
 const JOB_STATUS_LABELS: Record<string, string> = {
   queued:     '排队中',
@@ -55,7 +56,7 @@ const CAPABILITY_ICONS: Record<string, React.ReactNode> = {
 };
 
 type JobStatusFilter = 'all' | 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
-type ActiveTab = 'agents' | 'quotes';
+type ActiveTab = 'agents' | 'quotes' | 'negotiation';
 
 export default function OpsAgentMonitor() {
   const [, setLocation] = useLocation();
@@ -138,7 +139,25 @@ export default function OpsAgentMonitor() {
             <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />
             报价成功率
           </button>
+          <button
+            onClick={() => setActiveTab('negotiation')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'negotiation'
+                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 inline mr-1.5" />
+            议价分析
+          </button>
         </div>
+
+        {/* Negotiation Stats Tab */}
+        {activeTab === 'negotiation' && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <NegotiationStatsPanel />
+          </div>
+        )}
 
         {/* Quote Success Stats Tab */}
         {activeTab === 'quotes' && (
