@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  Users, Video, TrendingUp, Package, Calendar, Settings,
+  Users, Video, TrendingUp, Package, Calendar, Settings, Bot,
   Plus, Edit, Trash2, CheckCircle, Clock, AlertCircle,
   Award, Globe, Phone, Mail, Building2, Star, Eye,
   BarChart3, MessageSquare, ShoppingBag, Loader2, X, Upload,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useInquiryRTM } from "@/hooks/useInquiryRTM";
 import { useSocket } from "@/hooks/useSocket";
+import { AgentConfigTab } from "@/components/factories/AgentConfigTab";
 
 // ── MeetingsTab Component ─────────────────────────────────────────────────────
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -287,7 +288,7 @@ function MeetingsTab({ meetings, availability, onNavigate, onSaveAvailability, i
 }
 // ─────────────────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "products" | "webinars" | "meetings" | "inquiries" | "certifications" | "profile" | "orders" | "handshakes";
+type Tab = "overview" | "products" | "webinars" | "meetings" | "inquiries" | "certifications" | "profile" | "orders" | "handshakes" | "agent";
 
 export default function FactoryDashboard() {
   const [, setLocation] = useLocation();
@@ -495,6 +496,7 @@ export default function FactoryDashboard() {
     { id: "handshakes", icon: <Handshake className="w-4 h-4" />, label: "握手请求", badge: (pendingHandshakes as any[]).length || undefined },
     { id: "certifications", icon: <Award className="w-4 h-4" />, label: "资质认证", badge: factoryData.certifications?.length },
     { id: "profile", icon: <Settings className="w-4 h-4" />, label: "工厂设置" },
+    { id: "agent", icon: <Bot className="w-4 h-4" />, label: "AI 助手" },
   ];
 
   return (
@@ -1575,6 +1577,11 @@ export default function FactoryDashboard() {
           </div>
         )}
 
+        {activeTab === "agent" && (
+          <div className="p-6">
+            <AgentConfigTab />
+          </div>
+        )}
         {activeTab === "profile" && (
           <div>
             <div className="flex items-center justify-between mb-6">

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useSocket } from "@/hooks/useSocket";
+import { QuoteCard } from "@/components/QuoteCard";
 
 // ── 常量 ──────────────────────────────────────────────────────────────────────
 
@@ -201,6 +202,14 @@ export default function SourcingRoom() {
     { id: handshake?.demandId ?? 0 },
     { enabled: !!handshake?.demandId }
   );
+
+  // RFQ 报价查询
+  const rfqQuery = trpc.rfq.getRFQsByDemand.useQuery(
+    { demandId: handshake?.demandId ?? 0 },
+    { enabled: !!handshake?.demandId, refetchInterval: 15000 }
+  );
+  const quotes: any[] = (rfqQuery.data as any[]) ?? [];
+  const latestQuote = quotes.find((q: any) => q.status === 'quoted') ?? quotes[0] ?? null;
 
   const sendMessageMutation = trpc.knowledge.sendSourcingRoomMessage.useMutation({
     onSuccess: () => {
@@ -530,6 +539,29 @@ export default function SourcingRoom() {
             </div>
           )}
 
+          {/* Quote Card */}
+          {latestQuote && (
+            <QuoteCard
+              quote={latestQuote}
+              factoryName={handshake?.factoryName}
+              onAccepted={() => rfqQuery.refetch()}
+              onRejected={() => rfqQuery.refetch()}
+            />
+          )}
+          {!latestQuote && handshake?.status === 'accepted' && (
+            <div className="rounded-2xl border border-purple-500/20 p-4"
+              style={{ background: "rgba(124,58,237,0.05)" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">
+                  报价处理中
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                AI 助手正在为您获取报价，通常在 5–30 分钟内完成。
+              </p>
+            </div>
+          )}
           {/* Conversation Tips */}
           <div className="rounded-2xl border border-amber-500/15 p-4"
             style={{ background: "rgba(245,158,11,0.04)" }}>

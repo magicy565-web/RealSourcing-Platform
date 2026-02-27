@@ -871,6 +871,10 @@ export const rfqClawJobs = mysqlTable("rfq_claw_jobs", {
   retryCount:       int("retryCount").notNull().default(0),
   // 是否已发送超时告警
   timeoutAlertSent: tinyint("timeoutAlertSent").notNull().default(0),
+  // 4.1 新增：标准化任务 ID 和 Agent 推送标记
+  taskId:           varchar("taskId", { length: 150 }),
+  agentPushed:      tinyint("agentPushed").notNull().default(0),
+  agentId:          varchar("agentId", { length: 100 }),
   createdAt:        datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:        datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });
@@ -895,6 +899,9 @@ export const handshakeRequests = mysqlTable("handshake_requests", {
   respondedAt:          datetime("respondedAt", { mode: "date", fsp: 3 }),
   // 接受后创建的沟通室 URL slug
   roomSlug:             varchar("roomSlug", { length: 100 }),
+  // RFQ 触发时间和模式（4.1 新增）
+  rfqTriggeredAt:       datetime("rfqTriggeredAt", { mode: "date", fsp: 3 }),
+  rfqMode:              varchar("rfqMode", { length: 30 }),
   createdAt:            datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   updatedAt:            datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
 });

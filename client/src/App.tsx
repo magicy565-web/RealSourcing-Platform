@@ -39,6 +39,7 @@ import SourcingDemandPage from "./pages/SourcingDemandPage";
 import SourcingDemandDetail from "./pages/SourcingDemandDetail";
 import MatchingDashboard from "./pages/MatchingDashboard";
 import SourcingRoom from "./pages/SourcingRoom";
+import OpsAgentMonitor from "./pages/OpsAgentMonitor";
 
 function Router() {
   return (
@@ -203,6 +204,11 @@ function Router() {
       <Route path="/sourcing-room/:slug">
         <ProtectedRoute>
           <SourcingRoom />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/agent-monitor">
+        <ProtectedRoute>
+          <OpsAgentMonitor />
         </ProtectedRoute>
       </Route>
 

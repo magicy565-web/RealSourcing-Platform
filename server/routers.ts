@@ -2107,6 +2107,63 @@ ${transcriptSample}
         upcomingMeetings: meetings.filter(m => m.status === 'scheduled').length,
       };
     }),
+    /** 获取工厂 Agent 配置（飞书 Bitable 授权、ERP Key 等） */
+    getAgentConfig: protectedProcedure
+      .query(async ({ ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) return null;
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const agent = await db.query.clawAgentStatus.findFirst({
+          where: eq(schema.clawAgentStatus.factoryId, factory.id),
+        });
+        return {
+          factoryId: factory.id,
+          agentId: agent?.agentId ?? null,
+          agentStatus: agent?.status ?? 'offline',
+          agentVersion: agent?.version ?? null,
+          deployEnv: agent?.deployEnv ?? 'aliyun_wuying',
+          capabilities: (agent?.capabilities as any[]) ?? [],
+          lastHeartbeatAt: agent?.lastHeartbeatAt ?? null,
+          activeJobs: agent?.activeJobs ?? 0,
+          totalJobsProcessed: agent?.totalJobsProcessed ?? 0,
+          totalJobsFailed: agent?.totalJobsFailed ?? 0,
+          isEnabled: agent?.isEnabled ?? 1,
+        };
+      }),
+    /** 启用/禁用工厂 Agent */
+    toggleAgent: protectedProcedure
+      .input(z.object({ isEnabled: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) throw new TRPCError({ code: 'NOT_FOUND', message: '工厂不存在' });
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        await db.update(schema.clawAgentStatus)
+          .set({ isEnabled: input.isEnabled ? 1 : 0, updatedAt: new Date() })
+          .where(eq(schema.clawAgentStatus.factoryId, factory.id));
+        return { success: true, isEnabled: input.isEnabled };
+      }),
+    /** 获取工厂 Agent 的任务历史（最近 20 条） */
+    getAgentTaskHistory: protectedProcedure
+      .query(async ({ ctx }) => {
+        const factory = await getFactoryByUserId(ctx.user.id);
+        if (!factory) return [];
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { eq, desc } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const jobs = await db.query.rfqClawJobs.findMany({
+          where: eq(schema.rfqClawJobs.factoryId, factory.id),
+          orderBy: [desc(schema.rfqClawJobs.enqueuedAt)],
+          limit: 20,
+        });
+        return jobs;
+      }),
   }),
 
   // ── Meeting Booking (买家自助预约) ─────────────────────────────────────────────
@@ -3357,6 +3414,89 @@ Return ONLY valid JSON, no explanation.`;
       .mutation(async ({ input }) => {
         const { ingestFactoryKnowledge } = await import('./_core/factoryKnowledgeIngestService');
         return ingestFactoryKnowledge(input);
+      }),
+  }),
+  /**
+   * ── Ops 运营监控 ─────────────────────────────────────────────────────────────
+   * 运营人员查看 Agent 状态、任务队列、RFQ 统计
+   */
+  ops: router({
+    /** 获取所有 Agent 状态列表 */
+    getAllAgents: protectedProcedure
+      .query(async () => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { desc } = await import('drizzle-orm');
+        const db = await dbPromise;
+        return await db.query.clawAgentStatus.findMany({
+          orderBy: [desc(schema.clawAgentStatus.lastHeartbeatAt)],
+          limit: 100,
+        });
+      }),
+    /** 获取所有 RFQ Claw 任务列表（支持状态过滤） */
+    getRfqJobs: protectedProcedure
+      .input(z.object({
+        status: z.enum(['queued', 'processing', 'completed', 'failed', 'timeout']).optional(),
+        limit: z.number().min(1).max(200).default(50),
+      }))
+      .query(async ({ input }) => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { desc, eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const where = input.status ? eq(schema.rfqClawJobs.status, input.status) : undefined;
+        return await db.query.rfqClawJobs.findMany({
+          where,
+          orderBy: [desc(schema.rfqClawJobs.enqueuedAt)],
+          limit: input.limit,
+        });
+      }),
+    /** 获取 RFQ 统计数据 */
+    getRfqStats: protectedProcedure
+      .query(async () => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { count, eq, gte, sql } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const [total, pending, completed, failed, recent] = await Promise.all([
+          db.select({ count: count() }).from(schema.rfqClawJobs),
+          db.select({ count: count() }).from(schema.rfqClawJobs).where(eq(schema.rfqClawJobs.status, 'queued')),
+          db.select({ count: count() }).from(schema.rfqClawJobs).where(eq(schema.rfqClawJobs.status, 'completed')),
+          db.select({ count: count() }).from(schema.rfqClawJobs).where(eq(schema.rfqClawJobs.status, 'failed')),
+          db.select({ count: count() }).from(schema.rfqClawJobs).where(gte(schema.rfqClawJobs.enqueuedAt, since24h)),
+        ]);
+        const onlineAgents = await db.select({ count: count() }).from(schema.clawAgentStatus)
+          .where(eq(schema.clawAgentStatus.status, 'online'));
+        return {
+          totalJobs: total[0]?.count ?? 0,
+          pendingJobs: pending[0]?.count ?? 0,
+          completedJobs: completed[0]?.count ?? 0,
+          failedJobs: failed[0]?.count ?? 0,
+          jobsLast24h: recent[0]?.count ?? 0,
+          onlineAgents: onlineAgents[0]?.count ?? 0,
+        };
+      }),
+    /** 获取握手请求统计（含 RFQ 触发模式分布） */
+    getHandshakeStats: protectedProcedure
+      .query(async () => {
+        const { dbPromise } = await import('./db');
+        const schema = await import('../drizzle/schema');
+        const { count, eq } = await import('drizzle-orm');
+        const db = await dbPromise;
+        const [total, accepted, pending, rejected] = await Promise.all([
+          db.select({ count: count() }).from(schema.handshakeRequests),
+          db.select({ count: count() }).from(schema.handshakeRequests).where(eq(schema.handshakeRequests.status, 'accepted')),
+          db.select({ count: count() }).from(schema.handshakeRequests).where(eq(schema.handshakeRequests.status, 'pending')),
+          db.select({ count: count() }).from(schema.handshakeRequests).where(eq(schema.handshakeRequests.status, 'rejected')),
+        ]);
+        return {
+          total: total[0]?.count ?? 0,
+          accepted: accepted[0]?.count ?? 0,
+          pending: pending[0]?.count ?? 0,
+          rejected: rejected[0]?.count ?? 0,
+          acceptRate: total[0]?.count ? Math.round((accepted[0]?.count ?? 0) / total[0].count * 100) : 0,
+        };
       }),
   }),
 });
