@@ -3,7 +3,7 @@
  *
  * 功能：
  * 1. 展示 AI 从飞书/ERP 自动生成的报价草稿
- * 2. 工厂可一键确认或快速微调（单价 ±5%、交期 ±3 天）
+ * 2. 工厂可一键确认或微调（单价支持直接输入/±5%快捷按鈕，交期支持直接输入/±3天快捷按鈕）
  * 3. 显示数据来源（飞书/AI生成/手动）和置信度
  * 4. 确认后自动推送给买家
  */
@@ -210,23 +210,50 @@ export function QuoteReviewPanel({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => adjustPrice(-0.05)}
-                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
                   title="-5%"
                 >
-                  <ChevronDown className="w-3 h-3" />
+                  -5%
                 </button>
                 <button
                   onClick={() => adjustPrice(0.05)}
-                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
                   title="+5%"
                 >
-                  <ChevronUp className="w-3 h-3" />
+                  +5%
                 </button>
               </div>
             )}
-            <span className="text-lg font-bold text-white">
-              {editedQuote.currency} {editedQuote.unitPrice.toFixed(2)}
-            </span>
+            {isEditing ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-gray-400">{editedQuote.currency}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editedQuote.unitPrice}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val > 0) {
+                      const ratio = val / editedQuote.unitPrice;
+                      setEditedQuote((prev) => ({
+                        ...prev,
+                        unitPrice: Math.round(val * 100) / 100,
+                        tierPricing: prev.tierPricing?.map((t) => ({
+                          ...t,
+                          price: Math.round(t.price * ratio * 100) / 100,
+                        })),
+                      }));
+                    }
+                  }}
+                  className="w-24 bg-white/5 border border-white/10 rounded px-2 py-1 text-base font-bold text-white text-right focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+            ) : (
+              <span className="text-lg font-bold text-white">
+                {editedQuote.currency} {editedQuote.unitPrice.toFixed(2)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -259,21 +286,53 @@ export function QuoteReviewPanel({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => adjustLeadTime(-3)}
-                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
                   title="-3天"
                 >
-                  <ChevronDown className="w-3 h-3" />
+                  -3
+                </button>
+                <button
+                  onClick={() => adjustLeadTime(-1)}
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
+                  title="-1天"
+                >
+                  -1
+                </button>
+                <button
+                  onClick={() => adjustLeadTime(1)}
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
+                  title="+1天"
+                >
+                  +1
                 </button>
                 <button
                   onClick={() => adjustLeadTime(3)}
-                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors text-xs font-medium"
                   title="+3天"
                 >
-                  <ChevronUp className="w-3 h-3" />
+                  +3
                 </button>
               </div>
             )}
-            <span className="text-sm font-medium text-white">{editedQuote.leadTimeDays} 天</span>
+            {isEditing ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min="1"
+                  value={editedQuote.leadTimeDays}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val) && val >= 1) {
+                      setEditedQuote((prev) => ({ ...prev, leadTimeDays: val }));
+                    }
+                  }}
+                  className="w-16 bg-white/5 border border-white/10 rounded px-2 py-1 text-sm font-medium text-white text-right focus:outline-none focus:border-blue-500/50"
+                />
+                <span className="text-sm text-gray-400">天</span>
+              </div>
+            ) : (
+              <span className="text-sm font-medium text-white">{editedQuote.leadTimeDays} 天</span>
+            )}
           </div>
         </div>
 
