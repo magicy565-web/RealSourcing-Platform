@@ -408,7 +408,7 @@ export const appRouter = router({
         message: z.string().min(1).max(2000),
         sessionState: z.object({
           currentPhase: z.enum(["welcome", "price", "leadtime", "customization", "quantity", "qualification", "summary", "quotes", "followup"]),
-          preferences: z.record(z.unknown()),
+          preferences: z.record(z.string(), z.any()),
           conversationHistory: z.array(z.object({
             role: z.enum(["user", "assistant"]),
             content: z.string(),
@@ -575,7 +575,7 @@ JSON 格式示例：
     // P2.3: Agent 直接检索报价
     agentQuotes: protectedProcedure
       .input(z.object({
-        preferences: z.record(z.unknown()),
+        preferences: z.record(z.string(), z.any()),
         limit: z.number().min(1).max(10).default(5),
       }))
       .mutation(async ({ input }) => {
@@ -3252,7 +3252,7 @@ Respond ONLY with valid JSON, no markdown.`;
         knowledgeType: z.enum(['certification','material','process','pricing','moq','lead_time','packaging','quality_standard','market_trend','sourcing_tip']),
         title: z.string().min(2).max(200),
         content: z.string().min(10).max(5000),
-        structuredData: z.record(z.unknown()).optional(),
+        structuredData: z.record(z.string(), z.any()).optional(),
         targetMarkets: z.array(z.string()).optional(),
         confidence: z.number().min(0).max(100).optional().default(80),
         source: z.string().optional(),
