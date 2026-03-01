@@ -839,6 +839,19 @@ export default function AIAssistant() {
                       </motion.div>
                     )}
 
+                    {/* 智能检测报价关键词，触发卡片和悬浮球显示 */}
+                    {(() => {
+                      const hasQuoteKeywords = msg.content.includes('报价') || msg.content.includes('工厂') || msg.content.includes('供应商') || msg.content.includes('对比');
+                      const shouldShowCards = (msg.quotes && msg.quotes.length > 0) || (hasQuoteKeywords && msg.role === 'assistant');
+                      
+                      if (shouldShowCards && hasQuoteKeywords && (!msg.quotes || msg.quotes.length === 0)) {
+                        // 纯文本报价，强制显示悬浮球提示
+                        setShowFloatingButton(true);
+                      }
+                      
+                      return null;
+                    })()}
+
                     {/* Quote cards */}
                     {msg.quotes && msg.quotes.length > 0 && (
                       <motion.div
@@ -846,6 +859,13 @@ export default function AIAssistant() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
                         style={{ marginTop: 12 }}
+                        onAnimationComplete={() => {
+                          // 动画完成后强制显示悬浮球
+                          if (msg.quotes && msg.quotes.length >= 2) {
+                            setLatestQuotes(msg.quotes as SupplierForCompare[]);
+                            setShowFloatingButton(true);
+                          }
+                        }}
                       >
                         <div style={{
                           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -890,6 +910,26 @@ export default function AIAssistant() {
                           }
                           return null;
                         })()}
+
+                        {/* 纯文本报价兜底提示 */}
+                        {msg.quotes.length === 0 && (msg.content.includes('报价') || msg.content.includes('工厂')) && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            style={{
+                              marginTop: 12,
+                              background: "rgba(124,58,237,0.08)",
+                              border: "1px solid rgba(124,58,237,0.3)",
+                              borderRadius: 8, padding: "10px 12px",
+                              fontSize: 12, color: "#a78bfa",
+                              display: "flex", alignItems: "center", gap: 8,
+                            }}
+                          >
+                            <BarChart3 size={14} />
+                            <span>💡 点击右下角的「AI 对比矩阵」悬浮球可查看结构化对比</span>
+                          </motion.div>
+                        )}
 
                         {/* Next steps banner */}
                         <motion.div
