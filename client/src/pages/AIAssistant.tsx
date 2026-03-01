@@ -275,6 +275,7 @@ function QuoteCardsRenderer({
       </motion.div>
     </motion.div>
   );
+}
 
 // ─── PostQuoteFlow ─────────────────────────────────────────────────────────────
 // 报价后的后续流程可视化：握手 → 发送 RFQ → 预约会议
