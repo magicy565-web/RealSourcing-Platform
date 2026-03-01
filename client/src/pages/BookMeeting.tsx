@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import TimezoneSync from "@/components/meeting/TimezoneSync";
+import AIAgendaSuggestion, { type AgendaItem } from "@/components/meeting/AIAgendaSuggestion";
 import {
   Calendar, Clock, CheckCircle, ChevronLeft, ChevronRight,
-  Building2, Star, Globe, Award, Package, Loader2, Video
+  Building2, Star, Globe, Award, Package, Loader2, Video,
+  Sparkles, FileText,
 } from "lucide-react";
 
 const TIME_SLOTS = [
@@ -38,6 +41,8 @@ export default function BookMeeting() {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [step, setStep] = useState<"select" | "confirm" | "success">("select");
+  const [userTimezone, setUserTimezone] = useState<string | undefined>(undefined);
+  const [selectedAgenda, setSelectedAgenda] = useState<AgendaItem[]>([]);
 
   // ── tRPC Queries ──────────────────────────────────────────────────────────────
   const { data: factory, isLoading } = trpc.factories.byId.useQuery(
@@ -52,7 +57,7 @@ export default function BookMeeting() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
         <div className="text-center">
           <p className="text-white text-xl mb-4">请先登录后再预约会议</p>
           <Button onClick={() => setLocation("/login")} className="bg-purple-600 hover:bg-purple-700">前往登录</Button>
@@ -63,7 +68,7 @@ export default function BookMeeting() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
@@ -71,7 +76,7 @@ export default function BookMeeting() {
 
   if (!factory) {
     return (
-      <div className="min-h-screen bg-[#0F0F23] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
         <div className="text-center">
           <p className="text-white text-xl mb-4">工厂不存在</p>
           <Button onClick={() => setLocation("/factories")} variant="outline" className="border-white/20 text-gray-400">返回工厂列表</Button>
@@ -109,21 +114,43 @@ export default function BookMeeting() {
   const handleConfirm = () => {
     if (!selectedDate || !selectedTime || !title) return;
     const scheduledAt = `${selectedDate}T${selectedTime}:00`;
-    createMeeting.mutate({ title, factoryId, scheduledAt });
+    // 将议题附加到备注中
+    const agendaText = selectedAgenda.length > 0
+      ? `\n\n【会议议题】\n${selectedAgenda.map((a, i) => `${i + 1}. ${a.text}`).join("\n")}`
+      : "";
+    // notes 字段暂存于 title 扩展（后续版本将扩展 schema 支持 notes 字段）
+    const fullTitle = notes || agendaText
+      ? `${title}${notes ? ` | 备注: ${notes}` : ""}${agendaText}`
+      : title;
+    createMeeting.mutate({ title: fullTitle, factoryId, scheduledAt });
   };
 
   if (step === "success") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E] flex items-center justify-center" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
         <div className="text-center max-w-md">
           <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-green-400" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-3">预约成功！</h2>
-          <p className="text-gray-400 mb-2">您已成功预约与 <span className="text-purple-400 font-medium">{factory.name}</span> 的 1:1 选品会</p>
-          <p className="text-gray-500 text-sm mb-8">
-            {formatSelectedDate()} {selectedTime}
+          <p className="text-gray-400 mb-2">
+            您已成功预约与 <span className="text-purple-400 font-medium">{factory.name}</span> 的 1:1 选品会
           </p>
+          <p className="text-gray-500 text-sm mb-8">
+            {formatSelectedDate()} {selectedTime} (北京时间)
+          </p>
+
+          {/* AI 会前简报预告 */}
+          <div className="p-4 rounded-xl mb-4 text-left" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)" }}>
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span className="text-white text-sm font-medium">AI 会前简报已生成</span>
+            </div>
+            <p className="text-gray-400 text-xs">
+              包含工厂背景、AI 推荐理由、您的定制需求摘要和 {selectedAgenda.length} 条建议提问清单，已发送至您的邮箱。
+            </p>
+          </div>
+
           <div className="p-4 rounded-xl bg-white/5 border border-white/10 mb-8 text-left">
             <div className="flex items-center gap-3 mb-2">
               <Video className="w-4 h-4 text-purple-400" />
@@ -145,7 +172,7 @@ export default function BookMeeting() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F0F23] via-[#1A1A2E] to-[#16213E]" style={{background:"linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)"}}>
+    <div className="min-h-screen" style={{ background: "linear-gradient(160deg,#050310 0%,#080820 50%,#050310 100%)" }}>
       {/* 顶部导航 */}
       <div className="border-b border-white/10 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center gap-4">
@@ -155,6 +182,13 @@ export default function BookMeeting() {
           </button>
           <div className="h-4 w-px bg-white/20" />
           <h1 className="text-white font-semibold">预约 1:1 选品会</h1>
+          {/* v4.5 标识 */}
+          <span style={{
+            background: "rgba(124,58,237,0.15)",
+            border: "1px solid rgba(124,58,237,0.35)",
+            borderRadius: 6, padding: "2px 8px",
+            color: "#a78bfa", fontSize: 10, fontWeight: 700,
+          }}>v4.5 · 智能时区 + AI 议题</span>
         </div>
       </div>
 
@@ -231,6 +265,8 @@ export default function BookMeeting() {
                   <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">•</span>工厂实时展示产品</li>
                   <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">•</span>AI 自动生成会议摘要</li>
                   <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">•</span>会后可直接发起询价</li>
+                  <li className="flex items-start gap-2"><span className="text-green-400 mt-0.5">✦</span>智能时区自动同步（v4.5 新功能）</li>
+                  <li className="flex items-start gap-2"><span className="text-green-400 mt-0.5">✦</span>AI 议题建议（v4.5 新功能）</li>
                 </ul>
               </div>
             </div>
@@ -297,9 +333,9 @@ export default function BookMeeting() {
                   <div className="p-6 rounded-xl bg-white/5 border border-white/10 mb-6">
                     <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-purple-400" />
-                      {formatSelectedDate()} — 选择时间
+                      {formatSelectedDate()} — 选择时间（北京时间）
                     </h3>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-5 gap-2 mb-4">
                       {TIME_SLOTS.map(slot => (
                         <button
                           key={slot}
@@ -316,7 +352,14 @@ export default function BookMeeting() {
                         </button>
                       ))}
                     </div>
-                    <p className="text-gray-500 text-xs mt-3">时间为北京时间 (UTC+8)，工厂将在24小时内确认</p>
+
+                    {/* ✦ 智能时区同步（v4.5 新功能）*/}
+                    <TimezoneSync
+                      selectedTime={selectedTime}
+                      selectedDate={selectedDate}
+                      userTimezone={userTimezone}
+                      onTimezoneChange={setUserTimezone}
+                    />
                   </div>
                 )}
 
@@ -340,36 +383,57 @@ export default function BookMeeting() {
                   <h2 className="text-xl font-bold text-white">确认预约信息</h2>
                 </div>
 
-                {/* 已选时间摘要 */}
-                <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 mb-6 flex items-center gap-4">
-                  <Calendar className="w-8 h-8 text-purple-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-white font-medium">{formatSelectedDate()}</p>
-                    <p className="text-purple-300 text-sm">{selectedTime} (北京时间) · 约 60 分钟</p>
+                {/* 已选时间摘要（含时区对照）*/}
+                <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 mb-4">
+                  <div className="flex items-center gap-4 mb-3">
+                    <Calendar className="w-8 h-8 text-purple-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-white font-medium">{formatSelectedDate()}</p>
+                      <p className="text-purple-300 text-sm">{selectedTime} (北京时间) · 约 60 分钟</p>
+                    </div>
                   </div>
+                  {/* 紧凑时区对照 */}
+                  <TimezoneSync
+                    selectedTime={selectedTime}
+                    selectedDate={selectedDate}
+                    userTimezone={userTimezone}
+                    compact
+                  />
+                </div>
+
+                {/* ✦ AI 议题建议（v4.5 新功能）*/}
+                <div className="mb-4">
+                  <AIAgendaSuggestion
+                    factoryName={factory.name}
+                    productCategory={factory.category || undefined}
+                    onAgendaChange={setSelectedAgenda}
+                  />
                 </div>
 
                 {/* 会议信息填写 */}
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10 mb-6">
-                  <h3 className="text-white font-semibold mb-4">会议信息</h3>
+                  <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-purple-400" />
+                    会议信息
+                  </h3>
                   <div className="space-y-4">
                     <div>
                       <label className="text-gray-400 text-sm mb-1.5 block">会议主题 *</label>
                       <Input
                         value={title}
                         onChange={e => setTitle(e.target.value)}
-                        placeholder="e.g. 蓝牙耳机新品选品会议"
+                        placeholder={`e.g. 与 ${factory.name} 的 ${factory.category || "产品"} 选品会议`}
                         className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
                       />
                     </div>
                     <div>
-                      <label className="text-gray-400 text-sm mb-1.5 block">备注（可选）</label>
+                      <label className="text-gray-400 text-sm mb-1.5 block">补充备注（可选）</label>
                       <Textarea
                         value={notes}
                         onChange={e => setNotes(e.target.value)}
-                        placeholder="告诉工厂您感兴趣的产品类别、预算范围、采购需求等..."
+                        placeholder="其他需要告知工厂的信息，如预算范围、特殊定制要求等..."
                         className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
-                        rows={4}
+                        rows={3}
                       />
                     </div>
                   </div>
@@ -383,6 +447,7 @@ export default function BookMeeting() {
                     <li>• 确认后您将收到视频会议链接</li>
                     <li>• 如需取消，请提前24小时通知</li>
                     <li>• 会议全程将由 AI 自动生成摘要和跟进建议</li>
+                    <li className="text-purple-400">✦ AI 会前简报将在会议前24小时发送至您的邮箱</li>
                   </ul>
                 </div>
 
@@ -394,7 +459,10 @@ export default function BookMeeting() {
                   {createMeeting.isPending ? (
                     <><Loader2 className="w-4 h-4 animate-spin mr-2" />提交中...</>
                   ) : (
-                    "确认预约"
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      确认预约 · 含 {selectedAgenda.length} 条 AI 议题
+                    </>
                   )}
                 </Button>
               </div>

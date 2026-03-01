@@ -3,12 +3,13 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import QuoteCardRedesigned from "@/components/factories/QuoteCardRedesigned";
+import SupplierCompareMatrix, { type SupplierForCompare } from "@/components/factories/SupplierCompareMatrix";
 import ReactMarkdown from "react-markdown";
 import {
   Paperclip, Image as ImageIcon, Link2, Send,
   Building2, ScanSearch, Video, ShieldCheck, Star, MapPin,
   Clock, Package, CheckCircle2, Sparkles, MessageSquare, Zap, TrendingUp,
-  ArrowRight, FileText, Handshake, ChevronRight,
+  ArrowRight, FileText, Handshake, ChevronRight, BarChart3,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -454,6 +455,8 @@ export default function AIAssistant() {
     conversationHistory: [],
   });
   const [progressPercent, setProgressPercent] = useState(0);
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [compareQuotes, setCompareQuotes] = useState<SupplierForCompare[]>([]);
   const [hasStarted, setHasStarted] = useState(false);
 
   const agentWelcomeMutation = trpc.ai.agentWelcome.useMutation();
@@ -916,11 +919,37 @@ export default function AIAssistant() {
                   {msg.quotes && msg.quotes.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{
-                        color: "#475569", fontSize: 11, fontWeight: 700,
-                        letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        marginBottom: 10,
                       }}>
-                        <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
-                        为您匹配到 {msg.quotes.length} 家供应商
+                        <div style={{
+                          color: "#475569", fontSize: 11, fontWeight: 700,
+                          letterSpacing: "0.1em", textTransform: "uppercase",
+                        }}>
+                          <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
+                          为您匹配到 {msg.quotes.length} 家供应商
+                        </div>
+                        {msg.quotes.length >= 2 && (
+                          <button
+                            onClick={() => {
+                              setCompareQuotes(msg.quotes as SupplierForCompare[]);
+                              setCompareModalOpen(true);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 6,
+                              background: "rgba(124,58,237,0.15)",
+                              border: "1px solid rgba(124,58,237,0.4)",
+                              borderRadius: 8, padding: "5px 12px",
+                              color: "#a78bfa", fontSize: 11, fontWeight: 700,
+                              cursor: "pointer", transition: "all 0.2s",
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.25)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.15)"; }}
+                          >
+                            <BarChart3 size={12} />
+                            AI 对比矩阵
+                          </button>
+                        )}
                       </div>
                       {msg.quotes.map(q => <QuoteCardRedesigned key={q.quoteId} quote={q} />)}
 
@@ -938,7 +967,7 @@ export default function AIAssistant() {
                             匹配完成！下一步
                           </div>
                           <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
-                            点击「握手 · 开始合作」发送询盘 → 工厂 24h 内回复 → 预约视频会议确认细节
+                            点击「握手 · 开始合作」发送询盘，或点击「AI 对比矩阵」深度对比供应商
                           </div>
                         </div>
                       </div>
@@ -977,6 +1006,17 @@ export default function AIAssistant() {
       fontFamily: "Inter, system-ui, sans-serif",
       overflow: "hidden",
     }}>
+      {/* AI 供应商对比矩阵弹窗 */}
+      {compareModalOpen && compareQuotes.length >= 2 && (
+        <SupplierCompareMatrix
+          suppliers={compareQuotes}
+          onClose={() => setCompareModalOpen(false)}
+          onSelectSupplier={(supplier) => {
+            setCompareModalOpen(false);
+            handleSend(`我选择 ${supplier.factoryName}，请帮我发送询盘`);
+          }}
+        />
+      )}
       <BuyerSidebar userRole={user?.role || "buyer"} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
