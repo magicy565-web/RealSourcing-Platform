@@ -178,6 +178,104 @@ function StreamingText({ content, onComplete }: { content: string; onComplete?: 
   );
 }
 
+// ─── QuoteCardsRenderer：隔离的报价卡片渲染器（仅在流式打字完成后触发） ────────
+function QuoteCardsRenderer({ 
+  message, 
+  onQuotesDetected 
+}: { 
+  message: Message; 
+  onQuotesDetected: (quotes: SupplierForCompare[]) => void;
+}) {
+  const [shouldRender, setShouldRender] = useState(false);
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // 只有当消息不再流式输出时，才进行报价解析和卡片渲染
+    if (!message.isStreaming && !shouldRender) {
+      renderTimeoutRef.current = setTimeout(() => {
+        setShouldRender(true);
+        // 如果消息中已有报价数据，立即同步
+        if (message.quotes && message.quotes.length > 0) {
+          onQuotesDetected(message.quotes as SupplierForCompare[]);
+        }
+      }, 100); // 延迟100ms确保DOM稳定
+    }
+    return () => {
+      if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+    };
+  }, [message.isStreaming, shouldRender, message.quotes, onQuotesDetected]);
+
+  if (!shouldRender || !message.quotes || message.quotes.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      style={{ marginTop: 12 }}
+    >
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 10,
+      }}>
+        <div style={{
+          color: "#475569", fontSize: 11, fontWeight: 700,
+          letterSpacing: "0.1em", textTransform: "uppercase",
+        }}>
+          <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
+          为您匹配到 {message.quotes.length} 家供应商
+        </div>
+        {message.quotes.length >= 2 && (
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => {
+              // 此处由父组件处理
+            }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "rgba(124,58,237,0.15)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              borderRadius: 8, padding: "5px 12px",
+              color: "#a78bfa", fontSize: 11, fontWeight: 700,
+              cursor: "pointer", transition: "all 0.2s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.25)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.15)"; }}
+          >
+            <BarChart3 size={12} />
+            AI 对比矩阵
+          </motion.button>
+        )}
+      </div>
+      {message.quotes.map(q => <QuoteCardRedesigned key={q.quoteId || q.id} quote={q} />)}
+      
+      {/* 下一步提示 */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        style={{
+          marginTop: 14,
+          background: "rgba(16,185,129,0.06)",
+          border: "1px solid rgba(16,185,129,0.2)",
+          borderRadius: 12, padding: "12px 16px",
+          display: "flex", alignItems: "center", gap: 10,
+        }}
+      >
+        <CheckCircle2 size={16} color="#34d399" />
+        <div>
+          <div style={{ color: "#34d399", fontSize: 12, fontWeight: 700 }}>
+            匹配完成！下一步
+          </div>
+          <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
+            点击「握手 · 开始合作」发送询盘，或点击「AI 对比矩阵」深度对比供应商
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+
 // ─── PostQuoteFlow ─────────────────────────────────────────────────────────────
 // 报价后的后续流程可视化：握手 → 发送 RFQ → 预约会议
 function PostQuoteFlow({ quote, onAction }: {
@@ -466,7 +564,7 @@ export default function AIAssistant() {
     return quotes;
   };
 
-  // 内部发送逻辑（可传入 text 直接发送，不依赖 inputValue）
+  // ─── 内部发送逻辑 ──────────────────────────────────────────────────────────────
   const handleSendDirect = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
     setInputValue("");
@@ -924,123 +1022,16 @@ export default function AIAssistant() {
                       </motion.div>
                     )}
 
-                    {/* 智能检测报价关键词，触发卡片和悬浮球显示 */}
-                    {(() => {
-                      const hasQuoteKeywords = msg.content.includes('报价') || msg.content.includes('工厂') || msg.content.includes('供应商') || msg.content.includes('对比');
-                      const shouldShowCards = (msg.quotes && msg.quotes.length > 0) || (hasQuoteKeywords && msg.role === 'assistant');
-                      
-                      if (shouldShowCards && hasQuoteKeywords && (!msg.quotes || msg.quotes.length === 0)) {
-                        // 纯文本报价，强制显示悬浮球提示
-                        setShowFloatingButton(true);
-                      }
-                      
-                      return null;
-                    })()}
-
-                    {/* Quote cards */}
-                    {msg.quotes && msg.quotes.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        style={{ marginTop: 12 }}
-                        onAnimationComplete={() => {
-                          // 动画完成后强制显示悬浮球
-                          if (msg.quotes && msg.quotes.length >= 2) {
-                            setLatestQuotes(msg.quotes as SupplierForCompare[]);
-                            setShowFloatingButton(true);
-                          }
-                        }}
-                      >
-                        <div style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          marginBottom: 10,
-                        }}>
-                          <div style={{
-                            color: "#475569", fontSize: 11, fontWeight: 700,
-                            letterSpacing: "0.1em", textTransform: "uppercase",
-                          }}>
-                            <Sparkles size={10} style={{ display: "inline", marginRight: 4 }} />
-                            为您匹配到 {msg.quotes.length} 家供应商
-                          </div>
-                          {msg.quotes.length >= 2 && (
-                            <motion.button
-                              whileHover={{ scale: 1.04 }}
-                              whileTap={{ scale: 0.96 }}
-                              onClick={() => {
-                                setCompareQuotes(msg.quotes as SupplierForCompare[]);
-                                setCompareModalOpen(true);
-                              }}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 6,
-                                background: "rgba(124,58,237,0.15)",
-                                border: "1px solid rgba(124,58,237,0.4)",
-                                borderRadius: 8, padding: "5px 12px",
-                                color: "#a78bfa", fontSize: 11, fontWeight: 700,
-                                cursor: "pointer", transition: "all 0.2s",
-                              }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.25)"; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.15)"; }}
-                            >
-                              <BarChart3 size={12} />
-                              AI 对比矩阵
-                            </motion.button>
-                          )}
-                        </div>
-                        {msg.quotes.map(q => <QuoteCardRedesigned key={q.quoteId} quote={q} />)}
-                        {(() => {
-                          if (msg.quotes.length >= 2) {
-                            setLatestQuotes(msg.quotes as SupplierForCompare[]);
-                            setShowFloatingButton(true);
-                          }
-                          return null;
-                        })()}
-
-                        {/* 纯文本报价兜底提示 */}
-                        {msg.quotes.length === 0 && (msg.content.includes('报价') || msg.content.includes('工厂')) && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            style={{
-                              marginTop: 12,
-                              background: "rgba(124,58,237,0.08)",
-                              border: "1px solid rgba(124,58,237,0.3)",
-                              borderRadius: 8, padding: "10px 12px",
-                              fontSize: 12, color: "#a78bfa",
-                              display: "flex", alignItems: "center", gap: 8,
-                            }}
-                          >
-                            <BarChart3 size={14} />
-                            <span>💡 点击右下角的「AI 对比矩阵」悬浮球可查看结构化对比</span>
-                          </motion.div>
-                        )}
-
-                        {/* Next steps banner */}
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: 0.5 }}
-                          style={{
-                            marginTop: 14,
-                            background: "rgba(16,185,129,0.06)",
-                            border: "1px solid rgba(16,185,129,0.2)",
-                            borderRadius: 12, padding: "12px 16px",
-                            display: "flex", alignItems: "center", gap: 10,
-                          }}
-                        >
-                          <CheckCircle2 size={16} color="#34d399" />
-                          <div>
-                            <div style={{ color: "#34d399", fontSize: 12, fontWeight: 700 }}>
-                              匹配完成！下一步
-                            </div>
-                            <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
-                              点击「握手 · 开始合作」发送询盘，或点击「AI 对比矩阵」深度对比供应商
-                            </div>
-                          </div>
-                        </motion.div>
-                      </motion.div>
-                    )}
+                    {/* 隔离的报价卡片渲染器（仅在流式打字完成后触发） */}
+                    <QuoteCardsRenderer
+                      message={msg}
+                      onQuotesDetected={(quotes) => {
+                        if (quotes.length >= 2) {
+                          setLatestQuotes(quotes);
+                          setShowFloatingButton(true);
+                        }
+                      }}
+                    />
 
                     <div style={{
                       color: "#1e293b", fontSize: 10, marginTop: 4,
