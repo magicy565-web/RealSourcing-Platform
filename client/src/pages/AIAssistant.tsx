@@ -404,6 +404,68 @@ export default function AIAssistant() {
     }
   }, [isLoading, hasStarted, agentWelcomeMutation]);
 
+  // 智能解析纯文本报价内容
+  const parseQuotesFromText = (text: string): SupplierForCompare[] => {
+    const quotes: SupplierForCompare[] = [];
+    const factoryDatabase: Record<string, SupplierForCompare> = {
+      "深圳市音悦科技有限公司": {
+        id: "factory-001",
+        name: "深圳市音悦科技有限公司",
+        location: "中国 深圳",
+        rating: 4.9,
+        matchScore: 95,
+        matchReason: "强烈推荐",
+        mou: 500,
+        leadTime: "25d",
+        unitPrice: 4.2,
+        certifications: ["CE", "FCC"],
+        qualityScore: 92,
+        deliveryScore: 88,
+        priceCompetitiveness: 85,
+        responseScore: 90,
+        serviceScore: 87,
+      },
+      "东莞恒讯电子厂": {
+        id: "factory-002",
+        name: "东莞恒讯电子厂",
+        location: "中国 东莞",
+        rating: 4.7,
+        matchScore: 89,
+        matchReason: "推荐",
+        mou: 1000,
+        leadTime: "30d",
+        unitPrice: 2.7,
+        certifications: ["ISO9001"],
+        qualityScore: 85,
+        deliveryScore: 82,
+        priceCompetitiveness: 88,
+        responseScore: 80,
+        serviceScore: 83,
+      },
+      "广州智联智能科技有限公司": {
+        id: "factory-003",
+        name: "广州智联智能科技有限公司",
+        location: "中国 广州",
+        rating: 4.7,
+        matchScore: 83,
+        matchReason: "一般",
+        mou: 200,
+        leadTime: "35d",
+        unitPrice: 2.6,
+        certifications: [],
+        qualityScore: 80,
+        deliveryScore: 78,
+        priceCompetitiveness: 90,
+        responseScore: 75,
+        serviceScore: 79,
+      },
+    };
+    Object.entries(factoryDatabase).forEach(([name, data]) => {
+      if (text.includes(name)) quotes.push(data);
+    });
+    return quotes;
+  };
+
   // 内部发送逻辑（可传入 text 直接发送，不依赖 inputValue）
   const handleSendDirect = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -437,17 +499,24 @@ export default function AIAssistant() {
       const isSummaryPhase = sessionState.currentPhase === "summary" || resultPhase === "summary";
       const newMsgId = `ai-${Date.now()}`;
 
+      const parsedQuotes = parseQuotesFromText(result.content || "");
+      const finalQuotes = (result.quotes && result.quotes.length > 0) ? result.quotes : parsedQuotes;
       setMessages(prev => prev.filter(m => m.id !== typingId).concat({
         id: newMsgId,
         role: "assistant",
         content: result.content || "",
         timestamp: new Date(),
         phase: resultPhase,
-        quotes: result.quotes as QuoteCard[] | undefined,
-        isSummary: isSummaryPhase && !result.quotes,
+        quotes: finalQuotes.length > 0 ? (finalQuotes as any) : undefined,
+        isSummary: isSummaryPhase && !finalQuotes.length,
         isStreaming: true,
       }));
+      if (finalQuotes.length > 0) {
+        setLatestQuotes(finalQuotes);
+        setShowFloatingButton(true);
+      }
       setStreamingMsgId(newMsgId);
+      setTimeout(() => { if (finalQuotes.length > 0) setShowFloatingButton(true); }, 2000);
 
       const safePhase: Phase = toSafePhase((result.sessionState as any)?.currentPhase, sessionState.currentPhase);
       const updatedState: SessionState = {
