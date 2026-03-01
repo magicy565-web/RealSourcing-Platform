@@ -623,7 +623,8 @@ export default function SupplierCompareMatrix({
               }}
             >
               <X size={16} />
-            </button          </div>
+            </button>
+          </div>
         </div>
 
         {/* ── AI Insight Banner ── */}
