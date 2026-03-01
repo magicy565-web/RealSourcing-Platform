@@ -662,7 +662,7 @@ export default function SupplierCompareMatrix({
           </motion.div>
         )}
 
-        {/* Body */}ile Tab Navigator ── */}
+        {/* Body: Mobile Tab Navigator ── */}
         {mobile && (
           <div style={{
             display: "flex", alignItems: "center",
