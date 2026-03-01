@@ -207,6 +207,43 @@ function QuoteCardsRenderer({
 
   if (!shouldRender || !message.quotes || message.quotes.length === 0) return null;
 
+  // 生成 AI 深度点评内容
+  const getAIDeepInsight = () => {
+    const quotes = message.quotes;
+    if (!quotes || quotes.length < 2) return null;
+    
+    const sortedByPrice = [...quotes].sort((a, b) => (a.unitPrice || 999) - (b.unitPrice || 999));
+    const sortedByMatch = [...quotes].sort((a, b) => b.matchScore - a.matchScore);
+    
+    return (
+      <div style={{
+        background: "rgba(124,58,237,0.05)",
+        border: "1px solid rgba(124,58,237,0.2)",
+        borderRadius: 12, padding: "12px 16px", marginBottom: 16,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Sparkles size={14} color="#a78bfa" />
+          <span style={{ color: "#a78bfa", fontSize: 13, fontWeight: 700 }}>AI 采购顾问深度点评</span>
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.6 }}>
+          针对您的需求，我深度分析了这 {quotes.length} 家工厂：
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            <li style={{ marginBottom: 4 }}>
+              <strong style={{ color: "#e2e8f0" }}>最优匹配：</strong>
+              {sortedByMatch[0].factoryName} 综合评分最高（{sortedByMatch[0].matchScore}%），其在{sortedByMatch[0].matchReasons?.[0] || "行业经验"}方面表现卓越。
+            </li>
+            {sortedByPrice[0].unitPrice && (
+              <li style={{ marginBottom: 4 }}>
+                <strong style={{ color: "#e2e8f0" }}>成本领先：</strong>
+                {sortedByPrice[0].factoryName} 提供了最具竞争力的单价（${sortedByPrice[0].unitPrice}），适合对预算敏感的项目。
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -214,6 +251,7 @@ function QuoteCardsRenderer({
       transition={{ delay: 0.2 }}
       style={{ marginTop: 12 }}
     >
+      {getAIDeepInsight()}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 10,
@@ -1083,45 +1121,67 @@ export default function AIAssistant() {
       {/* 全局悬浮式 AI 对比矩阵入口 */}
       <AnimatePresence>
         {showFloatingButton && latestQuotes.length >= 2 && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            onClick={() => {
-              setCompareQuotes(latestQuotes);
-              setCompareModalOpen(true);
-            }}
-            style={{
-              position: "fixed",
-              bottom: 40, right: 40,
-              width: 56, height: 56,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
-              border: "2px solid rgba(124,58,237,0.5)",
-              boxShadow: "0 0 20px rgba(124,58,237,0.5), 0 0 40px rgba(124,58,237,0.25)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-              zIndex: 999,
-            }}
-            onMouseEnter={(e) => {
-              const btn = e.currentTarget as HTMLButtonElement;
-              btn.style.boxShadow = "0 0 30px rgba(124,58,237,0.7), 0 0 60px rgba(124,58,237,0.4)";
-              btn.style.transform = "scale(1.1)";
-            }}
-            onMouseLeave={(e) => {
-              const btn = e.currentTarget as HTMLButtonElement;
-              btn.style.boxShadow = "0 0 20px rgba(124,58,237,0.5), 0 0 40px rgba(124,58,237,0.25)";
-              btn.style.transform = "scale(1)";
-            }}
-          >
+          <div style={{ position: "fixed", bottom: 40, right: 40, zIndex: 999, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
+            {/* 气泡提示 */}
             <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1 }}
+              style={{
+                background: "rgba(124,58,237,0.95)",
+                backdropFilter: "blur(4px)",
+                padding: "8px 14px",
+                borderRadius: "12px 12px 2px 12px",
+                color: "#fff", fontSize: 12, fontWeight: 600,
+                boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+              }}
             >
-              <BarChart3 size={24} color="#fff" />
+              ✨ 点击查看 3 家工厂深度对比报告
             </motion.div>
-          </motion.button>
+            
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              onClick={() => {
+                setCompareQuotes(latestQuotes);
+                setCompareModalOpen(true);
+              }}
+              style={{
+                width: 64, height: 64,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                border: "2px solid rgba(255,255,255,0.2)",
+                boxShadow: "0 0 25px rgba(124,58,237,0.6), 0 0 50px rgba(124,58,237,0.3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.style.boxShadow = "0 0 35px rgba(124,58,237,0.8), 0 0 70px rgba(124,58,237,0.5)";
+                btn.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.style.boxShadow = "0 0 25px rgba(124,58,237,0.6), 0 0 50px rgba(124,58,237,0.3)";
+                btn.style.transform = "scale(1)";
+              }}
+            >
+              <motion.div
+                animate={{ 
+                  rotate: [0, 10, -10, 10, 0],
+                  scale: [1, 1.1, 1, 1.1, 1]
+                }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <BarChart3 size={28} color="#fff" />
+              </motion.div>
+            </motion.button>
+          </div>
         )}
       </AnimatePresence>
 

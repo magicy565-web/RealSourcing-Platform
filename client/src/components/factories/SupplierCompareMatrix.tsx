@@ -446,6 +446,35 @@ export default function SupplierCompareMatrix({
   const bestLead = leads.length ? Math.min(...leads) : null;
   const bestAI = ais.length ? Math.max(...ais) : null;
 
+  // ── AI Insight Generation ──
+  const getAIInsight = () => {
+    if (orderedSuppliers.length < 2) return null;
+    const s1 = orderedSuppliers[0];
+    const s2 = orderedSuppliers[1];
+    
+    let insight = "";
+    if (s1.unitPrice && s2.unitPrice) {
+      const diff = Math.abs(s1.unitPrice - s2.unitPrice) / Math.max(s1.unitPrice, s2.unitPrice);
+      if (diff > 0.2) {
+        const cheaper = s1.unitPrice < s2.unitPrice ? s1 : s2;
+        insight += `💰 **${cheaper.factoryName}** 价格优势明显，比对手低 ${Math.round(diff * 100)}%。`;
+      }
+    }
+    
+    if (s1.leadTimeDays && s2.leadTimeDays) {
+      if (Math.abs(s1.leadTimeDays - s2.leadTimeDays) >= 5) {
+        const faster = s1.leadTimeDays < s2.leadTimeDays ? s1 : s2;
+        insight += ` ⚡ **${faster.factoryName}** 交期更短（${faster.leadTimeDays}天），适合紧急订单。`;
+      }
+    }
+
+    if (s1.matchScore > 90 && s2.matchScore < 85) {
+      insight += ` 🏆 综合来看，**${s1.factoryName}** 的匹配度显著更高，是我们的首选推荐。`;
+    }
+
+    return insight || "💡 这几家供应商各具特色，建议根据您的侧重点（价格 vs 交期）进行选择。";
+  };
+
   // ── Section toggle ──
   const toggleSection = (key: SectionKey) => {
     setOpenSections(prev => {
@@ -594,11 +623,45 @@ export default function SupplierCompareMatrix({
               }}
             >
               <X size={16} />
-            </button>
-          </div>
+            </button          </div>
         </div>
 
-        {/* ── Mobile Tab Navigator ── */}
+        {/* ── AI Insight Banner ── */}
+        {orderedSuppliers.length >= 2 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              padding: "10px 20px",
+              background: "rgba(124,58,237,0.12)",
+              borderBottom: "1px solid rgba(124,58,237,0.2)",
+              display: "flex", alignItems: "flex-start", gap: 10,
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              marginTop: 2, width: 24, height: 24, borderRadius: "50%",
+              background: "rgba(124,58,237,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <Sparkles size={12} color="#a78bfa" />
+            </div>
+            <div style={{ color: "#c4b5fd", fontSize: 12, lineHeight: 1.6 }}>
+              <span style={{ fontWeight: 700, marginRight: 6 }}>AI 深度洞察:</span>
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <span style={{ margin: 0 }}>{children}</span>,
+                  strong: ({ children }) => <strong style={{ color: "#fff", fontWeight: 700 }}>{children}</strong>,
+                }}
+              >
+                {getAIInsight() || ""}
+              </ReactMarkdown>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Body */}ile Tab Navigator ── */}
         {mobile && (
           <div style={{
             display: "flex", alignItems: "center",
