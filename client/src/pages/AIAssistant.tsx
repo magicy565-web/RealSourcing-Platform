@@ -317,8 +317,9 @@ export default function AIAssistant() {
   const [compareQuotes, setCompareQuotes] = useState<SupplierForCompare[]>([]);
   const [hasStarted, setHasStarted] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  // 流式打字：记录最新一条 AI 消息是否正在流式输出
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
+  const [showFloatingButton, setShowFloatingButton] = useState(false);
+  const [latestQuotes, setLatestQuotes] = useState<SupplierForCompare[]>([]);
 
   const agentWelcomeMutation = trpc.ai.agentWelcome.useMutation();
   const agentChatMutation = trpc.ai.agentChat.useMutation();
@@ -882,6 +883,13 @@ export default function AIAssistant() {
                           )}
                         </div>
                         {msg.quotes.map(q => <QuoteCardRedesigned key={q.quoteId} quote={q} />)}
+                        {(() => {
+                          if (msg.quotes.length >= 2) {
+                            setLatestQuotes(msg.quotes as SupplierForCompare[]);
+                            setShowFloatingButton(true);
+                          }
+                          return null;
+                        })()}
 
                         {/* Next steps banner */}
                         <motion.div
@@ -941,6 +949,7 @@ export default function AIAssistant() {
       background: "#080814", color: "#e2e8f0",
       fontFamily: "Inter, system-ui, sans-serif",
       overflow: "hidden",
+      position: "relative",
     }}>
       {/* AI 供应商对比矩阵弹窗 */}
       {compareModalOpen && compareQuotes.length >= 2 && (
@@ -953,6 +962,52 @@ export default function AIAssistant() {
           }}
         />
       )}
+
+      {/* 全局悬浮式 AI 对比矩阵入口 */}
+      <AnimatePresence>
+        {showFloatingButton && latestQuotes.length >= 2 && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            onClick={() => {
+              setCompareQuotes(latestQuotes);
+              setCompareModalOpen(true);
+            }}
+            style={{
+              position: "fixed",
+              bottom: 40, right: 40,
+              width: 56, height: 56,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+              border: "2px solid rgba(124,58,237,0.5)",
+              boxShadow: "0 0 20px rgba(124,58,237,0.5), 0 0 40px rgba(124,58,237,0.25)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 999,
+            }}
+            onMouseEnter={(e) => {
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.style.boxShadow = "0 0 30px rgba(124,58,237,0.7), 0 0 60px rgba(124,58,237,0.4)";
+              btn.style.transform = "scale(1.1)";
+            }}
+            onMouseLeave={(e) => {
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.style.boxShadow = "0 0 20px rgba(124,58,237,0.5), 0 0 40px rgba(124,58,237,0.25)";
+              btn.style.transform = "scale(1)";
+            }}
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            >
+              <BarChart3 size={24} color="#fff" />
+            </motion.div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       <BuyerSidebar userRole={user?.role || "buyer"} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
