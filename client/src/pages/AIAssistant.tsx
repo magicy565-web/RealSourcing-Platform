@@ -122,32 +122,31 @@ function StreamingText({ content, onComplete }: { content: string; onComplete?: 
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
   const indexRef = useRef(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     indexRef.current = 0;
     setDisplayed("");
     setDone(false);
 
-    // 每 12ms 显示一个字符（约 80 字/秒，与 ChatGPT 体验接近）
-    intervalRef.current = setInterval(() => {
+    let isMounted = true;
+    const stream = () => {
+      if (!isMounted) return;
       if (indexRef.current < content.length) {
         indexRef.current += 1;
         setDisplayed(content.slice(0, indexRef.current));
+        requestAnimationFrame(() => setTimeout(stream, 12));
       } else {
-        if (intervalRef.current) clearInterval(intervalRef.current);
         setDone(true);
         onComplete?.();
       }
-    }, 12);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    stream();
+
+    return () => { isMounted = false; };
   }, [content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <>
+    <div style={{ position: "relative" }}>
       <ReactMarkdown
         components={{
           p: ({ children }) => <p style={{ margin: "0 0 8px" }}>{children}</p>,
@@ -158,13 +157,13 @@ function StreamingText({ content, onComplete }: { content: string; onComplete?: 
       >{displayed}</ReactMarkdown>
       {!done && (
         <span style={{
-          display: "inline-block", width: 2, height: "1em",
-          background: "#a78bfa", marginLeft: 2, verticalAlign: "text-bottom",
-          animation: "blink 0.8s step-end infinite",
+          display: "inline-block", width: 2, height: 14, background: "#7c3aed",
+          marginLeft: 2, verticalAlign: "middle",
+          animation: "blink 0.8s infinite",
         }} />
       )}
       <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
-    </>
+    </div>
   );
 }
 
@@ -745,17 +744,14 @@ export default function AIAssistant() {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <AnimatePresence initial={false}>
-          {messages.map(msg => (
-            <motion.div
+        <div>
+          {messages.map((msg) => (
+            <div
               key={msg.id}
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
                 display: "flex",
                 justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                marginBottom: 16,
               }}
             >
               {msg.role === "assistant" && (
@@ -927,9 +923,9 @@ export default function AIAssistant() {
                   </>
                 )}
               </div>
-            </motion.div>
+            </div>
           ))}
-        </AnimatePresence>
+        </div>
         <div ref={messagesEndRef} />
       </div>
 
