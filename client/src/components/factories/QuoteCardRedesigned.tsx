@@ -6,6 +6,7 @@ import {
   Handshake, FileText, Video, ArrowRight, X, Loader, AlertCircle,
   TrendingUp, Package, Clock, DollarSign
 } from "lucide-react";
+import IncomePredictor from "@/components/dropshipping/IncomePredictor";
 
 interface QuoteCard {
   quoteId: string;
@@ -416,6 +417,13 @@ export default function QuoteCardRedesigned({ quote, onAction, demandId = 1, mat
             <CheckCircle2 size={14} />
             流程已完成，等待工厂确认
           </motion.div>
+        )}
+        {/* Dropshipping 月收入预测器 */}
+        {quote.unitPrice && (
+          <IncomePredictor
+            productCost={quote.unitPrice}
+            productName={quote.factoryName}
+          />
         )}
       </motion.div>
 
