@@ -122,19 +122,18 @@ function StreamingText({ content, onComplete }: { content: string; onComplete?: 
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
   const indexRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     indexRef.current = 0;
     setDisplayed("");
     setDone(false);
 
-    let isMounted = true;
     const stream = () => {
-      if (!isMounted) return;
       if (indexRef.current < content.length) {
         indexRef.current += 1;
         setDisplayed(content.slice(0, indexRef.current));
-        requestAnimationFrame(() => setTimeout(stream, 12));
+        timerRef.current = setTimeout(stream, 15);
       } else {
         setDone(true);
         onComplete?.();
@@ -142,19 +141,15 @@ function StreamingText({ content, onComplete }: { content: string; onComplete?: 
     };
     stream();
 
-    return () => { isMounted = false; };
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [content]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 极简渲染，避免 ReactMarkdown 在流式更新时产生 DOM 冲突
   return (
-    <div style={{ position: "relative" }}>
-      <ReactMarkdown
-        components={{
-          p: ({ children }) => <p style={{ margin: "0 0 8px" }}>{children}</p>,
-          strong: ({ children }) => <strong style={{ color: "#c4b5fd", fontWeight: 700 }}>{children}</strong>,
-          ul: ({ children }) => <ul style={{ margin: "6px 0", paddingLeft: 18 }}>{children}</ul>,
-          li: ({ children }) => <li style={{ marginBottom: 3 }}>{children}</li>,
-        }}
-      >{displayed}</ReactMarkdown>
+    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+      {displayed}
       {!done && (
         <span style={{
           display: "inline-block", width: 2, height: 14, background: "#7c3aed",
