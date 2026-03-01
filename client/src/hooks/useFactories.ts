@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks/useDebounce";
 
 /**
  * AI 匹配度数据接口
@@ -37,6 +38,8 @@ interface FactoryOnlineStatus {
 export function useFactories() {
   // ── 状态管理 ──────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
+  // 搜索防抖：300ms 后才触发过滤，避免每次按键都重新计算
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedFactoryForSample, setSelectedFactoryForSample] = useState<string | null>(null);
 
@@ -80,15 +83,15 @@ export function useFactories() {
       const category = factory.category || "";
 
       const matchesSearch =
-        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        country.toLowerCase().includes(searchQuery.toLowerCase());
+        name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        city.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        country.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
 
       const matchesCategory = categoryFilter === "all" || category === categoryFilter;
 
       return matchesSearch && matchesCategory;
     });
-  }, [factories, searchQuery, categoryFilter]);
+  }, [factories, debouncedSearchQuery, categoryFilter]);
 
   const avgScore = useMemo(() => {
     if (factories.length === 0) return "0.0";
