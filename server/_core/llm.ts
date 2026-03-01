@@ -209,14 +209,32 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = () => {
+  // 主路由：阿里云百炼 DashScope
+  if (ENV.dashscopeApiKey) {
+    return 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+  }
+  // 备用：OpenAI 兼容接口
+  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
+    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
+  }
+  return `${(ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '')}/chat/completions`;
+};
+
+const resolveApiKey = () => {
+  if (ENV.dashscopeApiKey) return ENV.dashscopeApiKey;
+  if (ENV.forgeApiKey) return ENV.forgeApiKey;
+  return ENV.openaiApiKey;
+};
+
+const resolveModel = () => {
+  if (ENV.dashscopeApiKey) return ENV.dashscopeModel || 'qwen-plus';
+  return ENV.openaiModel || 'gpt-4.1-mini';
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!ENV.dashscopeApiKey && !ENV.forgeApiKey && !ENV.openaiApiKey) {
+    throw new Error("No AI API key configured (DASHSCOPE_API_KEY / BUILT_IN_FORGE_API_KEY / OPENAI_API_KEY)");
   }
 };
 
@@ -280,7 +298,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: resolveModel(),
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,10 +314,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
+  payload.max_tokens = 8192;
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -316,7 +331,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${resolveApiKey()}`,
     },
     body: JSON.stringify(payload),
   });

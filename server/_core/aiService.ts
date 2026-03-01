@@ -150,7 +150,7 @@ async function callNovai(
 }
 
 /**
- * 智能路由：优先使用 ENV.openaiModel，失败时依次切换到 DashScope → DeepSeek
+ * 智能路由：优先使用阿里云百炼 Qwen，失败时依次切换到 OpenAI 兼容接口 → DeepSeek
  */
 async function callAI(
   messages: ChatMessage[],
@@ -160,36 +160,36 @@ async function callAI(
     preferJson?: boolean;
   } = {}
 ): Promise<string> {
-  const primaryModel = ENV.openaiModel || 'gpt-4.1-mini';
   const errors: string[] = [];
 
-  // 优先：使用配置的 OpenAI 兼容模型
-  if (ENV.openaiApiKey) {
-    try {
-      return await callNovai(messages, {
-        model: primaryModel,
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-      });
-    } catch (e) {
-      const msg = (e as Error).message;
-      errors.push(`${primaryModel}: ${msg}`);
-      aiLog('warn', 'Router', `Primary model failed, trying DashScope`, { model: primaryModel, error: msg });
-    }
-  }
-
-  // 备用：阿里云百炼（qwen-plus）
+  // 主路由：阿里云百炼（qwen-plus）— 稳定可靠，中英文采购场景优化
   if (ENV.dashscopeApiKey) {
     try {
       return await callDashScope(messages, {
-        model: 'qwen-plus',
+        model: ENV.dashscopeModel || 'qwen-plus',
         maxTokens: options.maxTokens,
         temperature: options.temperature,
       });
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`DashScope/qwen-plus: ${msg}`);
-      aiLog('warn', 'Router', `DashScope failed, trying DeepSeek`, { error: msg });
+      aiLog('warn', 'Router', `Qwen primary failed, trying OpenAI compatible`, { error: msg });
+    }
+  }
+
+  // 备用：OpenAI 兼容接口
+  if (ENV.openaiApiKey) {
+    const fallbackModel = ENV.openaiModel || 'gpt-4.1-mini';
+    try {
+      return await callNovai(messages, {
+        model: fallbackModel,
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      errors.push(`${fallbackModel}: ${msg}`);
+      aiLog('warn', 'Router', `OpenAI compatible failed, trying DeepSeek`, { model: fallbackModel, error: msg });
     }
   }
 

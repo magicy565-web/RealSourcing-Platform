@@ -49,21 +49,39 @@ export interface FactoryNegotiationProfile {
 // ── AI 调用 ───────────────────────────────────────────────────────────────────
 
 async function callAI(prompt: string, systemPrompt: string): Promise<string> {
-  const { OpenAI } = await import("openai");
-  const client = new OpenAI({
-    apiKey: ENV.openaiApiKey || process.env.OPENAI_API_KEY || "",
+  // 优先使用阿里云百炼 DashScope
+  const useDashScope = !!ENV.dashscopeApiKey;
+  const baseUrl = useDashScope
+    ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    : (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
+  const apiKey = useDashScope ? ENV.dashscopeApiKey : (ENV.openaiApiKey || process.env.OPENAI_API_KEY || '');
+  const model = useDashScope ? (ENV.dashscopeModel || 'qwen-plus') : 'gpt-4.1-mini';
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' },
+    }),
+    signal: AbortSignal.timeout(30000),
   });
-  const response = await client.chat.completions.create({
-    model: "gpt-4.1-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.3,
-    max_tokens: 1000,
-    response_format: { type: "json_object" },
-  });
-  return response.choices[0]?.message?.content ?? "{}";
+
+  if (!response.ok) {
+    throw new Error(`Negotiation AI call failed: ${response.status}`);
+  }
+
+  const result = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return result.choices?.[0]?.message?.content ?? '{}';
 }
 
 // ── 获取工厂谈判画像 ──────────────────────────────────────────────────────────

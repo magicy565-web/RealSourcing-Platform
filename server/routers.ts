@@ -2969,7 +2969,7 @@ Return ONLY valid JSON, no explanation.`;
         try {
           const aiResponse = await callAI([
             { role: 'user', content: parsePrompt }
-          ], { model: 'gpt-4.1-mini', temperature: 0.1 });
+          ], { temperature: 0.1 });
 
           const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
@@ -3350,8 +3350,13 @@ Return ONLY valid JSON, no explanation.`;
         fileTypes: z.array(z.string()).optional(),
       }))
       .mutation(async ({ input }) => {
-        const OpenAI = (await import('openai')).default;
-        const client = new OpenAI();
+        // 优先使用阿里云百炼 DashScope
+        const _useDashScope = !!process.env.DASHSCOPE_API_KEY;
+        const _dsBaseUrl = _useDashScope
+          ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+          : (process.env.OPENAI_BASE_URL || 'https://once.novai.su/v1').replace(/\/$/, '');
+        const _dsApiKey = _useDashScope ? process.env.DASHSCOPE_API_KEY! : (process.env.OPENAI_API_KEY || '');
+        const _dsModel = _useDashScope ? (process.env.DASHSCOPE_MODEL || 'qwen-vl-plus') : 'gpt-4.1-mini';
 
         // 构建 Vision 消息，支持多张图片
         const imageMessages: any[] = input.fileUrls
@@ -3393,17 +3398,27 @@ Respond ONLY with valid JSON, no markdown.`;
         }
 
         try {
-          const response = await client.chat.completions.create({
-            model: 'gpt-4.1-mini',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userContent },
-            ],
-            max_tokens: 1000,
-            temperature: 0.2,
+          const _dsResponse = await fetch(`${_dsBaseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${_dsApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: _dsModel,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent },
+              ],
+              max_tokens: 1000,
+              temperature: 0.2,
+            }),
+            signal: AbortSignal.timeout(30000),
           });
+          if (!_dsResponse.ok) throw new Error(`AI API error: ${_dsResponse.status}`);
+          const _dsResult = await _dsResponse.json() as { choices?: Array<{ message?: { content?: string } }> };
 
-          const raw = response.choices[0]?.message?.content ?? '{}';
+          const raw = _dsResult.choices?.[0]?.message?.content ?? '{}';
           // 清理可能的 markdown 代码块
           const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           const parsed = JSON.parse(cleaned);

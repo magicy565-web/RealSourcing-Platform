@@ -322,7 +322,11 @@ async function analyzeWithLLM(
     hasScreenshot: !!screenshotBase64,
   });
 
-  const baseUrl = (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
+  // 优先使用阿里云百炼 DashScope
+  const useDashScope = !!ENV.dashscopeApiKey;
+  const baseUrl = useDashScope
+    ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    : (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
 
   // 构建多模态消息
   const userContent: Array<Record<string, unknown>> = [
@@ -368,11 +372,11 @@ ${textContent}
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${ENV.openaiApiKey}`,
+      'Authorization': `Bearer ${useDashScope ? ENV.dashscopeApiKey : ENV.openaiApiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4.1-mini',
+      model: useDashScope ? (ENV.dashscopeModel || 'qwen-vl-plus') : 'gpt-4.1-mini',
       messages: [
         {
           role: 'system',

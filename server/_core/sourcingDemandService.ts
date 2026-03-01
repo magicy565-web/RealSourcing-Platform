@@ -114,8 +114,14 @@ function extractJsonFromLLMOutput(raw: string): Record<string, unknown> | null {
 async function callExtractionLLM(
   ingestedContent: IngestedContent
 ): Promise<SourcingDemand | ExtractionError> {
-  const baseUrl = (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
-  const model = 'gpt-4.1-mini'; // 信息提取用轻量模型，降低成本
+  // 优先使用阿里云百炼 DashScope，备用 OpenAI 兼容接口
+  const useDashScope = !!ENV.dashscopeApiKey;
+  const baseUrl = useDashScope
+    ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    : (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
+  const model = useDashScope
+    ? (ENV.dashscopeModel || 'qwen-plus')
+    : 'gpt-4.1-mini';
 
   // 构建用户消息
   const userMessage: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
@@ -149,7 +155,7 @@ ${ingestedContent.imageUrls.length > 0 ? `**参考图片**: ${ingestedContent.im
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${ENV.openaiApiKey}`,
+        'Authorization': `Bearer ${useDashScope ? ENV.dashscopeApiKey : ENV.openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

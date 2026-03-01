@@ -99,7 +99,11 @@ const TRANSFORMATION_SYSTEM_PROMPT = `你是一位资深的制造业工程师和
 async function callTransformationLLM(
   demand: SourcingDemand
 ): Promise<ManufacturingParameters | TransformationError> {
-  const baseUrl = (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
+  // 优先使用阿里云百炼 DashScope
+  const useDashScope = !!ENV.dashscopeApiKey;
+  const baseUrl = useDashScope
+    ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    : (ENV.openaiBaseUrl || 'https://once.novai.su/v1').replace(/\/$/, '');
 
   const userPrompt = `请将以下采购需求转化为详细的工厂生产参数：
 
@@ -130,11 +134,11 @@ ${demand.visualReferences.length > 0 ? `**视觉参考图片**: ${demand.visualR
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${ENV.openaiApiKey}`,
+        'Authorization': `Bearer ${useDashScope ? ENV.dashscopeApiKey : ENV.openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: useDashScope ? (ENV.dashscopeModel || 'qwen-plus') : 'gpt-4.1-mini',
         messages: [
           { role: 'system', content: TRANSFORMATION_SYSTEM_PROMPT },
           { role: 'user', content: userContent },
