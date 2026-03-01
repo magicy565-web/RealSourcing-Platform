@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyerSidebar from "@/components/BuyerSidebar";
@@ -117,46 +117,62 @@ function TypingIndicator() {
   );
 }
 
-// ─── StreamingText：流式打字效果 ─────────────────────────────────────────────
+// ─── ErrorBoundary：错误边界保护 ──────────────────────────────────────────
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return <div style={{ color: "#ef4444", fontSize: 12, padding: 10 }}>渲染出错，请刷新页面。</div>;
+    return this.props.children;
+  }
+}
+
+// ─── StreamingText：流式打字效果（终极稳健版） ──────────────────────────────────
 function StreamingText({ content, onComplete }: { content: string; onComplete?: () => void }) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
+  const contentRef = useRef(content);
   const indexRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
 
   useEffect(() => {
+    contentRef.current = content;
     indexRef.current = 0;
     setDisplayed("");
     setDone(false);
 
-    const stream = () => {
-      if (indexRef.current < content.length) {
-        indexRef.current += 1;
-        setDisplayed(content.slice(0, indexRef.current));
-        timerRef.current = setTimeout(stream, 15);
-      } else {
-        setDone(true);
-        onComplete?.();
+    const animate = (time: number) => {
+      if (time - lastTimeRef.current > 20) { // 控制打字速度
+        if (indexRef.current < contentRef.current.length) {
+          indexRef.current += 2; // 每次增加2个字符，提高流畅度
+          setDisplayed(contentRef.current.slice(0, indexRef.current));
+          lastTimeRef.current = time;
+        } else {
+          setDone(true);
+          onComplete?.();
+          return;
+        }
       }
+      requestRef.current = requestAnimationFrame(animate);
     };
-    stream();
+    requestRef.current = requestAnimationFrame(animate);
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [content]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
+  }, [content, onComplete]);
 
-  // 极简渲染，避免 ReactMarkdown 在流式更新时产生 DOM 冲突
+  // 打字完成后使用 ReactMarkdown，打字过程中使用纯文本
+  if (done) {
+    return <ReactMarkdown>{content}</ReactMarkdown>;
+  }
+
   return (
-    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>
       {displayed}
-      {!done && (
-        <span style={{
-          display: "inline-block", width: 2, height: 14, background: "#7c3aed",
-          marginLeft: 2, verticalAlign: "middle",
-          animation: "blink 0.8s infinite",
-        }} />
-      )}
+      <span style={{
+        display: "inline-block", width: 2, height: 14, background: "#7c3aed",
+        marginLeft: 2, verticalAlign: "middle", animation: "blink 0.8s infinite",
+      }} />
       <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
     </div>
   );
@@ -740,7 +756,7 @@ export default function AIAssistant() {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
+        <ErrorBoundary>
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -968,7 +984,7 @@ export default function AIAssistant() {
               </div>
             </div>
           ))}
-        </div>
+        </ErrorBoundary>
         <div ref={messagesEndRef} />
       </div>
 
