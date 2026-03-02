@@ -15,6 +15,13 @@ async function initDb() {
 }
 
 const dbPromise = initDb();
+
+// 获取底层 mysql2 pool（用于执行原始 SQL）
+export async function getPool(): Promise<mysql.Pool> {
+  await dbPromise; // 确保 pool 已初始化
+  return pool;
+}
+
 export { db, dbPromise };
 
 // ─── User Operations ──────────────────────────────────────────────────────────

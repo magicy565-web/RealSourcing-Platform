@@ -18,17 +18,42 @@ const GRID_BG = `
 export default function Login() {
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const returnTo = searchParams.get("returnTo") || "/dashboard";
+  // 如果是从注册页跳来的新用户，登录后强制进入 onboarding
+  const isNewUser = searchParams.get("newUser") === "1";
+  const returnTo = isNewUser ? "/onboarding" : (searchParams.get("returnTo") || "/dashboard");
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const utils = trpc.useUtils();
 
+  // 检查用户是否已完成 onboarding（用于老用户首次登录判断）
+  const checkProfileMutation = trpc.businessProfile.get.useQuery(undefined, {
+    enabled: false, // 手动触发
+  });
+
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       toast.success("登录成功！");
       await utils.auth.me.invalidate();
-      setLocation(returnTo);
+
+      if (isNewUser) {
+        // 新注册用户：直接进入 onboarding
+        setLocation("/onboarding");
+      } else {
+        // 老用户：检查是否已完成 onboarding
+        try {
+          const profile = await utils.businessProfile.get.fetch();
+          if (!profile || !profile.onboardingCompletedAt) {
+            // 未完成 onboarding，引导进入
+            setLocation("/onboarding");
+          } else {
+            setLocation(returnTo);
+          }
+        } catch {
+          // 查询失败时直接跳转 dashboard
+          setLocation(returnTo);
+        }
+      }
     },
     onError: (error: any) => {
       toast.error(error.message || "登录失败，请检查邮箱和密码");
@@ -75,6 +100,27 @@ export default function Login() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
+              {/* 新用户引导提示 */}
+              {isNewUser && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-6 p-4 rounded-2xl"
+                  style={{
+                    background: "rgba(124,58,237,0.12)",
+                    border: "1px solid rgba(124,58,237,0.30)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <span className="text-violet-300 text-sm font-semibold">账号已创建成功！</span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.50)" }}>
+                    登录后将引导您完成 2 分钟个性化配置，AI 将根据您的采购目标为您定制专属建议。
+                  </p>
+                </motion.div>
+              )}
+
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6"
                 style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.25)" }}>
                 <Sparkles className="w-3 h-3 text-violet-400" />
@@ -172,9 +218,33 @@ export default function Login() {
           </div>
 
           <div className="mb-8">
-            <h1 className="text-3xl font-black text-white mb-2">欢迎回来</h1>
-            <p style={{ color: "rgba(255,255,255,0.40)" }}>登录您的 RealSourcing 账号</p>
+            <h1 className="text-3xl font-black text-white mb-2">
+              {isNewUser ? "一步之遥！" : "欢迎回来"}
+            </h1>
+            <p style={{ color: "rgba(255,255,255,0.40)" }}>
+              {isNewUser
+                ? "登录后立即开始您的个性化采购配置"
+                : "登录您的 RealSourcing 账号"}
+            </p>
           </div>
+
+          {/* 移动端新用户提示 */}
+          {isNewUser && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-3 rounded-xl flex items-center gap-3 lg:hidden"
+              style={{
+                background: "rgba(124,58,237,0.12)",
+                border: "1px solid rgba(124,58,237,0.25)",
+              }}
+            >
+              <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.60)" }}>
+                账号已创建！登录后将引导您完成个性化配置
+              </p>
+            </motion.div>
+          )}
 
           {/* 表单卡片 */}
           <div className="rounded-2xl p-8"
@@ -268,7 +338,7 @@ export default function Login() {
                 }}
               >
                 {loginMutation.isPending ? "登录中..." : (
-                  <><span>登录</span> <ArrowRight className="w-4 h-4" /></>
+                  <><span>{isNewUser ? "登录并开始配置" : "登录"}</span> <ArrowRight className="w-4 h-4" /></>
                 )}
               </motion.button>
             </form>

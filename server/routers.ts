@@ -4504,35 +4504,31 @@ Respond ONLY with valid JSON, no markdown.`;
         mainChallenge: z.string(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const mysql = require('mysql2/promise');
-        const conn = await mysql.createConnection(process.env.DATABASE_URL);
-        try {
-          await conn.execute(
-            `INSERT INTO user_business_profiles
-              (userId, ambition, businessStage, targetPlatforms, interestedNiches, budget, mainChallenge, onboardingCompletedAt, createdAt, updatedAt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3), NOW(3))
-             ON DUPLICATE KEY UPDATE
-              ambition = VALUES(ambition),
-              businessStage = VALUES(businessStage),
-              targetPlatforms = VALUES(targetPlatforms),
-              interestedNiches = VALUES(interestedNiches),
-              budget = VALUES(budget),
-              mainChallenge = VALUES(mainChallenge),
-              onboardingCompletedAt = NOW(3),
-              updatedAt = NOW(3)`,
-            [
-              ctx.user.id,
-              input.ambition,
-              input.businessStage,
-              JSON.stringify(input.targetPlatforms),
-              JSON.stringify(input.interestedNiches),
-              input.budget,
-              input.mainChallenge,
-            ]
-          );
-        } finally {
-          await conn.end();
-        }
+        const { getPool } = await import('./db');
+        const pool = await getPool();
+        await pool.execute(
+          `INSERT INTO user_business_profiles
+            (userId, ambition, businessStage, targetPlatforms, interestedNiches, budget, mainChallenge, onboardingCompletedAt, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3), NOW(3))
+           ON DUPLICATE KEY UPDATE
+            ambition = VALUES(ambition),
+            businessStage = VALUES(businessStage),
+            targetPlatforms = VALUES(targetPlatforms),
+            interestedNiches = VALUES(interestedNiches),
+            budget = VALUES(budget),
+            mainChallenge = VALUES(mainChallenge),
+            onboardingCompletedAt = NOW(3),
+            updatedAt = NOW(3)`,
+          [
+            ctx.user.id,
+            input.ambition,
+            input.businessStage,
+            JSON.stringify(input.targetPlatforms),
+            JSON.stringify(input.interestedNiches),
+            input.budget,
+            input.mainChallenge,
+          ]
+        );
         await saveUserOnboardingPreferences(ctx.user.id, {
           interestedCategories: input.interestedNiches,
           orderScale: input.budget,
@@ -4540,31 +4536,23 @@ Respond ONLY with valid JSON, no markdown.`;
         return { success: true };
       }),
     get: protectedProcedure.query(async ({ ctx }) => {
-      const mysql = require('mysql2/promise');
-      const conn = await mysql.createConnection(process.env.DATABASE_URL);
-      try {
-        const [rows] = await conn.execute(
-          'SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1',
-          [ctx.user.id]
-        );
-        return (rows as any[])[0] || null;
-      } finally {
-        await conn.end();
-      }
+      const { getPool } = await import('./db');
+      const pool = await getPool();
+      const [rows] = await pool.execute(
+        'SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1',
+        [ctx.user.id]
+      );
+      return (rows as any[])[0] || null;
     }),
     updateAiSummary: protectedProcedure
       .input(z.object({ aiSummary: z.string() }))
       .mutation(async ({ input, ctx }) => {
-        const mysql = require('mysql2/promise');
-        const conn = await mysql.createConnection(process.env.DATABASE_URL);
-        try {
-          await conn.execute(
-            'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(3), updatedAt = NOW(3) WHERE userId = ?',
-            [input.aiSummary, ctx.user.id]
-          );
-        } finally {
-          await conn.end();
-        }
+        const { getPool } = await import('./db');
+        const pool = await getPool();
+        await pool.execute(
+          'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(3), updatedAt = NOW(3) WHERE userId = ?',
+          [input.aiSummary, ctx.user.id]
+        );
         return { success: true };
       }),
   }),

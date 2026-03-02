@@ -66,12 +66,15 @@ export default function Register() {
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: async () => {
-      toast.success("Account created! Welcome to RealSourcing");
-      await utils.auth.me.invalidate();
-      setLocation("/onboarding");
+      toast.success("账号创建成功！请登录以开始设置您的采购偏好", {
+        description: "登录后将引导您完成个性化配置",
+        duration: 5000,
+      });
+      // 注册成功后跳转到登录页，并标记为新用户（登录后自动进入 onboarding）
+      setLocation("/login?newUser=1");
     },
     onError: (error: any) => {
-      toast.error(error.message || "Registration failed, please try again");
+      toast.error(error.message || "注册失败，请重试");
     },
   });
 
