@@ -53,11 +53,21 @@ function OpportunityCard({ item, onSave, onDismiss, onView }: {
   const scoreColor = item.opportunityScore >= 75 ? "text-purple-400" : item.opportunityScore >= 55 ? "text-amber-400" : "text-muted-foreground";
   const scoreBg = item.opportunityScore >= 75 ? "bg-purple-600/20 border-purple-500/30" : item.opportunityScore >= 55 ? "bg-amber-600/20 border-amber-500/30" : "bg-white/5 border-white/10";
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // 防止点击按钮时触发卡片点击
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
+      return;
+    }
+    // 跳转到产品详情页
+    window.location.href = `/product/${item.id}`;
+  };
+
   return (
     <div
+      onClick={handleCardClick}
       className={cn(
-        "group relative bg-[#13131a] border rounded-2xl overflow-hidden transition-all duration-300",
-        "hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-900/20",
+        "group relative bg-[#13131a] border rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer",
+        "hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-900/20 hover:scale-[1.02]",
         item.userAction === "saved" ? "border-purple-500/50" : "border-white/8"
       )}
     >
@@ -248,9 +258,9 @@ function OpportunityCard({ item, onSave, onDismiss, onView }: {
             <X className="w-3.5 h-3.5" />
           </button>
           <a
-            href={`/factories/${item.factorySlug || item.factoryId}`}
+            href={`/product/${item.id}`}
             className="p-2 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 transition-all"
-            title="View supplier"
+            title="View product details"
           >
             <ArrowUpRight className="w-3.5 h-3.5" />
           </a>
