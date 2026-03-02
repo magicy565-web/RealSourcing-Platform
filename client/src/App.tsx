@@ -43,6 +43,7 @@ import SourcingRoom from "./pages/SourcingRoom";
 import OpsAgentMonitor from "./pages/OpsAgentMonitor";
 import MyQuotes from "./pages/MyQuotes";
 import CustomQuoteHistory from "./pages/CustomQuoteHistory";
+import DropshippingProfitAnalyzer from "./pages/DropshippingProfitAnalyzer";
 
 function Router() {
   return (
@@ -228,6 +229,13 @@ function Router() {
       <Route path="/custom-quote-history">
         <ProtectedRoute>
           <CustomQuoteHistory />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Dropshipping Profit Analyzer (Phase 5.1) ── */}
+      <Route path="/profit-analyzer">
+        <ProtectedRoute>
+          <DropshippingProfitAnalyzer />
         </ProtectedRoute>
       </Route>
 

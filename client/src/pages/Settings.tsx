@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,10 +7,11 @@ import { trpc } from "@/lib/trpc";
 import {
   User, Bell, Shield, Globe, Palette, Link2, Trash2, Save,
   Camera, Check, ChevronRight, Mail, Phone, MapPin, Building2,
-  Eye, EyeOff, Smartphone, Loader2
+  Eye, EyeOff, Smartphone, Loader2, Sparkles, Target, TrendingUp,
+  ShoppingBag, AlertTriangle, DollarSign, Tag, X
 } from "lucide-react";
 
-type SettingsTab = "profile" | "notifications" | "security" | "preferences" | "integrations";
+type SettingsTab = "profile" | "business_profile" | "notifications" | "security" | "preferences" | "integrations";
 
 const GRID_BG = `
   linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
@@ -18,6 +20,7 @@ const GRID_BG = `
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "profile", label: "Profile", icon: <User className="w-4 h-4" /> },
+  { id: "business_profile", label: "Business Profile", icon: <Sparkles className="w-4 h-4" /> },
   { id: "notifications", label: "Notifications", icon: <Bell className="w-4 h-4" /> },
   { id: "security", label: "Security", icon: <Shield className="w-4 h-4" /> },
   { id: "preferences", label: "Preferences", icon: <Palette className="w-4 h-4" /> },
@@ -79,7 +82,14 @@ const InputField = ({ icon: Icon, label, value, onChange, type = "text", disable
 
 export default function Settings() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const search = useSearch();
+  const initialTab = (() => {
+    const params = new URLSearchParams(search);
+    const tab = params.get("tab");
+    const validTabs: SettingsTab[] = ["profile", "business_profile", "notifications", "security", "preferences", "integrations"];
+    return validTabs.includes(tab as SettingsTab) ? (tab as SettingsTab) : "profile";
+  })();
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [notifications, setNotifications] = useState(
@@ -94,6 +104,66 @@ export default function Settings() {
     onSuccess: () => toast.success("Profile saved successfully!"),
     onError: (err) => toast.error(`Failed to save: ${err.message}`),
   });
+
+  // Business Profile
+  const utils = trpc.useUtils();
+  const { data: bizProfile, isLoading: bizProfileLoading } = trpc.businessProfile.get.useQuery(undefined, {
+    retry: false,
+    staleTime: 2 * 60 * 1000,
+  });
+  const saveOnboardingMutation = trpc.businessProfile.saveOnboarding.useMutation({
+    onSuccess: () => {
+      toast.success("Business profile updated!");
+      utils.businessProfile.get.invalidate();
+    },
+    onError: (err) => toast.error(`Failed to save: ${err.message}`),
+  });
+
+  const [bizForm, setBizForm] = useState({
+    ambition: "",
+    businessStage: "",
+    targetPlatforms: [] as string[],
+    budget: "",
+    interestedNiches: [] as string[],
+    mainChallenge: "",
+  });
+
+  useEffect(() => {
+    if (bizProfile) {
+      const parsePlatforms = () => {
+        try {
+          const raw = bizProfile.targetPlatforms;
+          if (Array.isArray(raw)) return raw;
+          if (typeof raw === "string") return JSON.parse(raw);
+          return [];
+        } catch { return []; }
+      };
+      const parseNiches = () => {
+        try {
+          const raw = bizProfile.interestedNiches;
+          if (Array.isArray(raw)) return raw;
+          if (typeof raw === "string") return JSON.parse(raw);
+          return [];
+        } catch { return []; }
+      };
+      setBizForm({
+        ambition: bizProfile.ambition || "",
+        businessStage: bizProfile.businessStage || "",
+        targetPlatforms: parsePlatforms(),
+        budget: bizProfile.budget || "",
+        interestedNiches: parseNiches(),
+        mainChallenge: bizProfile.mainChallenge || "",
+      });
+    }
+  }, [bizProfile]);
+
+  const handleSaveBizProfile = () => {
+    if (!bizForm.ambition || !bizForm.businessStage || !bizForm.budget || !bizForm.mainChallenge) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+    saveOnboardingMutation.mutate(bizForm);
+  };
 
   const [profile, setProfile] = useState({
     name: user?.name || "",
@@ -388,6 +458,243 @@ export default function Settings() {
                     <Save className="w-4 h-4" />Save Preferences
                   </motion.button>
                 </div>
+              </div>
+            )}
+
+            {/* Business Profile Tab */}
+            {activeTab === "business_profile" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-lg text-white">Business Profile</h2>
+                    <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>Update your sourcing goals and preferences — this personalizes your AI Coach recommendations.</p>
+                  </div>
+                  {bizProfile && (
+                    <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(74,222,128,0.10)", color: "#4ade80" }}>
+                      <Check className="w-3 h-3" />Profile Active
+                    </span>
+                  )}
+                </div>
+
+                {bizProfileLoading ? (
+                  <div className="flex items-center justify-center h-40">
+                    <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {/* Goal */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <Target className="w-3.5 h-3.5 text-purple-400" />Your Goal <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: "side_income", label: "Earn Side Income", sub: "$500–$2,000 / month" },
+                          { value: "full_time", label: "Go Full-Time", sub: "$5,000–$20,000 / month" },
+                          { value: "dtc_brand", label: "Build a DTC Brand", sub: "Long-term brand" },
+                          { value: "learn", label: "Explore & Learn", sub: "Understand dropshipping" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setBizForm({ ...bizForm, ambition: opt.value })}
+                            className="text-left p-3 rounded-xl transition-all"
+                            style={{
+                              background: bizForm.ambition === opt.value ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.03)",
+                              border: bizForm.ambition === opt.value ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.07)",
+                            }}
+                          >
+                            <p className="text-sm font-semibold" style={{ color: bizForm.ambition === opt.value ? "#c4b5fd" : "rgba(255,255,255,0.70)" }}>{opt.label}</p>
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.30)" }}>{opt.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Stage */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-400" />Current Stage <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: "newbie", label: "Complete Beginner", sub: "Never sold online" },
+                          { value: "has_idea", label: "Have an Idea", sub: "No store yet" },
+                          { value: "has_store", label: "Have a Store", sub: "Need better products" },
+                          { value: "already_selling", label: "Already Selling", sub: "Want to scale up" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setBizForm({ ...bizForm, businessStage: opt.value })}
+                            className="text-left p-3 rounded-xl transition-all"
+                            style={{
+                              background: bizForm.businessStage === opt.value ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.03)",
+                              border: bizForm.businessStage === opt.value ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.07)",
+                            }}
+                          >
+                            <p className="text-sm font-semibold" style={{ color: bizForm.businessStage === opt.value ? "#c4b5fd" : "rgba(255,255,255,0.70)" }}>{opt.label}</p>
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.30)" }}>{opt.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Budget */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <DollarSign className="w-3.5 h-3.5 text-purple-400" />Starting Budget <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: "under_500", label: "Under $500" },
+                          { value: "500_2000", label: "$500 – $2,000" },
+                          { value: "2000_10000", label: "$2,000 – $10,000" },
+                          { value: "over_10000", label: "$10,000+" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setBizForm({ ...bizForm, budget: opt.value })}
+                            className="p-3 rounded-xl text-sm font-semibold transition-all"
+                            style={{
+                              background: bizForm.budget === opt.value ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.03)",
+                              border: bizForm.budget === opt.value ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.07)",
+                              color: bizForm.budget === opt.value ? "#c4b5fd" : "rgba(255,255,255,0.60)",
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Sales Platform */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <ShoppingBag className="w-3.5 h-3.5 text-purple-400" />Sales Platforms <span className="text-white/25 text-xs font-normal">(select all that apply)</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: "shopify", label: "Shopify" },
+                          { value: "tiktok", label: "TikTok Shop" },
+                          { value: "amazon", label: "Amazon" },
+                          { value: "etsy", label: "Etsy" },
+                          { value: "woocommerce", label: "WooCommerce" },
+                          { value: "not_sure", label: "Not Decided" },
+                        ].map((opt) => {
+                          const selected = bizForm.targetPlatforms.includes(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => setBizForm({
+                                ...bizForm,
+                                targetPlatforms: selected
+                                  ? bizForm.targetPlatforms.filter((p) => p !== opt.value)
+                                  : [...bizForm.targetPlatforms, opt.value],
+                              })}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                              style={{
+                                background: selected ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.04)",
+                                border: selected ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.09)",
+                                color: selected ? "#c4b5fd" : "rgba(255,255,255,0.50)",
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Product Niches */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <Tag className="w-3.5 h-3.5 text-purple-400" />Product Niches <span className="text-white/25 text-xs font-normal">(select all that apply)</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: "home_goods", label: "Home & Living" },
+                          { value: "beauty", label: "Beauty & Skincare" },
+                          { value: "pet_supplies", label: "Pet Supplies" },
+                          { value: "sports_fitness", label: "Sports & Fitness" },
+                          { value: "baby_kids", label: "Baby & Kids" },
+                          { value: "gadgets", label: "Gadgets & Tech" },
+                          { value: "fashion", label: "Apparel & Fashion" },
+                          { value: "outdoor", label: "Outdoor & Garden" },
+                          { value: "kitchen", label: "Kitchen & Dining" },
+                          { value: "health_wellness", label: "Health & Wellness" },
+                          { value: "toys_games", label: "Toys & Games" },
+                          { value: "automotive", label: "Automotive" },
+                        ].map((opt) => {
+                          const selected = bizForm.interestedNiches.includes(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => setBizForm({
+                                ...bizForm,
+                                interestedNiches: selected
+                                  ? bizForm.interestedNiches.filter((n) => n !== opt.value)
+                                  : [...bizForm.interestedNiches, opt.value],
+                              })}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                              style={{
+                                background: selected ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.04)",
+                                border: selected ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.09)",
+                                color: selected ? "#c4b5fd" : "rgba(255,255,255,0.50)",
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Main Challenge */}
+                    <div>
+                      <label className="text-xs font-semibold mb-2 block flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+                        <AlertTriangle className="w-3.5 h-3.5 text-purple-400" />Main Challenge <span className="text-red-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: "finding_products", label: "Finding Winning Products", sub: "Don't know what will sell" },
+                          { value: "finding_suppliers", label: "Finding Reliable Suppliers", sub: "Quality & scam concerns" },
+                          { value: "marketing", label: "Marketing & Traffic", sub: "Can't get customers" },
+                          { value: "operations", label: "Managing Operations", sub: "Orders & returns" },
+                          { value: "capital", label: "Limited Budget", sub: "Not sure I can afford it" },
+                          { value: "knowledge", label: "Lack of Knowledge", sub: "Don't know where to start" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setBizForm({ ...bizForm, mainChallenge: opt.value })}
+                            className="text-left p-3 rounded-xl transition-all"
+                            style={{
+                              background: bizForm.mainChallenge === opt.value ? "rgba(124,58,237,0.20)" : "rgba(255,255,255,0.03)",
+                              border: bizForm.mainChallenge === opt.value ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.07)",
+                            }}
+                          >
+                            <p className="text-sm font-semibold" style={{ color: bizForm.mainChallenge === opt.value ? "#c4b5fd" : "rgba(255,255,255,0.70)" }}>{opt.label}</p>
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.30)" }}>{opt.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="flex items-center justify-between pt-2">
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Changes will update your AI Coach recommendations immediately.</p>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                        onClick={handleSaveBizProfile}
+                        disabled={saveOnboardingMutation.isPending}
+                        className="h-10 px-5 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                      >
+                        {saveOnboardingMutation.isPending
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</>
+                          : <><Save className="w-4 h-4" />Save Business Profile</>}
+                      </motion.button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

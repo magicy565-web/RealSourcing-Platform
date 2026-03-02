@@ -18,6 +18,7 @@ import {
   Zap,
   Calendar,
   Package,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ const MENU_GROUPS = [
     items: [
       { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", badge: "NEW" },
       { icon: Zap, label: "Sourcing Intelligence", href: "/sourcing-demands", badge: "AI" },
+      { icon: TrendingUp, label: "Profit Analyzer", href: "/profit-analyzer", badge: "NEW" },
     ],
   },
   {
@@ -81,7 +83,7 @@ export default function BuyerSidebar({ userRole = "buyer" }: SidebarProps) {
 
   // Deterministic avatar selection based on user id or name
   const avatarIndex = useMemo(() => {
-    const seed = user?.id || user?.name || "default";
+    const seed = String(user?.id || user?.name || "default");
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
       hash = (hash * 31 + seed.charCodeAt(i)) & 0xffff;

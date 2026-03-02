@@ -27,38 +27,6 @@ const CHALLENGE_LABELS: Record<string, string> = {
   knowledge: "Lack of Knowledge",
 };
 
-// ─── 任务清单（基于用户阶段动态生成）─────────────────────────────────────────
-function getTasksForStage(stage: string, niches: string[]): Task[] {
-  const nicheText = niches.length > 0 ? niches[0] : "your niche";
-  const tasks: Record<string, Task[]> = {
-    newbie: [
-      { id: "t1", title: "Complete your business profile", description: "Tell us more about your goals", action: "/onboarding", actionLabel: "Complete Profile", icon: "solar:user-circle-bold-duotone", done: true },
-      { id: "t2", title: "Browse the Factory Library", description: "Explore 500+ verified Chinese manufacturers", action: "/factories", actionLabel: "Browse Factories", icon: "solar:buildings-2-bold-duotone", done: false },
-      { id: "t3", title: "Attend your first Webinar", description: "Watch a live factory tour or product showcase", action: "/webinars", actionLabel: "View Webinars", icon: "solar:videocamera-bold-duotone", done: false },
-      { id: "t4", title: "Send your first inquiry", description: "Contact a supplier about a product you like", action: "/factories", actionLabel: "Find Suppliers", icon: "solar:send-square-bold-duotone", done: false },
-    ],
-    has_idea: [
-      { id: "t1", title: "Complete your business profile", description: "Your profile is set up", action: "/onboarding", actionLabel: "View Profile", icon: "solar:user-circle-bold-duotone", done: true },
-      { id: "t2", title: `Find suppliers for ${nicheText}`, description: "Search factories matching your product idea", action: "/factories", actionLabel: "Search Factories", icon: "solar:magnifer-bold-duotone", done: false },
-      { id: "t3", title: "Request 3 supplier quotes", description: "Compare pricing and MOQ from multiple sources", action: "/inquiries", actionLabel: "My Inquiries", icon: "solar:document-text-bold-duotone", done: false },
-      { id: "t4", title: "Book a video call with a factory", description: "Verify the supplier face-to-face", action: "/factories", actionLabel: "Book a Meeting", icon: "solar:calendar-bold-duotone", done: false },
-    ],
-    has_store: [
-      { id: "t1", title: "Complete your business profile", description: "Your profile is set up", action: "/onboarding", actionLabel: "View Profile", icon: "solar:user-circle-bold-duotone", done: true },
-      { id: "t2", title: "Request product samples", description: "Verify quality before listing products", action: "/factories", actionLabel: "Find Factories", icon: "solar:box-bold-duotone", done: false },
-      { id: "t3", title: "Compare 3+ suppliers on price & quality", description: "Use AI to analyze your options", action: "/ai-assistant", actionLabel: "Ask AI Coach", icon: "solar:magic-stick-2-bold-duotone", done: false },
-      { id: "t4", title: "Set up a sourcing demand", description: "Let factories come to you with proposals", action: "/sourcing-demands", actionLabel: "Create Demand", icon: "solar:target-bold-duotone", done: false },
-    ],
-    already_selling: [
-      { id: "t1", title: "Complete your business profile", description: "Your profile is set up", action: "/onboarding", actionLabel: "View Profile", icon: "solar:user-circle-bold-duotone", done: true },
-      { id: "t2", title: "Audit your current suppliers", description: "Are there better options available?", action: "/factories", actionLabel: "Browse Factories", icon: "solar:chart-2-bold-duotone", done: false },
-      { id: "t3", title: "Negotiate better pricing", description: "Use AI to prepare for supplier negotiation", action: "/ai-assistant", actionLabel: "Get AI Help", icon: "solar:hand-shake-bold-duotone", done: false },
-      { id: "t4", title: "Explore private label options", description: "Build your own brand with factory partners", action: "/sourcing-demands", actionLabel: "Post a Demand", icon: "solar:crown-bold-duotone", done: false },
-    ],
-  };
-  return tasks[stage] || tasks.newbie;
-}
-
 interface Task {
   id: string;
   title: string;
@@ -69,12 +37,207 @@ interface Task {
   done: boolean;
 }
 
+// ─── 任务清单（基于用户阶段 + 真实数据）─────────────────────────────────────
+function buildTasks(
+  stage: string,
+  niches: string[],
+  realData: {
+    hasInquiries: boolean;
+    hasMeetings: boolean;
+    hasSampleOrders: boolean;
+    hasWebinarAttended: boolean;
+    hasSourcingDemand: boolean;
+  }
+): Task[] {
+  const nicheText = niches.length > 0 ? niches[0].replace(/_/g, " ") : "your niche";
+
+  const taskMap: Record<string, Task[]> = {
+    newbie: [
+      {
+        id: "t1",
+        title: "Complete your business profile",
+        description: "Tell us more about your goals",
+        action: "/onboarding",
+        actionLabel: "View Profile",
+        icon: "solar:user-circle-bold-duotone",
+        done: true, // always done if we have a profile
+      },
+      {
+        id: "t2",
+        title: "Attend your first Webinar",
+        description: "Watch a live factory tour or product showcase",
+        action: "/webinars",
+        actionLabel: "View Webinars",
+        icon: "solar:videocamera-bold-duotone",
+        done: realData.hasWebinarAttended,
+      },
+      {
+        id: "t3",
+        title: "Browse the Factory Library",
+        description: "Explore 500+ verified Chinese manufacturers",
+        action: "/factories",
+        actionLabel: "Browse Factories",
+        icon: "solar:buildings-2-bold-duotone",
+        done: realData.hasInquiries, // proxy: if they've sent an inquiry, they've browsed
+      },
+      {
+        id: "t4",
+        title: "Send your first inquiry",
+        description: "Contact a supplier about a product you like",
+        action: "/inquiries",
+        actionLabel: "My Inquiries",
+        icon: "solar:send-square-bold-duotone",
+        done: realData.hasInquiries,
+      },
+    ],
+    has_idea: [
+      {
+        id: "t1",
+        title: "Complete your business profile",
+        description: "Your profile is set up",
+        action: "/settings",
+        actionLabel: "Edit Profile",
+        icon: "solar:user-circle-bold-duotone",
+        done: true,
+      },
+      {
+        id: "t2",
+        title: `Find suppliers for ${nicheText}`,
+        description: "Search factories matching your product idea",
+        action: "/factories",
+        actionLabel: "Search Factories",
+        icon: "solar:magnifer-bold-duotone",
+        done: realData.hasInquiries,
+      },
+      {
+        id: "t3",
+        title: "Request 3 supplier quotes",
+        description: "Compare pricing and MOQ from multiple sources",
+        action: "/inquiries",
+        actionLabel: "My Inquiries",
+        icon: "solar:document-text-bold-duotone",
+        done: realData.hasInquiries,
+      },
+      {
+        id: "t4",
+        title: "Book a video call with a factory",
+        description: "Verify the supplier face-to-face",
+        action: "/meetings",
+        actionLabel: "Book a Meeting",
+        icon: "solar:calendar-bold-duotone",
+        done: realData.hasMeetings,
+      },
+    ],
+    has_store: [
+      {
+        id: "t1",
+        title: "Complete your business profile",
+        description: "Your profile is set up",
+        action: "/settings",
+        actionLabel: "Edit Profile",
+        icon: "solar:user-circle-bold-duotone",
+        done: true,
+      },
+      {
+        id: "t2",
+        title: "Request product samples",
+        description: "Verify quality before listing products",
+        action: "/sample-orders",
+        actionLabel: "Sample Orders",
+        icon: "solar:box-bold-duotone",
+        done: realData.hasSampleOrders,
+      },
+      {
+        id: "t3",
+        title: "Compare suppliers with AI",
+        description: "Use AI to analyze your options",
+        action: "/ai-assistant",
+        actionLabel: "Ask AI Coach",
+        icon: "solar:magic-stick-2-bold-duotone",
+        done: false,
+      },
+      {
+        id: "t4",
+        title: "Post a sourcing demand",
+        description: "Let factories come to you with proposals",
+        action: "/sourcing-demands",
+        actionLabel: "Create Demand",
+        icon: "solar:target-bold-duotone",
+        done: realData.hasSourcingDemand,
+      },
+    ],
+    already_selling: [
+      {
+        id: "t1",
+        title: "Complete your business profile",
+        description: "Your profile is set up",
+        action: "/settings",
+        actionLabel: "Edit Profile",
+        icon: "solar:user-circle-bold-duotone",
+        done: true,
+      },
+      {
+        id: "t2",
+        title: "Audit your current suppliers",
+        description: "Are there better options available?",
+        action: "/factories",
+        actionLabel: "Browse Factories",
+        icon: "solar:chart-2-bold-duotone",
+        done: realData.hasInquiries,
+      },
+      {
+        id: "t3",
+        title: "Analyze your profit margins",
+        description: "Use the Dropshipping Profit Analyzer",
+        action: "/profit-analyzer",
+        actionLabel: "Open Analyzer",
+        icon: "solar:graph-up-bold-duotone",
+        done: false,
+      },
+      {
+        id: "t4",
+        title: "Explore private label options",
+        description: "Build your own brand with factory partners",
+        action: "/sourcing-demands",
+        actionLabel: "Post a Demand",
+        icon: "solar:crown-bold-duotone",
+        done: realData.hasSourcingDemand,
+      },
+    ],
+  };
+
+  return taskMap[stage] || taskMap.newbie;
+}
+
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 export default function AICoachBanner() {
   const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState(true);
+
   const { data: profile, isLoading } = trpc.businessProfile.get.useQuery(undefined, {
     retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 真实数据查询（用于任务完成状态）
+  const { data: inquiries = [] } = trpc.inquiries.myInquiries.useQuery(undefined, {
+    enabled: !!profile,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: meetings = [] } = trpc.meetings.myMeetings.useQuery(undefined, {
+    enabled: !!profile,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: sampleOrders = [] } = trpc.sampleOrders.mySampleOrders.useQuery(undefined, {
+    enabled: !!profile,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: sourcingDemands = [] } = trpc.sourcingDemands.getByUser.useQuery(undefined, {
+    enabled: !!profile,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: webinars = [] } = trpc.webinars.list.useQuery(undefined, {
+    enabled: !!profile,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -119,7 +282,16 @@ export default function AICoachBanner() {
     } catch { return []; }
   })();
 
-  const tasks = getTasksForStage(profile.businessStage || "newbie", niches);
+  // 构建真实数据状态
+  const realData = {
+    hasInquiries: Array.isArray(inquiries) && inquiries.length > 0,
+    hasMeetings: Array.isArray(meetings) && meetings.length > 0,
+    hasSampleOrders: Array.isArray(sampleOrders) && sampleOrders.length > 0,
+    hasWebinarAttended: Array.isArray(webinars) && webinars.some((w: any) => w.status === "ended"),
+    hasSourcingDemand: Array.isArray(sourcingDemands) && sourcingDemands.length > 0,
+  };
+
+  const tasks = buildTasks(profile.businessStage || "newbie", niches, realData);
   const completedCount = tasks.filter((t) => t.done).length;
   const progressPct = (completedCount / tasks.length) * 100;
 
@@ -225,7 +397,7 @@ export default function AICoachBanner() {
                   Ask AI Coach anything
                 </button>
                 <button
-                  onClick={() => setLocation("/settings")}
+                  onClick={() => setLocation("/settings?tab=business_profile")}
                   className="flex items-center gap-1.5 text-xs text-white/25 hover:text-white/50 transition-colors"
                 >
                   <Icon icon="solar:settings-bold-duotone" className="w-3.5 h-3.5" />
