@@ -95,7 +95,12 @@ function OpportunityCard({ item, onSave, onDismiss, onView }: {
         </div>
 
         {/* Product Name */}
-        <h3 className="text-sm font-semibold text-white mb-1.5 line-clamp-2 leading-snug">{item.name}</h3>
+        <h3 className="text-sm font-semibold text-white mb-1.5 line-clamp-2 leading-snug">
+          {item.name
+            .split(' — ')
+            .filter((part, idx, arr) => idx === 0 || part !== arr[0])
+            .join(' — ')}
+        </h3>
 
         {/* Headline */}
         {item.headline && (

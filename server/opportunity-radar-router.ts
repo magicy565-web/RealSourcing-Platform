@@ -174,8 +174,8 @@ export const opportunityRadarRouter = router({
       const offset = (input.page - 1) * input.pageSize;
       const whereClause = conditions.join(' AND ');
 
-      // Main query
-      const [rows] = await pool.execute(`
+      // Main query — use pool.query (not execute) because SQL contains dynamic fragments
+      const mainSql = `
         SELECT
           p.id, p.name, p.category, p.description, p.coverImage, p.images, p.slug,
           pd.priceMin, pd.priceMax, pd.currency, pd.moq, pd.material, pd.features,
@@ -189,7 +189,6 @@ export const opportunityRadarRouter = router({
           poa.suggestedPlatforms, poa.actionSteps, poa.risks,
           poa.estimatedMargin, poa.suggestedRetailPrice,
           poa.keywords, poa.tags, poa.batchId, poa.createdAt as analysisDate,
-          -- User interaction status
           (SELECT action FROM user_radar_interactions
            WHERE userId = ? AND productId = p.id
            ORDER BY createdAt DESC LIMIT 1) as userAction
@@ -200,16 +199,18 @@ export const opportunityRadarRouter = router({
         WHERE ${whereClause}
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?
-      `, [ctx.user.id, ...params, input.pageSize, offset]) as any[];
+      `;
+      const [rows] = await pool.query(mainSql, [ctx.user.id, ...params, input.pageSize, offset]) as any[];
 
       // Count total
-      const [countRows] = await pool.execute(`
+      const countSql = `
         SELECT COUNT(*) as total
         FROM product_opportunity_analysis poa
         JOIN products p ON p.id = poa.productId
         LEFT JOIN product_details pd ON pd.productId = p.id
         WHERE ${whereClause}
-      `, params) as any[];
+      `;
+      const [countRows] = await pool.query(countSql, params) as any[];
 
       const total = (countRows as any[])[0]?.total || 0;
 
