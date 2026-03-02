@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { getPersonalizedWidgetGreeting } from "@/lib/aiPersonalization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -321,6 +322,13 @@ export function AICoachWidget() {
     }
   );
 
+  // Business profile for personalized greeting
+  const { data: businessProfile } = trpc.businessProfile.get.useQuery(undefined, {
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+
   const chatMutation = trpc.coach.chat.useMutation();
   const feedbackMutation = trpc.coach.submitFeedback.useMutation();
   const updateSettingsMutation = trpc.coach.updateSettings.useMutation();
@@ -442,9 +450,21 @@ export function AICoachWidget() {
   const newBatchCount = batchQuery.data?.newCount || 0;
   const hasNewOpps = batchQuery.data?.hasNewOpportunities && !notifDismissed;
 
-  const welcomeMessage = hasProfile
-    ? `Hi! I'm ${coachName}, your ${nicheLabel} sourcing coach. Ask me about finding suppliers, dropshipping strategy, or say "show me opportunities" to see the latest product picks!`
-    : `Hi! I'm ${coachName}, your AI sourcing coach. Complete your business profile first so I can give you personalized advice for your niche!`;
+  // Personalized greeting based on business profile
+  const personalizedGreeting = getPersonalizedWidgetGreeting(
+    coachName,
+    businessProfile ? {
+      ambition: businessProfile.ambition,
+      businessStage: businessProfile.businessStage,
+      budget: businessProfile.budget,
+      mainChallenge: businessProfile.mainChallenge,
+      targetPlatforms: businessProfile.targetPlatforms,
+      interestedNiches: businessProfile.interestedNiches,
+    } : null,
+    nicheLabel,
+  );
+  const welcomeMessage = personalizedGreeting.message;
+  const personalizedSuggestedPrompts = personalizedGreeting.suggestedPrompts;
 
   return (
     <>
@@ -582,22 +602,22 @@ export function AICoachWidget() {
             <div ref={messagesEndRef} />
           </ScrollArea>
 
-          {/* Suggested prompts */}
+          {/* Personalized Suggested Prompts */}
           {messages.length === 0 && !isSending && (
-            <div className="px-4 pb-2 flex flex-wrap gap-1.5">
-              {[
-                "Show me new opportunities",
-                "How do I find furniture suppliers?",
-                "What's a good profit margin?",
-              ].map(prompt => (
-                <button
-                  key={prompt}
-                  onClick={() => handleSend(prompt)}
-                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full px-2.5 py-1 transition-colors border border-slate-700"
-                >
-                  {prompt}
-                </button>
-              ))}
+            <div className="px-4 pb-3">
+              <p className="text-[10px] text-slate-500 mb-1.5 font-medium uppercase tracking-wider">Try asking:</p>
+              <div className="flex flex-col gap-1.5">
+                {personalizedSuggestedPrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(prompt)}
+                    className="text-left text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl px-3 py-2 transition-all border border-slate-700 hover:border-violet-500/40 flex items-center gap-2 group"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500/60 group-hover:bg-violet-400 flex-shrink-0 transition-colors" />
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

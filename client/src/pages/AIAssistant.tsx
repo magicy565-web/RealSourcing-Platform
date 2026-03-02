@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPersonalizedQuickPrompts } from "@/lib/aiPersonalization";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import QuoteCardRedesigned from "@/components/factories/QuoteCardRedesigned";
 import SupplierCompareMatrix, { type SupplierForCompare } from "@/components/factories/SupplierCompareMatrix";
@@ -439,15 +440,7 @@ function PostQuoteFlow({ quote, onAction }: {
   );
 }
 
-// ─── Prompt chips ─────────────────────────────────────────────────────────────
-const promptChips = [
-  { label: "蓝牙耳机 5000个", icon: "🎧" },
-  { label: "瑜伽服 ODM 小单", icon: "🧘" },
-  { label: "USB-C 充电器 FCC 认证", icon: "⚡" },
-  { label: "宠物用品 亚马逊 FBA", icon: "🐾" },
-  { label: "护肤品 GMP 工厂", icon: "💄" },
-  { label: "LED 灯具 CE 认证", icon: "💡" },
-];
+// ─── Prompt chips (static fallback, replaced by personalized version below) ───
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AIAssistant() {
@@ -476,6 +469,12 @@ export default function AIAssistant() {
 
   const agentWelcomeMutation = trpc.ai.agentWelcome.useMutation();
   const agentChatMutation = trpc.ai.agentChat.useMutation();
+
+  // ─── Business Profile for personalization ──────────────────────────────────
+  const { data: businessProfile } = trpc.businessProfile.get.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Auto-scroll
   useEffect(() => {
@@ -818,42 +817,77 @@ export default function AIAssistant() {
         {renderInputBox("例如：我需要 5000 个蓝牙耳机，预算 $8/个，需要 CE 认证...")}
       </div>
 
-      {/* Prompt chips */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center",
-        maxWidth: 640, marginBottom: 32,
-      }}>
-        {promptChips.map((chip, i) => (
-          <motion.button
-            key={i}
-            whileHover={{ scale: 1.04, y: -1 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => {
-              setInputValue(chip.label);
-              inputRef.current?.focus();
-            }}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 999, padding: "6px 14px",
-              color: "#94a3b8", fontSize: 12, fontWeight: 500,
-              cursor: "pointer", transition: "all 0.2s",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.borderColor = "rgba(124,58,237,0.4)";
-              e.currentTarget.style.color = "#c4b5fd";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-              e.currentTarget.style.color = "#94a3b8";
-            }}
-          >
-            <span>{chip.icon}</span>
-            {chip.label}
-          </motion.button>
-        ))}
-      </div>
+      {/* Personalized Quick Prompts */}
+      {(() => {
+        const quickPrompts = getPersonalizedQuickPrompts(businessProfile || null);
+        return (
+          <div style={{ width: "100%", maxWidth: 680, marginBottom: 32 }}>
+            {businessProfile && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6,
+                marginBottom: 10, justifyContent: "center",
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: "#7c3aed",
+                  letterSpacing: "0.08em", textTransform: "uppercase",
+                }}>✦ Personalized for you</span>
+              </div>
+            )}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 8,
+            }}>
+              {quickPrompts.map((prompt, i) => (
+                <motion.button
+                  key={i}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    handleSendDirect(prompt.prompt);
+                  }}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 12, padding: "10px 14px",
+                    color: "#94a3b8", fontSize: 12, fontWeight: 500,
+                    cursor: "pointer", transition: "all 0.2s",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = `${prompt.color}50`;
+                    e.currentTarget.style.background = `${prompt.color}08`;
+                    e.currentTarget.style.color = "#e2e8f0";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                    e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                    e.currentTarget.style.color = "#94a3b8";
+                  }}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{prompt.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: "#cbd5e1", fontSize: 12, marginBottom: 2, lineHeight: 1.3 }}>
+                      {prompt.label}
+                    </div>
+                    <div style={{
+                      fontSize: 10, color: "#475569", lineHeight: 1.4,
+                      overflow: "hidden", display: "-webkit-box",
+                      WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                    }}>
+                      {prompt.prompt.length > 80 ? prompt.prompt.slice(0, 80) + "…" : prompt.prompt}
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Guide cards */}
       <div style={{

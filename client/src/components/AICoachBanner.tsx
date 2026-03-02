@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { getPersonalizedFirstAction } from "@/lib/aiPersonalization";
 
 // ─── 标签映射 ─────────────────────────────────────────────────────────────────
 const AMBITION_LABELS: Record<string, string> = {
@@ -299,6 +300,22 @@ export default function AICoachBanner() {
   const stageLabel = STAGE_LABELS[profile.businessStage || ""] || profile.businessStage || "—";
   const challengeLabel = CHALLENGE_LABELS[profile.mainChallenge || ""] || profile.mainChallenge || "—";
 
+  // ── 个性化首论推荐 ──────────────────────────────────────────────────────────
+  const firstAction = getPersonalizedFirstAction({
+    ambition: profile.ambition,
+    businessStage: profile.businessStage,
+    budget: profile.budget,
+    mainChallenge: profile.mainChallenge,
+    targetPlatforms: profile.targetPlatforms,
+    interestedNiches: profile.interestedNiches,
+  });
+
+  const handleFirstAction = () => {
+    // Navigate to AI Assistant with pre-filled prompt via URL param
+    const encodedPrompt = encodeURIComponent(firstAction.prompt);
+    setLocation(`${firstAction.href}?q=${encodedPrompt}`);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -362,6 +379,54 @@ export default function AICoachBanner() {
             className="overflow-hidden"
           >
             <div className="px-5 py-4">
+
+              {/* ── 个性化首论推荐卡片（NEW）── */}
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+                className="mb-4 rounded-xl overflow-hidden cursor-pointer group"
+                style={{
+                  background: "linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(79,70,229,0.08) 100%)",
+                  border: "1px solid rgba(124,58,237,0.25)",
+                }}
+                onClick={handleFirstAction}
+              >
+                <div className="px-4 py-3 flex items-center gap-3">
+                  {/* AI 推荐标签 */}
+                  <div className="flex-shrink-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                      style={{ background: "rgba(124,58,237,0.25)" }}>
+                      <Icon icon={firstAction.icon} className="w-4.5 h-4.5 text-purple-300" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">
+                        AI Recommended Next Step
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-white leading-tight truncate">
+                      {firstAction.headline}
+                    </p>
+                    <p className="text-xs text-white/40 mt-0.5 leading-relaxed line-clamp-1">
+                      {firstAction.subtext}
+                    </p>
+                  </div>
+                  <div
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 group-hover:bg-purple-500/30"
+                    style={{
+                      background: "rgba(124,58,237,0.20)",
+                      border: "1px solid rgba(124,58,237,0.35)",
+                      color: "#c4b5fd",
+                    }}
+                  >
+                    {firstAction.ctaLabel}
+                    <Icon icon="solar:arrow-right-bold" className="w-3 h-3" />
+                  </div>
+                </div>
+              </motion.div>
+
               {/* AI Coach 上下文提示 */}
               <div className="flex items-start gap-3 mb-4 p-3 rounded-xl"
                 style={{ background: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.12)" }}>
