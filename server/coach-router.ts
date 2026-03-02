@@ -376,13 +376,55 @@ export const coachRouter = router({
         sessionId = (result as any).insertId;
       }
 
+       // ── Opportunity card injection ───────────────────────────────────────
+      // Detect if user is asking about opportunities / new products
+      const opportunityKeywords = [
+        "show me opportunities", "new opportunities", "new products", "latest products",
+        "what's new", "whats new", "trending products", "top products", "best products",
+        "product opportunities", "show products", "find products", "recommend products",
+        "show me deals", "new arrivals", "latest arrivals",
+      ];
+      const msgLower = input.message.toLowerCase();
+      const isOpportunityQuery = opportunityKeywords.some(kw => msgLower.includes(kw));
+      let opportunityCards: any[] = [];
+      if (isOpportunityQuery) {
+        try {
+          const [oppRows] = await pool.execute(
+            `SELECT oi.id, oi.name, oi.opportunityScore, oi.estimatedMargin,
+                    oi.priceMin, oi.priceMax, oi.moq, oi.headline, oi.coverImage, oi.tags,
+                    f.name as factoryName
+             FROM opportunity_items oi
+             LEFT JOIN opportunity_batches ob ON oi.batchId = ob.id
+             LEFT JOIN factories f ON oi.factoryId = f.id
+             WHERE ob.niche = ? AND oi.isActive = 1
+             ORDER BY oi.opportunityScore DESC
+             LIMIT 3`,
+            [primaryNiche]
+          ) as any[];
+          opportunityCards = (oppRows as any[]).map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            factoryName: row.factoryName,
+            opportunityScore: row.opportunityScore,
+            estimatedMargin: row.estimatedMargin,
+            priceMin: row.priceMin,
+            priceMax: row.priceMax,
+            moq: row.moq,
+            headline: row.headline,
+            coverImage: row.coverImage,
+            tags: typeof row.tags === "string" ? JSON.parse(row.tags || "[]") : (row.tags || []),
+          }));
+        } catch {
+          // Silent fail — cards are optional enhancement
+        }
+      }
       return {
         sessionId,
         reply: assistantContent,
         messageIndex: updatedMessages.length - 1,
+        opportunityCards: opportunityCards.length > 0 ? opportunityCards : undefined,
       };
     }),
-
   // Submit feedback for a specific message
   submitFeedback: protectedProcedure
     .input(z.object({

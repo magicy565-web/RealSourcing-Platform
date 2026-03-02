@@ -44,6 +44,7 @@ import OpsAgentMonitor from "./pages/OpsAgentMonitor";
 import MyQuotes from "./pages/MyQuotes";
 import CustomQuoteHistory from "./pages/CustomQuoteHistory";
 import DropshippingProfitAnalyzer from "./pages/DropshippingProfitAnalyzer";
+import OpportunityRadar from "./pages/OpportunityRadar";
 import { AICoachWidget } from "./components/AICoachWidget";
 
 function Router() {
@@ -237,6 +238,13 @@ function Router() {
       <Route path="/profit-analyzer">
         <ProtectedRoute>
           <DropshippingProfitAnalyzer />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Opportunity Radar (Phase 5.2) ── */}
+      <Route path="/opportunity-radar">
+        <ProtectedRoute>
+          <OpportunityRadar />
         </ProtectedRoute>
       </Route>
 

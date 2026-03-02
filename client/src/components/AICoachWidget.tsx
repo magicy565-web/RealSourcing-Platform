@@ -1,7 +1,6 @@
 /**
  * AICoachWidget — Global Floating AI Coach
- * A persistent floating chat widget available on all authenticated pages.
- * Features: niche-specialized AI, session memory, user-defined coach name, message feedback.
+ * Upgraded: proactive new-batch notification + in-chat opportunity cards
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
@@ -11,42 +10,124 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  MessageCircle, X, Send, ThumbsUp, ThumbsDown,
+  X, Send, ThumbsUp, ThumbsDown,
   Sparkles, ChevronDown, RotateCcw, Settings, Check,
-  Loader2, Bot, User
+  Loader2, Bot, User, Radar, TrendingUp, DollarSign,
+  ArrowUpRight, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OpportunityCard {
+  id: number;
+  name: string;
+  factoryName?: string;
+  opportunityScore: number;
+  estimatedMargin?: string;
+  priceMin?: number;
+  priceMax?: number;
+  moq?: number;
+  headline?: string;
+  coverImage?: string;
+  tags?: string[];
+}
 
 interface CoachMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
   feedback?: "up" | "down";
+  opportunityCards?: OpportunityCard[];
+}
+
+// ─── Mini Opportunity Card (in-chat) ─────────────────────────────────────────
+
+function MiniOpportunityCard({ card, onNavigate }: { card: OpportunityCard; onNavigate: () => void }) {
+  const scoreColor =
+    card.opportunityScore >= 75 ? "text-purple-400" :
+    card.opportunityScore >= 55 ? "text-amber-400" : "text-slate-400";
+
+  return (
+    <div
+      className="bg-slate-700/50 border border-slate-600 rounded-xl overflow-hidden mt-2 hover:border-purple-500/50 transition-all cursor-pointer group"
+      onClick={onNavigate}
+    >
+      {/* Cover */}
+      <div className="h-20 bg-gradient-to-br from-purple-900/30 to-slate-800 relative overflow-hidden">
+        {card.coverImage ? (
+          <img
+            src={card.coverImage}
+            alt={card.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Package className="w-7 h-7 text-slate-600" />
+          </div>
+        )}
+        <div className={cn(
+          "absolute top-2 right-2 px-1.5 py-0.5 bg-slate-900/80 rounded-full text-[10px] font-bold",
+          scoreColor
+        )}>
+          {card.opportunityScore}pt
+        </div>
+      </div>
+      {/* Info */}
+      <div className="p-2.5">
+        <p className="text-xs font-semibold text-white line-clamp-1 mb-0.5">{card.name}</p>
+        {card.factoryName && (
+          <p className="text-[10px] text-slate-400 mb-1.5">{card.factoryName}</p>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+            {card.priceMin != null && (
+              <span className="flex items-center gap-0.5">
+                <DollarSign className="w-2.5 h-2.5" />
+                ${card.priceMin}{card.priceMax ? `–$${card.priceMax}` : ""}
+              </span>
+            )}
+            {card.estimatedMargin && (
+              <span className="flex items-center gap-0.5 text-emerald-400">
+                <TrendingUp className="w-2.5 h-2.5" />
+                {card.estimatedMargin}
+              </span>
+            )}
+          </div>
+          <ArrowUpRight className="w-3 h-3 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+        {card.tags && card.tags.length > 0 && (
+          <div className="flex gap-1 mt-1.5 flex-wrap">
+            {card.tags.slice(0, 3).map(tag => (
+              <span key={tag} className="px-1 py-0.5 bg-purple-600/20 text-purple-400 text-[9px] rounded-full">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({
-  message,
-  index,
-  sessionId,
-  coachName,
-  onFeedback,
+  message, index, sessionId, coachName, onFeedback, onNavigateRadar,
 }: {
   message: CoachMessage;
   index: number;
   sessionId: number | null;
   coachName: string;
   onFeedback: (idx: number, feedback: "up" | "down") => void;
+  onNavigateRadar: () => void;
 }) {
   const isAssistant = message.role === "assistant";
 
   return (
     <div className={cn("flex gap-2 mb-4", isAssistant ? "flex-row" : "flex-row-reverse")}>
-      {/* Avatar */}
       <div className={cn(
         "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold",
         isAssistant
@@ -57,27 +138,35 @@ function MessageBubble({
       </div>
 
       <div className={cn("flex flex-col gap-1 max-w-[85%]", isAssistant ? "items-start" : "items-end")}>
-        {/* Bubble */}
         <div className={cn(
           "rounded-2xl px-3 py-2 text-sm leading-relaxed",
           isAssistant
             ? "bg-slate-800 text-slate-100 rounded-tl-sm"
             : "bg-violet-600 text-white rounded-tr-sm"
         )}>
-          {/* Render markdown-like content */}
           <div className="whitespace-pre-wrap break-words">{message.content}</div>
         </div>
 
-        {/* Feedback buttons for assistant messages */}
+        {/* Opportunity Cards */}
+        {isAssistant && message.opportunityCards && message.opportunityCards.length > 0 && (
+          <div className="w-full space-y-1">
+            {message.opportunityCards.map(card => (
+              <MiniOpportunityCard key={card.id} card={card} onNavigate={onNavigateRadar} />
+            ))}
+            <p className="text-[10px] text-slate-500 px-1">
+              Tap a card to explore on Opportunity Radar →
+            </p>
+          </div>
+        )}
+
+        {/* Feedback */}
         {isAssistant && sessionId && (
           <div className="flex items-center gap-1 px-1">
             <button
               onClick={() => onFeedback(index, "up")}
               className={cn(
                 "p-1 rounded transition-colors",
-                message.feedback === "up"
-                  ? "text-green-400"
-                  : "text-slate-500 hover:text-slate-300"
+                message.feedback === "up" ? "text-green-400" : "text-slate-500 hover:text-slate-300"
               )}
               title="Helpful"
             >
@@ -87,14 +176,15 @@ function MessageBubble({
               onClick={() => onFeedback(index, "down")}
               className={cn(
                 "p-1 rounded transition-colors",
-                message.feedback === "down"
-                  ? "text-red-400"
-                  : "text-slate-500 hover:text-slate-300"
+                message.feedback === "down" ? "text-red-400" : "text-slate-500 hover:text-slate-300"
               )}
               title="Not helpful"
             >
               <ThumbsDown className="w-3 h-3" />
             </button>
+            <span className="text-[10px] text-slate-600 ml-1">
+              {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
           </div>
         )}
       </div>
@@ -102,19 +192,67 @@ function MessageBubble({
   );
 }
 
-// ─── Coach Name Settings Panel ────────────────────────────────────────────────
+// ─── New Batch Notification Bubble ───────────────────────────────────────────
 
-function CoachNameSettings({
-  currentName,
-  onSave,
-  onClose,
-}: {
+function NewBatchNotification({ count, onView, onDismiss }: {
+  count: number;
+  onView: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="fixed bottom-24 right-6 z-50 w-72 bg-slate-900 border border-purple-500/40 rounded-2xl shadow-2xl shadow-purple-900/30 overflow-hidden">
+      <div className="bg-gradient-to-r from-purple-600/30 to-violet-600/20 px-4 py-3 flex items-center justify-between border-b border-purple-500/20">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-purple-600/30 flex items-center justify-center">
+            <Radar className="w-3.5 h-3.5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-white">New Opportunities!</p>
+            <p className="text-[10px] text-purple-300">Fresh batch analyzed</p>
+          </div>
+        </div>
+        <button onClick={onDismiss} className="text-slate-400 hover:text-white transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+          <p className="text-sm text-slate-200">
+            <span className="font-semibold text-purple-300">{count} new products</span> analyzed for your niche
+          </p>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          AI has identified high-potential opportunities in furniture & home living. Check them out before your competitors do.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onView}
+            className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5"
+          >
+            <Radar className="w-3.5 h-3.5" />
+            View Radar
+          </button>
+          <button
+            onClick={onDismiss}
+            className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-400 text-xs rounded-xl transition-all"
+          >
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Coach Name Settings ──────────────────────────────────────────────────────
+
+function CoachNameSettings({ currentName, onSave, onClose }: {
   currentName: string;
   onSave: (name: string) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(currentName);
-
   return (
     <div className="p-4 border-b border-slate-700 bg-slate-800/80">
       <p className="text-xs text-slate-400 mb-2">Give your AI Coach a name</p>
@@ -127,19 +265,12 @@ function CoachNameSettings({
           className="h-8 text-sm bg-slate-700 border-slate-600 text-white"
           onKeyDown={e => e.key === "Enter" && name.trim() && onSave(name.trim())}
         />
-        <Button
-          size="sm"
-          className="h-8 px-2 bg-violet-600 hover:bg-violet-700"
-          onClick={() => name.trim() && onSave(name.trim())}
-        >
+        <Button size="sm" className="h-8 px-2 bg-violet-600 hover:bg-violet-700"
+          onClick={() => name.trim() && onSave(name.trim())}>
           <Check className="w-3.5 h-3.5" />
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 px-2 text-slate-400 hover:text-white"
-          onClick={onClose}
-        >
+        <Button size="sm" variant="ghost" className="h-8 px-2 text-slate-400 hover:text-white"
+          onClick={onClose}>
           <X className="w-3.5 h-3.5" />
         </Button>
       </div>
@@ -151,6 +282,7 @@ function CoachNameSettings({
 
 export function AICoachWidget() {
   const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
 
   // UI State
   const [isOpen, setIsOpen] = useState(false);
@@ -158,6 +290,8 @@ export function AICoachWidget() {
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isFirstOpen, setIsFirstOpen] = useState(true);
+  const [showBatchNotif, setShowBatchNotif] = useState(false);
+  const [notifDismissed, setNotifDismissed] = useState(false);
 
   // Session State
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -178,12 +312,22 @@ export function AICoachWidget() {
     staleTime: 30_000,
   });
 
+  const batchQuery = trpc.opportunityRadar.getLatestBatch.useQuery(
+    { niche: "furniture" },
+    {
+      enabled: isAuthenticated,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60_000,
+    }
+  );
+
   const chatMutation = trpc.coach.chat.useMutation();
   const feedbackMutation = trpc.coach.submitFeedback.useMutation();
   const updateSettingsMutation = trpc.coach.updateSettings.useMutation();
   const clearSessionMutation = trpc.coach.clearSession.useMutation();
+  const markBatchSeenMutation = trpc.opportunityRadar.markBatchSeen.useMutation();
 
-  // Sync session data from query
+  // Sync session data
   useEffect(() => {
     if (sessionQuery.data) {
       const data = sessionQuery.data;
@@ -197,73 +341,61 @@ export function AICoachWidget() {
     }
   }, [sessionQuery.data]);
 
+  // Show new batch notification (2s delay after login)
+  useEffect(() => {
+    if (batchQuery.data?.hasNewOpportunities && !notifDismissed && !isOpen) {
+      const timer = setTimeout(() => setShowBatchNotif(true), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [batchQuery.data?.hasNewOpportunities, notifDismissed, isOpen]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isSending]);
 
   // Focus input when opened
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
   }, [isOpen]);
 
-  // Send message
-  const handleSend = useCallback(async () => {
-    const text = inputValue.trim();
+  const handleSend = useCallback(async (overrideText?: string) => {
+    const text = overrideText || inputValue.trim();
     if (!text || isSending) return;
-
     setInputValue("");
     setIsSending(true);
 
-    // Optimistically add user message
-    const userMsg: CoachMessage = {
-      role: "user",
-      content: text,
-      timestamp: new Date().toISOString(),
-    };
+    const userMsg: CoachMessage = { role: "user", content: text, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const result = await chatMutation.mutateAsync({
-        sessionId,
-        message: text,
-      });
-
+      const result = await chatMutation.mutateAsync({ sessionId, message: text });
       setSessionId(result.sessionId);
-
       const assistantMsg: CoachMessage = {
         role: "assistant",
         content: result.reply,
         timestamp: new Date().toISOString(),
+        opportunityCards: result.opportunityCards as OpportunityCard[] | undefined,
       };
       setMessages(prev => [...prev, assistantMsg]);
-    } catch (err) {
-      toast.error("Failed to send message. Please try again in a moment.");
-      // Remove the optimistic message on error
+    } catch {
+      toast.error("Failed to send message. Please try again.");
       setMessages(prev => prev.slice(0, -1));
       setInputValue(text);
     } finally {
       setIsSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [inputValue, isSending, sessionId, chatMutation, toast]);
+  }, [inputValue, isSending, sessionId, chatMutation]);
 
-  // Handle feedback
   const handleFeedback = useCallback(async (messageIdx: number, feedback: "up" | "down") => {
     if (!sessionId) return;
-    setMessages(prev => prev.map((m, i) =>
-      i === messageIdx ? { ...m, feedback } : m
-    ));
+    setMessages(prev => prev.map((m, i) => i === messageIdx ? { ...m, feedback } : m));
     try {
       await feedbackMutation.mutateAsync({ sessionId, messageIdx, feedback });
-    } catch {
-      // Silent fail for feedback
-    }
+    } catch { /* silent */ }
   }, [sessionId, feedbackMutation]);
 
-  // Handle coach name save
   const handleSaveCoachName = useCallback(async (name: string) => {
     try {
       await updateSettingsMutation.mutateAsync({ coachName: name });
@@ -275,7 +407,6 @@ export function AICoachWidget() {
     }
   }, [updateSettingsMutation]);
 
-  // Handle clear session
   const handleClearSession = useCallback(async () => {
     try {
       await clearSessionMutation.mutateAsync();
@@ -287,37 +418,61 @@ export function AICoachWidget() {
     }
   }, [clearSessionMutation]);
 
-  // Handle open
+  const handleViewRadar = useCallback(() => {
+    setShowBatchNotif(false);
+    setNotifDismissed(true);
+    const batchId = batchQuery.data?.batch?.id;
+    if (batchId) markBatchSeenMutation.mutate({ batchId });
+    setLocation("/opportunity-radar");
+  }, [batchQuery.data, markBatchSeenMutation, setLocation]);
+
+  const handleDismissNotif = useCallback(() => {
+    setShowBatchNotif(false);
+    setNotifDismissed(true);
+  }, []);
+
   const handleOpen = useCallback(() => {
     setIsOpen(true);
     setIsFirstOpen(false);
+    setShowBatchNotif(false);
   }, []);
 
   if (!isAuthenticated) return null;
 
-  // Welcome message for empty sessions
+  const newBatchCount = batchQuery.data?.newCount || 0;
+  const hasNewOpps = batchQuery.data?.hasNewOpportunities && !notifDismissed;
+
   const welcomeMessage = hasProfile
-    ? `Hi! I'm ${coachName}, your ${nicheLabel} sourcing coach. Ask me anything about finding suppliers, dropshipping strategy, or using RealSourcing — I'm here to help you grow.`
+    ? `Hi! I'm ${coachName}, your ${nicheLabel} sourcing coach. Ask me about finding suppliers, dropshipping strategy, or say "show me opportunities" to see the latest product picks!`
     : `Hi! I'm ${coachName}, your AI sourcing coach. Complete your business profile first so I can give you personalized advice for your niche!`;
 
   return (
     <>
+      {/* New Batch Notification */}
+      {showBatchNotif && !isOpen && (
+        <NewBatchNotification
+          count={newBatchCount}
+          onView={handleViewRadar}
+          onDismiss={handleDismissNotif}
+        />
+      )}
+
       {/* Floating Button */}
       {!isOpen && (
-        <button
-          onClick={handleOpen}
-          className="fixed bottom-6 right-6 z-50 group"
-          aria-label="Open AI Coach"
-        >
+        <button onClick={handleOpen} className="fixed bottom-6 right-6 z-50 group" aria-label="Open AI Coach">
           <div className="relative">
-            {/* Pulse ring for first-time users */}
             {isFirstOpen && (
               <span className="absolute inset-0 rounded-full bg-violet-500 animate-ping opacity-40" />
+            )}
+            {/* New batch badge */}
+            {hasNewOpps && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-purple-500 border-2 border-slate-950 flex items-center justify-center z-10">
+                <span className="text-[9px] text-white font-bold">{Math.min(newBatchCount, 9)}+</span>
+              </span>
             )}
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 shadow-lg shadow-violet-500/30 flex items-center justify-center transition-transform group-hover:scale-110">
               <Sparkles className="w-6 h-6 text-white" />
             </div>
-            {/* Coach name tooltip */}
             <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               <div className="bg-slate-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap shadow-lg">
                 Chat with {coachName}
@@ -330,7 +485,6 @@ export function AICoachWidget() {
       {/* Chat Window */}
       {isOpen && (
         <div className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-24px)] flex flex-col rounded-2xl shadow-2xl shadow-black/40 overflow-hidden border border-slate-700 bg-slate-900">
-
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-600 to-purple-700">
             <div className="flex items-center gap-2">
@@ -343,27 +497,23 @@ export function AICoachWidget() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="outline" className="text-[10px] border-violet-400/50 text-violet-200 px-1.5 py-0">
-                AI
-              </Badge>
-              <button
-                onClick={() => setShowSettings(s => !s)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
-                title="Rename coach"
-              >
+              <Badge variant="outline" className="text-[10px] border-violet-400/50 text-violet-200 px-1.5 py-0">AI</Badge>
+              {hasNewOpps && (
+                <button
+                  onClick={handleViewRadar}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/30 hover:bg-purple-500/50 transition-colors text-purple-200 text-[10px] font-medium"
+                >
+                  <Radar className="w-3 h-3" />
+                  {newBatchCount} new
+                </button>
+              )}
+              <button onClick={() => setShowSettings(s => !s)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white">
                 <Settings className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={handleClearSession}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
-                title="Clear conversation"
-              >
+              <button onClick={handleClearSession} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white" title="Clear conversation">
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
-              >
+              <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white">
                 <ChevronDown className="w-4 h-4" />
               </button>
             </div>
@@ -371,15 +521,26 @@ export function AICoachWidget() {
 
           {/* Coach Name Settings */}
           {showSettings && (
-            <CoachNameSettings
-              currentName={coachName}
-              onSave={handleSaveCoachName}
-              onClose={() => setShowSettings(false)}
-            />
+            <CoachNameSettings currentName={coachName} onSave={handleSaveCoachName} onClose={() => setShowSettings(false)} />
+          )}
+
+          {/* New batch banner inside chat */}
+          {hasNewOpps && (
+            <div className="px-3 py-2 bg-purple-900/30 border-b border-purple-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-[11px] text-purple-300">
+                  <span className="font-semibold">{newBatchCount} new opportunities</span> in your niche
+                </span>
+              </div>
+              <button onClick={handleViewRadar} className="text-[10px] text-purple-400 hover:text-purple-300 underline transition-colors">
+                View Radar →
+              </button>
+            </div>
           )}
 
           {/* Messages */}
-          <ScrollArea className="flex-1 h-[380px] px-4 py-3" ref={scrollAreaRef}>
+          <ScrollArea className="flex-1 h-[360px] px-4 py-3" ref={scrollAreaRef}>
             {/* Welcome message */}
             <div className="flex gap-2 mb-4">
               <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
@@ -399,6 +560,7 @@ export function AICoachWidget() {
                 sessionId={sessionId}
                 coachName={coachName}
                 onFeedback={handleFeedback}
+                onNavigateRadar={handleViewRadar}
               />
             ))}
 
@@ -417,24 +579,20 @@ export function AICoachWidget() {
                 </div>
               </div>
             )}
-
             <div ref={messagesEndRef} />
           </ScrollArea>
 
-          {/* Suggested prompts (shown when no messages) */}
+          {/* Suggested prompts */}
           {messages.length === 0 && !isSending && (
             <div className="px-4 pb-2 flex flex-wrap gap-1.5">
               {[
+                "Show me new opportunities",
                 "How do I find furniture suppliers?",
                 "What's a good profit margin?",
-                "How does RealSourcing work?",
               ].map(prompt => (
                 <button
                   key={prompt}
-                  onClick={() => {
-                    setInputValue(prompt);
-                    setTimeout(() => inputRef.current?.focus(), 50);
-                  }}
+                  onClick={() => handleSend(prompt)}
                   className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full px-2.5 py-1 transition-colors border border-slate-700"
                 >
                   {prompt}
@@ -461,15 +619,12 @@ export function AICoachWidget() {
                 disabled={isSending}
               />
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!inputValue.trim() || isSending}
                 size="sm"
                 className="h-9 w-9 p-0 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 flex-shrink-0"
               >
-                {isSending
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Send className="w-4 h-4" />
-                }
+                {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
             <p className="text-[10px] text-slate-600 mt-1.5 text-center">
