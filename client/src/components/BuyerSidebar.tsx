@@ -45,7 +45,7 @@ const MENU_GROUPS = [
     label: "AI Tools",
     items: [
       { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", badge: "NEW" },
-      { icon: Zap, label: "Sourcing Intelligence", href: "/sourcing-demands", badge: "AI" },
+
       { icon: TrendingUp, label: "Profit Analyzer", href: "/profit-analyzer", badge: "NEW" },
       { icon: Radar, label: "Opportunity Radar", href: "/opportunity-radar", badge: "HOT" },
     ],

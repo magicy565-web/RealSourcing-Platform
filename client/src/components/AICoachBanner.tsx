@@ -47,7 +47,7 @@ function buildTasks(
     hasMeetings: boolean;
     hasSampleOrders: boolean;
     hasWebinarAttended: boolean;
-    hasSourcingDemand: boolean;
+
   }
 ): Task[] {
   const nicheText = niches.length > 0 ? niches[0].replace(/_/g, " ") : "your niche";
@@ -159,12 +159,12 @@ function buildTasks(
       },
       {
         id: "t4",
-        title: "Post a sourcing demand",
-        description: "Let factories come to you with proposals",
-        action: "/sourcing-demands",
-        actionLabel: "Create Demand",
-        icon: "solar:target-bold-duotone",
-        done: realData.hasSourcingDemand,
+        title: "Explore Opportunity Radar",
+        description: "Find high-potential products for your store",
+        action: "/opportunity-radar",
+        actionLabel: "Open Radar",
+        icon: "solar:radar-bold-duotone",
+        done: false,
       },
     ],
     already_selling: [
@@ -197,12 +197,12 @@ function buildTasks(
       },
       {
         id: "t4",
-        title: "Explore private label options",
-        description: "Build your own brand with factory partners",
-        action: "/sourcing-demands",
-        actionLabel: "Post a Demand",
-        icon: "solar:crown-bold-duotone",
-        done: realData.hasSourcingDemand,
+        title: "Explore Opportunity Radar",
+        description: "Find high-potential products for your store",
+        action: "/opportunity-radar",
+        actionLabel: "Open Radar",
+        icon: "solar:radar-bold-duotone",
+        done: false,
       },
     ],
   };
@@ -233,10 +233,7 @@ export default function AICoachBanner() {
     enabled: !!profile,
     staleTime: 2 * 60 * 1000,
   });
-  const { data: sourcingDemands = [] } = trpc.sourcingDemands.getByUser.useQuery(undefined, {
-    enabled: !!profile,
-    staleTime: 2 * 60 * 1000,
-  });
+
   const { data: webinars = [] } = trpc.webinars.list.useQuery(undefined, {
     enabled: !!profile,
     staleTime: 5 * 60 * 1000,
@@ -289,7 +286,7 @@ export default function AICoachBanner() {
     hasMeetings: Array.isArray(meetings) && meetings.length > 0,
     hasSampleOrders: Array.isArray(sampleOrders) && sampleOrders.length > 0,
     hasWebinarAttended: Array.isArray(webinars) && webinars.some((w: any) => w.status === "ended"),
-    hasSourcingDemand: Array.isArray(sourcingDemands) && sourcingDemands.length > 0,
+
   };
 
   const tasks = buildTasks(profile.businessStage || "newbie", niches, realData);

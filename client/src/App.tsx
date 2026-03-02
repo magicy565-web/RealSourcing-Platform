@@ -36,8 +36,7 @@ import BookMeeting from "./pages/BookMeeting";
 import SampleOrder from "./pages/SampleOrder";
 import SampleOrderTracker from "./pages/SampleOrderTracker";
 import Meetings from "./pages/Meetings";
-import SourcingDemandPage from "./pages/SourcingDemandPage";
-import SourcingDemandDetail from "./pages/SourcingDemandDetail";
+
 import MatchingDashboard from "./pages/MatchingDashboard";
 import SourcingRoom from "./pages/SourcingRoom";
 import OpsAgentMonitor from "./pages/OpsAgentMonitor";
@@ -195,17 +194,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* ── AI Sourcing Demands (Phase 3) ── */}
-      <Route path="/sourcing-demands">
-        <ProtectedRoute>
-          <SourcingDemandPage />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/sourcing-demands/:id">
-        <ProtectedRoute>
-          <SourcingDemandDetail />
-        </ProtectedRoute>
-      </Route>
+
 
       {/* ── 15-min Factory Matching (Phase 4.0) ── */}
       <Route path="/matching/:id">

@@ -4470,13 +4470,7 @@ Respond ONLY with valid JSON, no markdown.`;
   // 补全缺失路由以修复前端 TS 错误
   ftgi: ftgiRouter,
   humanScores: humanScoresRouter,
-  sourcingDemands: router({
-    getById: publicProcedure
-      .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => getSourcingDemandById(input.id)),
-    getByUser: protectedProcedure
-      .query(async ({ ctx }) => getSourcingDemandsByUser(ctx.user.id)),
-  }),
+
   samples: router({
     request: protectedProcedure
       .input(z.object({
