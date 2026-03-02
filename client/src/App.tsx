@@ -44,6 +44,7 @@ import OpsAgentMonitor from "./pages/OpsAgentMonitor";
 import MyQuotes from "./pages/MyQuotes";
 import CustomQuoteHistory from "./pages/CustomQuoteHistory";
 import DropshippingProfitAnalyzer from "./pages/DropshippingProfitAnalyzer";
+import { AICoachWidget } from "./components/AICoachWidget";
 
 function Router() {
   return (
@@ -260,6 +261,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <AICoachWidget />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

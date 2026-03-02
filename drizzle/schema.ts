@@ -1313,3 +1313,45 @@ export const factoryFtgiScores = mysqlTable("factory_ftgi_scores", {
 });
 export type FactoryFtgiScore = typeof factoryFtgiScores.$inferSelect;
 export type InsertFactoryFtgiScore = typeof factoryFtgiScores.$inferInsert;
+
+// ─── AI Coach Sessions (AI Coach 对话会话) ────────────────────────────────────
+export const aiCoachSessions = mysqlTable("ai_coach_sessions", {
+  id:              int("id").primaryKey().autoincrement(),
+  userId:          int("userId").notNull(),
+  niche:           varchar("niche", { length: 50 }),
+  coachName:       varchar("coachName", { length: 50 }),
+  messages:        json("messages").notNull().default([]),
+  profileSnapshot: json("profileSnapshot"),
+  thumbsUpCount:   int("thumbsUpCount").notNull().default(0),
+  thumbsDownCount: int("thumbsDownCount").notNull().default(0),
+  topicsDiscussed: json("topicsDiscussed"),
+  createdAt:       datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt:       datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type AiCoachSession = typeof aiCoachSessions.$inferSelect;
+export type InsertAiCoachSession = typeof aiCoachSessions.$inferInsert;
+
+// ─── AI Coach Message Feedback (消息级别反馈) ─────────────────────────────────
+export const aiCoachFeedback = mysqlTable("ai_coach_feedback", {
+  id:         int("id").primaryKey().autoincrement(),
+  sessionId:  int("sessionId").notNull(),
+  userId:     int("userId").notNull(),
+  messageIdx: int("messageIdx").notNull(),
+  feedback:   varchar("feedback", { length: 10 }).notNull(),
+  comment:    text("comment"),
+  createdAt:  datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type AiCoachFeedback = typeof aiCoachFeedback.$inferSelect;
+export type InsertAiCoachFeedback = typeof aiCoachFeedback.$inferInsert;
+
+// ─── AI Coach Settings (用户 Coach 配置) ──────────────────────────────────────
+export const aiCoachSettings = mysqlTable("ai_coach_settings", {
+  id:        int("id").primaryKey().autoincrement(),
+  userId:    int("userId").notNull().unique(),
+  coachName: varchar("coachName", { length: 50 }).notNull().default("Alex"),
+  isEnabled: int("isEnabled").notNull().default(1),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+});
+export type AiCoachSettings = typeof aiCoachSettings.$inferSelect;
+export type InsertAiCoachSettings = typeof aiCoachSettings.$inferInsert;

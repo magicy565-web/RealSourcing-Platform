@@ -100,6 +100,7 @@ import {
   generateEmbedding, buildEmbeddingText, findSimilarDemands, isEmbeddingError
 } from "./_core/vectorSearchService";
 
+import { coachRouter } from './coach-router';
 // ─── FTGI 路由 ────────────────────────────────────────────────────────────────
 const ftgiRouter = router({
   // 获取工厂 FTGI 评分
@@ -293,6 +294,7 @@ const humanScoresRouter = router({
 
 
 export const appRouter = router({
+  coach: coachRouter,
   system: systemRouter,
 
   // ── Agora RTC/RTM Token Generation ──────────────────────────────────────────
