@@ -2,6 +2,7 @@ import { useState } from "react";
 import type React from "react";
 import { motion } from "framer-motion";
 import { Icon as SolarIcon } from "@iconify/react";
+import AICoachBanner from "@/components/AICoachBanner";
 import BuyerSidebar from "@/components/BuyerSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -140,6 +141,9 @@ export default function Dashboard() {
               </p>
             </div>
           </BlurFade>
+
+          {/* ===== AI COACH BANNER ===== */}
+          <AICoachBanner />
 
           {/* ===== BENTO GRID ===== */}
           {/* Row 1: 统计数字 Bento — 不等宽布局 */}

@@ -10,6 +10,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Onboarding from "./pages/Onboarding";
+import OnboardingV2 from "./pages/OnboardingV2";
 import Dashboard from "./pages/Dashboard";
 import Webinars from "./pages/Webinars";
 import Factories from "./pages/Factories";
@@ -50,8 +51,14 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
 
-      {/* Onboarding (protected, no sidebar) */}
+      {/* Onboarding V2 - 6-step immersive profile builder */}
       <Route path="/onboarding">
+        <ProtectedRoute>
+          <OnboardingV2 />
+        </ProtectedRoute>
+      </Route>
+      {/* Onboarding V1 (legacy) */}
+      <Route path="/onboarding-legacy">
         <ProtectedRoute>
           <Onboarding />
         </ProtectedRoute>

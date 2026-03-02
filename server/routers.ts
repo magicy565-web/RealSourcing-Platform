@@ -614,14 +614,42 @@ export const appRouter = router({
           })),
         }),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
          const { invokeLLM } = await import('./_core/llm');
         const { getAllFactories } = await import('./db');
         const currentPhase = input.sessionState.currentPhase;
         const prefs = input.sessionState.preferences as Record<string, unknown>;
         const history = input.sessionState.conversationHistory;
-
-        const systemPrompt = `你是 RealSourcing 平台的 AI 采购顾问，专门帮助买家在中国找到最优质的供应商。
+        // 读取用户商业画像，注入 AI 上下文
+        let userProfileContext = '';
+        try {
+          const mysql = require('mysql2/promise');
+          const conn = await mysql.createConnection(process.env.DATABASE_URL);
+          const [rows] = await conn.execute('SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1', [ctx.user.id]);
+          await conn.end();
+          const profile = (rows as any[])[0];
+          if (profile) {
+            const niches = (() => { try { return JSON.parse(profile.interestedNiches || '[]'); } catch { return []; } })();
+            const platforms = (() => { try { return JSON.parse(profile.targetPlatforms || '[]'); } catch { return []; } })();
+            const AMBITION_MAP: Record<string, string> = { side_income: 'earn side income ($500-$2k/month)', full_time: 'go full-time ($5k-$20k/month)', dtc_brand: 'build a DTC brand', learn: 'explore and learn dropshipping' };
+            const STAGE_MAP: Record<string, string> = { newbie: 'complete beginner', has_idea: 'has product idea but no store yet', has_store: 'has a store, needs better products', already_selling: 'already selling and wants to scale' };
+            const CHALLENGE_MAP: Record<string, string> = { finding_products: 'finding winning products', finding_suppliers: 'finding reliable suppliers', marketing: 'marketing and getting traffic', operations: 'managing operations', capital: 'limited budget', knowledge: 'lack of knowledge' };
+            userProfileContext = `
+=== USER BUSINESS PROFILE (CONFIDENTIAL CONTEXT) ===
+Goal: ${AMBITION_MAP[profile.ambition] || profile.ambition || 'not specified'}
+Current Stage: ${STAGE_MAP[profile.businessStage] || profile.businessStage || 'not specified'}
+Budget: ${profile.budget || 'not specified'}
+Interested Niches: ${niches.join(', ') || 'not specified'}
+Target Sales Platforms: ${platforms.join(', ') || 'not specified'}
+Main Challenge: ${CHALLENGE_MAP[profile.mainChallenge] || profile.mainChallenge || 'not specified'}
+===================================================
+IMPORTANT: Use this profile to personalize all responses. Address their specific challenge first. Recommend suppliers and products that match their niches and budget. Speak to their current stage.
+`;
+          }
+        } catch (e) {
+          // Profile fetch failed silently — proceed without context
+        }
+        const systemPrompt = `你是 RealSourcing 平台的 AI 采购顾问，专门帮助买家在中国找到最优质的供应商。${userProfileContext}。
 
 你的任务是通过多轮对话，逐步收集买家的采购需求，包括：产品信息、价格预算、交期要求、定制需求、采购数量、工厂资质要求。
 
@@ -4463,6 +4491,82 @@ Respond ONLY with valid JSON, no markdown.`;
           status: 'pending',
         });
        }),
+  }),
+  // ── Business Profile (User Commercial Portrait) ───────────────────────────
+  businessProfile: router({
+    saveOnboarding: protectedProcedure
+      .input(z.object({
+        ambition: z.string(),
+        businessStage: z.string(),
+        targetPlatforms: z.array(z.string()),
+        budget: z.string(),
+        interestedNiches: z.array(z.string()),
+        mainChallenge: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const mysql = require('mysql2/promise');
+        const conn = await mysql.createConnection(process.env.DATABASE_URL);
+        try {
+          await conn.execute(
+            `INSERT INTO user_business_profiles
+              (userId, ambition, businessStage, targetPlatforms, interestedNiches, budget, mainChallenge, onboardingCompletedAt, createdAt, updatedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3), NOW(3))
+             ON DUPLICATE KEY UPDATE
+              ambition = VALUES(ambition),
+              businessStage = VALUES(businessStage),
+              targetPlatforms = VALUES(targetPlatforms),
+              interestedNiches = VALUES(interestedNiches),
+              budget = VALUES(budget),
+              mainChallenge = VALUES(mainChallenge),
+              onboardingCompletedAt = NOW(3),
+              updatedAt = NOW(3)`,
+            [
+              ctx.user.id,
+              input.ambition,
+              input.businessStage,
+              JSON.stringify(input.targetPlatforms),
+              JSON.stringify(input.interestedNiches),
+              input.budget,
+              input.mainChallenge,
+            ]
+          );
+        } finally {
+          await conn.end();
+        }
+        await saveUserOnboardingPreferences(ctx.user.id, {
+          interestedCategories: input.interestedNiches,
+          orderScale: input.budget,
+        });
+        return { success: true };
+      }),
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const mysql = require('mysql2/promise');
+      const conn = await mysql.createConnection(process.env.DATABASE_URL);
+      try {
+        const [rows] = await conn.execute(
+          'SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1',
+          [ctx.user.id]
+        );
+        return (rows as any[])[0] || null;
+      } finally {
+        await conn.end();
+      }
+    }),
+    updateAiSummary: protectedProcedure
+      .input(z.object({ aiSummary: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const mysql = require('mysql2/promise');
+        const conn = await mysql.createConnection(process.env.DATABASE_URL);
+        try {
+          await conn.execute(
+            'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(3), updatedAt = NOW(3) WHERE userId = ?',
+            [input.aiSummary, ctx.user.id]
+          );
+        } finally {
+          await conn.end();
+        }
+        return { success: true };
+      }),
   }),
 });
 
