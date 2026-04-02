@@ -183,7 +183,8 @@ export async function updateFactoryCapabilityEmbedding(factoryId: number) {
     embeddingModel: result.model,
     primaryCategory: factory.category,
     embeddingAt: new Date(),
-  }).onDuplicateKeyUpdate({
+  }).onConflictDoUpdate({
+    target: schema.factoryCapabilityEmbeddings.factoryId,
     set: {
       capabilityText,
       embeddingVector: JSON.stringify(result.vector),

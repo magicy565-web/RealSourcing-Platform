@@ -190,7 +190,8 @@ router.post('/claw/register', verifyClaw, async (req, res) => {
           isEnabled: 1,
           createdAt: now,
           updatedAt: now,
-        }).onDuplicateKeyUpdate({
+        }).onConflictDoUpdate({
+          target: schema.clawAgentStatus.agentId,
           set: {
             status: 'registered',
             version,

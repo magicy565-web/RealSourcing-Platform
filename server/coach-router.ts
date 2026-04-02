@@ -178,21 +178,21 @@ export const coachRouter = router({
 
     // Get coach settings
     const [settingsRows] = await pool.execute(
-      "SELECT * FROM ai_coach_settings WHERE userId = ? LIMIT 1",
+      `SELECT * FROM ai_coach_settings WHERE "userId" = ? LIMIT 1`,
       [ctx.user.id]
     ) as any[];
     const settings = (settingsRows as any[])[0] || null;
 
     // Get latest session
     const [sessionRows] = await pool.execute(
-      "SELECT * FROM ai_coach_sessions WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1",
+      `SELECT * FROM ai_coach_sessions WHERE "userId" = ? ORDER BY "updatedAt" DESC LIMIT 1`,
       [ctx.user.id]
     ) as any[];
     const session = (sessionRows as any[])[0] || null;
 
     // Get business profile for niche detection
     const [profileRows] = await pool.execute(
-      "SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1",
+      `SELECT * FROM user_business_profiles WHERE "userId" = ? LIMIT 1`,
       [ctx.user.id]
     ) as any[];
     const profile = (profileRows as any[])[0] || null;
@@ -237,7 +237,7 @@ export const coachRouter = router({
 
       // Get coach settings
       const [settingsRows] = await pool.execute(
-        "SELECT * FROM ai_coach_settings WHERE userId = ? LIMIT 1",
+        `SELECT * FROM ai_coach_settings WHERE "userId" = ? LIMIT 1`,
         [ctx.user.id]
       ) as any[];
       const settings = (settingsRows as any[])[0] || null;
@@ -245,7 +245,7 @@ export const coachRouter = router({
 
       // Get business profile
       const [profileRows] = await pool.execute(
-        "SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1",
+        `SELECT * FROM user_business_profiles WHERE "userId" = ? LIMIT 1`,
         [ctx.user.id]
       ) as any[];
       const profile = (profileRows as any[])[0] || null;
@@ -268,7 +268,7 @@ export const coachRouter = router({
 
       if (sessionId) {
         const [rows] = await pool.execute(
-          "SELECT messages FROM ai_coach_sessions WHERE id = ? AND userId = ? LIMIT 1",
+          `SELECT messages FROM ai_coach_sessions WHERE id = ? AND "userId" = ? LIMIT 1`,
           [sessionId, ctx.user.id]
         ) as any[];
         const row = (rows as any[])[0];
@@ -329,14 +329,7 @@ export const coachRouter = router({
       const updatedMessages = [...existingMessages, newUserMsg, newAssistantMsg];
 
       // Extract topics discussed (simple keyword detection)
-      const topicKeywords: Record<string, string[]> = {
-        "product_selection": ["product", "niche", "winning", "trending", "sell"],
-        "supplier_sourcing": ["supplier", "factory", "manufacturer", "source", "find"],
-        "pricing_margins": ["price", "margin", "profit", "cost", "markup"],
-        "shipping_logistics": ["shipping", "freight", "logistics", "delivery", "import"],
-        "quality_control": ["quality", "sample", "inspection", "defect", "test"],
-        "platform_strategy": ["shopify", "amazon", "tiktok", "etsy", "platform"],
-        "private_label": ["brand", "private label", "oem", "custom", "packaging"],
+      const topicKeywords: Record<string, string[]> = { product_selection: ["product", "niche", "winning", "trending", "sell"], supplier_sourcing: ["supplier", "factory", "manufacturer", "source", "find"], pricing_margins: ["price", "margin", "profit", "cost", "markup"], shipping_logistics: ["shipping", "freight", "logistics", "delivery", "import"], quality_control: ["quality", "sample", "inspection", "defect", "test"], platform_strategy: ["shopify", "amazon", "tiktok", "etsy", "platform"], private_label: ["brand", "private label", "oem", "custom", "packaging"],
       };
       const allText = (input.message + " " + assistantContent).toLowerCase();
       const detectedTopics: string[] = [];
@@ -350,8 +343,8 @@ export const coachRouter = router({
       if (sessionId) {
         await pool.execute(
           `UPDATE ai_coach_sessions 
-           SET messages = ?, topicsDiscussed = ?, updatedAt = NOW()
-           WHERE id = ? AND userId = ?`,
+           SET messages = ?, "topicsDiscussed" = ?, "updatedAt" = NOW()
+           WHERE id = ? AND "userId" = ?`,
           [
             JSON.stringify(updatedMessages),
             JSON.stringify(detectedTopics),
@@ -362,7 +355,7 @@ export const coachRouter = router({
       } else {
         const [result] = await pool.execute(
           `INSERT INTO ai_coach_sessions 
-           (userId, niche, coachName, messages, profileSnapshot, topicsDiscussed, createdAt, updatedAt)
+           (userId, niche, "coachName", messages, "profileSnapshot", "topicsDiscussed", "createdAt", "updatedAt")
            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
             ctx.user.id,
@@ -390,14 +383,14 @@ export const coachRouter = router({
       if (isOpportunityQuery) {
         try {
           const [oppRows] = await pool.execute(
-            `SELECT oi.id, oi.name, oi.opportunityScore, oi.estimatedMargin,
-                    oi.priceMin, oi.priceMax, oi.moq, oi.headline, oi.coverImage, oi.tags,
+            `SELECT oi.id, oi.name, oi."opportunityScore", oi."estimatedMargin",
+                    oi."priceMin", oi."priceMax", oi.moq, oi.headline, oi."coverImage", oi.tags,
                     f.name as factoryName
              FROM opportunity_items oi
-             LEFT JOIN opportunity_batches ob ON oi.batchId = ob.id
-             LEFT JOIN factories f ON oi.factoryId = f.id
-             WHERE ob.niche = ? AND oi.isActive = 1
-             ORDER BY oi.opportunityScore DESC
+             LEFT JOIN opportunity_batches ob ON oi."batchId" = ob.id
+             LEFT JOIN factories f ON oi."factoryId" = f.id
+             WHERE ob.niche = ? AND oi."isActive" = 1
+             ORDER BY oi."opportunityScore" DESC
              LIMIT 3`,
             [primaryNiche]
           ) as any[];
@@ -439,13 +432,13 @@ export const coachRouter = router({
       // Update session thumbs count
       const countField = input.feedback === "up" ? "thumbsUpCount" : "thumbsDownCount";
       await pool.execute(
-        `UPDATE ai_coach_sessions SET ${countField} = ${countField} + 1 WHERE id = ? AND userId = ?`,
+        `UPDATE ai_coach_sessions SET ${countField} = ${countField} + 1 WHERE id = ? AND "userId" = ?`,
         [input.sessionId, ctx.user.id]
       );
 
       // Insert feedback record
       await pool.execute(
-        `INSERT INTO ai_coach_feedback (sessionId, userId, messageIdx, feedback, comment, createdAt)
+        `INSERT INTO ai_coach_feedback ("sessionId", "userId", "messageIdx", feedback, comment, "createdAt")
          VALUES (?, ?, ?, ?, ?, NOW())`,
         [input.sessionId, ctx.user.id, input.messageIdx, input.feedback, input.comment || null]
       );
@@ -457,7 +450,7 @@ export const coachRouter = router({
   getSettings: protectedProcedure.query(async ({ ctx }) => {
     const pool = await getPool();
     const [rows] = await pool.execute(
-      "SELECT * FROM ai_coach_settings WHERE userId = ? LIMIT 1",
+      `SELECT * FROM ai_coach_settings WHERE "userId" = ? LIMIT 1`,
       [ctx.user.id]
     ) as any[];
     const settings = (rows as any[])[0];
@@ -474,9 +467,9 @@ export const coachRouter = router({
     .mutation(async ({ input, ctx }) => {
       const pool = await getPool();
       await pool.execute(
-        `INSERT INTO ai_coach_settings (userId, coachName, createdAt, updatedAt)
+        `INSERT INTO ai_coach_settings ("userId", "coachName", "createdAt", "updatedAt")
          VALUES (?, ?, NOW(), NOW())
-         ON CONFLICT (userId) DO UPDATE SET coachName = EXCLUDED.coachName, updatedAt = NOW()`,
+         ON CONFLICT ("userId") DO UPDATE SET "coachName" = EXCLUDED."coachName", "updatedAt" = NOW()`,
         [ctx.user.id, input.coachName]
       );
       return { success: true };
@@ -486,7 +479,7 @@ export const coachRouter = router({
   clearSession: protectedProcedure.mutation(async ({ ctx }) => {
     const pool = await getPool();
     await pool.execute(
-      "DELETE FROM ai_coach_sessions WHERE userId = ?",
+      `DELETE FROM ai_coach_sessions WHERE "userId" = ?`,
       [ctx.user.id]
     );
     return { success: true };

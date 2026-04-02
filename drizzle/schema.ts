@@ -670,7 +670,7 @@ export const knowledgeUsageLog = pgTable("knowledge_usage_log", {
 // 每家工厂可有多条记录（按产品类别分别建立向量）
 export const factoryCapabilityEmbeddings = pgTable("factory_capability_embeddings", {
   id:               serial("id").primaryKey(),
-  factoryId:        integer("factoryId").notNull(),
+  factoryId:        integer("factoryId").notNull().unique(),
   // 能力描述文本（工厂名 + 品类 + 描述 + 主要产品 + 认证 + MOQ 等）
   capabilityText:   text("capabilityText").notNull(),
   // 语义向量（1536 维，JSON 格式，与 sourcingDemands.embeddingVector 同维度）

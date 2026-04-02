@@ -47,27 +47,12 @@ SUPPLIER:
 - Certification: ${factory?.certificationStatus || 'pending'}
 
 Generate a JSON response with this exact structure:
-{
-  "opportunityScore": <0-100, overall score>,
-  "trendScore": <0-100, how trendy/growing is this product category>,
-  "marginScore": <0-100, profit margin potential>,
-  "competitionScore": <0-100, higher means LESS competition>,
-  "demandScore": <0-100, consumer demand signal>,
-  "headline": "<one punchy sentence summarizing the opportunity, max 80 chars>",
-  "whyNow": "<2-3 sentences explaining why this is a good opportunity RIGHT NOW>",
-  "targetAudience": "<who would buy this, be specific>",
-  "suggestedPlatforms": ["shopify", "tiktok_shop", "amazon", "etsy"],
-  "actionSteps": [
+{ opportunityScore: <0-100, overall score>, trendScore: <0-100, how trendy/growing is this product category>, marginScore: <0-100, profit margin potential>, competitionScore: <0-100, higher means LESS competition>, demandScore: <0-100, consumer demand signal>, headline: "<one punchy sentence summarizing the opportunity, max 80 chars>", whyNow: "<2-3 sentences explaining why this is a good opportunity RIGHT NOW>", targetAudience: "<who would buy this, be specific>", suggestedPlatforms: ["shopify", "tiktok_shop", "amazon", "etsy"], actionSteps: [
     "<step 1: what to do first>",
     "<step 2: next action>",
     "<step 3: how to validate>",
     "<step 4: how to scale>"
-  ],
-  "risks": "<key risks in 1-2 sentences>",
-  "estimatedMargin": "<e.g. 40-60%>",
-  "suggestedRetailPrice": "<e.g. $89-$149>",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "tags": ["tag1", "tag2", "tag3"]
+  ], risks: "<key risks in 1-2 sentences>", estimatedMargin: "<e.g. 40-60%>", suggestedRetailPrice: "<e.g. $89-$149>", keywords: ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"], tags: ["tag1", "tag2", "tag3"]
 }
 
 Be specific, practical, and honest. Base scores on real market dynamics for ${niche} products in 2025-2026.`;
@@ -131,19 +116,19 @@ export const opportunityRadarRouter = router({
 
       // Build WHERE clauses
       const conditions: string[] = [
-        'poa.isActive = 1',
+        'poa."isActive" = 1',
         'poa.niche = ?',
-        'poa.opportunityScore >= ?',
+        'poa."opportunityScore" >= ?',
         "p.status = 'active'",
       ];
       const params: any[] = [input.niche, input.minScore];
 
       if (input.priceMin !== undefined) {
-        conditions.push('pd.priceMin >= ?');
+        conditions.push('pd."priceMin" >= ?');
         params.push(input.priceMin);
       }
       if (input.priceMax !== undefined) {
-        conditions.push('(pd.priceMax <= ? OR pd.priceMax IS NULL)');
+        conditions.push('(pd."priceMax" <= ? OR pd."priceMax" IS NULL)');
         params.push(input.priceMax);
       }
       if (input.maxMoq !== undefined) {
@@ -153,23 +138,23 @@ export const opportunityRadarRouter = router({
       if (input.showNewOnly) {
         // Get latest batch ID
         const [batches] = await pool.execute(
-          'SELECT id FROM radar_batches WHERE niche = ? AND isPublished = 1 ORDER BY publishedAt DESC LIMIT 1',
+          'SELECT id FROM radar_batches WHERE niche = ? AND "isPublished" = 1 ORDER BY "publishedAt" DESC LIMIT 1',
           [input.niche]
         ) as any[];
         if (batches.length > 0) {
-          conditions.push('poa.batchId = ?');
+          conditions.push('poa."batchId" = ?');
           params.push(batches[0].id);
         }
       }
 
       // Sort order
       const sortMap: Record<string, string> = {
-        opportunity_score: 'poa.opportunityScore DESC',
-        margin: 'poa.marginScore DESC',
-        trend: 'poa.trendScore DESC',
-        newest: 'poa.createdAt DESC',
+        opportunity_score: 'poa."opportunityScore" DESC',
+        margin: 'poa."marginScore" DESC',
+        trend: 'poa."trendScore" DESC',
+        newest: 'poa."createdAt" DESC',
       };
-      const orderBy = sortMap[input.sortBy] || 'poa.opportunityScore DESC';
+      const orderBy = sortMap[input.sortBy] || 'poa."opportunityScore" DESC';
 
       const offset = (input.page - 1) * input.pageSize;
       const whereClause = conditions.join(' AND ');
@@ -178,23 +163,23 @@ export const opportunityRadarRouter = router({
       const mainSql = `
         SELECT
           p.id, p.name, p.category, p.description, p.coverImage, p.images, p.slug,
-          pd.priceMin, pd.priceMax, pd.currency, pd.moq, pd.material, pd.features,
-          pd.leadTimeDays, pd.rating, pd.reviewCount,
+          pd."priceMin", pd."priceMax", pd.currency, pd.moq, pd.material, pd.features,
+          pd."leadTimeDays", pd.rating, pd.reviewCount,
           f.id as factoryId, f.name as factoryName, f.logo as factoryLogo,
           f.country as factoryCountry, f.overallScore as factoryScore,
           f.certificationStatus, f.slug as factorySlug,
-          poa.opportunityScore, poa.trendScore, poa.marginScore,
+          poa."opportunityScore", poa."trendScore", poa."marginScore",
           poa.competitionScore, poa.demandScore,
-          poa.headline, poa.whyNow, poa.targetAudience,
-          poa.suggestedPlatforms, poa.actionSteps, poa.risks,
-          poa.estimatedMargin, poa.suggestedRetailPrice,
-          poa.keywords, poa.tags, poa.batchId, poa.createdAt as analysisDate,
+          poa.headline, poa."whyNow", poa.targetAudience,
+          poa."suggestedPlatforms", poa."actionSteps", poa.risks,
+          poa."estimatedMargin", poa."suggestedRetailPrice",
+          poa.keywords, poa.tags, poa."batchId", poa."createdAt" as analysisDate,
           (SELECT action FROM user_radar_interactions
-           WHERE userId = ? AND productId = p.id
-           ORDER BY createdAt DESC LIMIT 1) as userAction
+           WHERE "userId" = ? AND "productId" = p.id
+           ORDER BY "createdAt" DESC LIMIT 1) as userAction
         FROM product_opportunity_analysis poa
-        JOIN products p ON p.id = poa.productId
-        LEFT JOIN product_details pd ON pd.productId = p.id
+        JOIN products p ON p.id = poa."productId"
+        LEFT JOIN product_details pd ON pd."productId" = p.id
         LEFT JOIN factories f ON f.id = p.factoryId
         WHERE ${whereClause}
         ORDER BY ${orderBy}
@@ -206,8 +191,8 @@ export const opportunityRadarRouter = router({
       const countSql = `
         SELECT COUNT(*) as total
         FROM product_opportunity_analysis poa
-        JOIN products p ON p.id = poa.productId
-        LEFT JOIN product_details pd ON pd.productId = p.id
+        JOIN products p ON p.id = poa."productId"
+        LEFT JOIN product_details pd ON pd."productId" = p.id
         WHERE ${whereClause}
       `;
       const [countRows] = await pool.query(countSql, params) as any[];
@@ -216,7 +201,7 @@ export const opportunityRadarRouter = router({
 
       // Get latest batch info
       const [batchRows] = await pool.execute(
-        'SELECT * FROM radar_batches WHERE niche = ? AND isPublished = 1 ORDER BY publishedAt DESC LIMIT 1',
+        'SELECT * FROM radar_batches WHERE niche = ? AND "isPublished" = 1 ORDER BY "publishedAt" DESC LIMIT 1',
         [input.niche]
       ) as any[];
       const latestBatch = (batchRows as any[])[0] || null;
@@ -245,7 +230,7 @@ export const opportunityRadarRouter = router({
   getPreferences: protectedProcedure.query(async ({ ctx }) => {
     const pool = await getDb();
     const [rows] = await pool.execute(
-      'SELECT * FROM user_radar_preferences WHERE userId = ? LIMIT 1',
+      'SELECT * FROM user_radar_preferences WHERE "userId" = ? LIMIT 1',
       [ctx.user.id]
     ) as any[];
     const prefs = (rows as any[])[0];
@@ -277,24 +262,24 @@ export const opportunityRadarRouter = router({
       const pool = await getDb();
       await pool.execute(`
         INSERT INTO user_radar_preferences
-          (userId, priceRangeMin, priceRangeMax, minOpportunityScore,
-           targetPlatforms, preferredStyles, preferredMaterials,
-           maxMoq, maxLeadTimeDays, showNewOnly, sortBy, notifyOnNewBatch,
-           createdAt, updatedAt)
+          ("userId", "priceRangeMin", "priceRangeMax", "minOpportunityScore",
+           "targetPlatforms", "preferredStyles", "preferredMaterials",
+           "maxMoq", "maxLeadTimeDays", "showNewOnly", "sortBy", "notifyOnNewBatch",
+           "createdAt", "updatedAt")
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-        ON CONFLICT (userId) DO UPDATE SET
-          priceRangeMin = EXCLUDED.priceRangeMin,
-          priceRangeMax = EXCLUDED.priceRangeMax,
-          minOpportunityScore = EXCLUDED.minOpportunityScore,
-          targetPlatforms = EXCLUDED.targetPlatforms,
-          preferredStyles = EXCLUDED.preferredStyles,
-          preferredMaterials = EXCLUDED.preferredMaterials,
-          maxMoq = EXCLUDED.maxMoq,
-          maxLeadTimeDays = EXCLUDED.maxLeadTimeDays,
-          showNewOnly = EXCLUDED.showNewOnly,
-          sortBy = EXCLUDED.sortBy,
-          notifyOnNewBatch = EXCLUDED.notifyOnNewBatch,
-          updatedAt = NOW()
+        ON CONFLICT ("userId") DO UPDATE SET
+          "priceRangeMin" = EXCLUDED."priceRangeMin",
+          "priceRangeMax" = EXCLUDED."priceRangeMax",
+          "minOpportunityScore" = EXCLUDED."minOpportunityScore",
+          "targetPlatforms" = EXCLUDED."targetPlatforms",
+          "preferredStyles" = EXCLUDED."preferredStyles",
+          "preferredMaterials" = EXCLUDED."preferredMaterials",
+          "maxMoq" = EXCLUDED."maxMoq",
+          "maxLeadTimeDays" = EXCLUDED."maxLeadTimeDays",
+          "showNewOnly" = EXCLUDED."showNewOnly",
+          "sortBy" = EXCLUDED."sortBy",
+          "notifyOnNewBatch" = EXCLUDED."notifyOnNewBatch",
+          "updatedAt" = NOW()
       `, [
         ctx.user.id,
         input.priceRangeMin ?? null,
@@ -321,7 +306,7 @@ export const opportunityRadarRouter = router({
     .mutation(async ({ input, ctx }) => {
       const pool = await getDb();
       await pool.execute(
-        'INSERT INTO user_radar_interactions (userId, productId, action, createdAt) VALUES (?, ?, ?, NOW())',
+        'INSERT INTO user_radar_interactions ("userId", "productId", action, "createdAt") VALUES (?, ?, ?, NOW())',
         [ctx.user.id, input.productId, input.action]
       );
       return { success: true };
@@ -339,11 +324,11 @@ export const opportunityRadarRouter = router({
 
       // Fetch product + factory data
       const [productRows] = await pool.execute(`
-        SELECT p.*, pd.priceMin, pd.priceMax, pd.moq, pd.material, pd.features, pd.leadTimeDays,
+        SELECT p.*, pd."priceMin", pd."priceMax", pd.moq, pd.material, pd.features, pd."leadTimeDays",
                f.name as factoryName, f.country as factoryCountry,
                f.overallScore as factoryScore, f.certificationStatus
         FROM products p
-        LEFT JOIN product_details pd ON pd.productId = p.id
+        LEFT JOIN product_details pd ON pd."productId" = p.id
         LEFT JOIN factories f ON f.id = p.factoryId
         WHERE p.id = ?
       `, [input.productId]) as any[];
@@ -362,29 +347,29 @@ export const opportunityRadarRouter = router({
       // Save to DB
       await pool.execute(`
         INSERT INTO product_opportunity_analysis
-          (productId, niche, opportunityScore, trendScore, marginScore, competitionScore, demandScore,
-           headline, whyNow, targetAudience, suggestedPlatforms, actionSteps, risks,
-           estimatedMargin, suggestedRetailPrice, keywords, tags, batchId, isActive, createdAt, updatedAt)
+          (productId, niche, "opportunityScore", "trendScore", "marginScore", competitionScore, demandScore,
+           headline, "whyNow", targetAudience, "suggestedPlatforms", "actionSteps", risks,
+           estimatedMargin, "suggestedRetailPrice", keywords, tags, "batchId", "isActive", "createdAt", "updatedAt")
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-        ON CONFLICT (productId) DO UPDATE SET
-          opportunityScore = EXCLUDED.opportunityScore,
-          trendScore = EXCLUDED.trendScore,
-          marginScore = EXCLUDED.marginScore,
-          competitionScore = EXCLUDED.competitionScore,
-          demandScore = EXCLUDED.demandScore,
+        ON CONFLICT ("productId") DO UPDATE SET
+          "opportunityScore" = EXCLUDED."opportunityScore",
+          "trendScore" = EXCLUDED."trendScore",
+          "marginScore" = EXCLUDED."marginScore",
+          competitionScore = EXCLUDED."competitionScore",
+          demandScore = EXCLUDED."demandScore",
           headline = EXCLUDED.headline,
-          whyNow = EXCLUDED.whyNow,
-          targetAudience = EXCLUDED.targetAudience,
-          suggestedPlatforms = EXCLUDED.suggestedPlatforms,
-          actionSteps = EXCLUDED.actionSteps,
+          "whyNow" = EXCLUDED."whyNow",
+          targetAudience = EXCLUDED."targetAudience",
+          "suggestedPlatforms" = EXCLUDED."suggestedPlatforms",
+          "actionSteps" = EXCLUDED."actionSteps",
           risks = EXCLUDED.risks,
-          estimatedMargin = EXCLUDED.estimatedMargin,
-          suggestedRetailPrice = EXCLUDED.suggestedRetailPrice,
+          "estimatedMargin" = EXCLUDED."estimatedMargin",
+          "suggestedRetailPrice" = EXCLUDED."suggestedRetailPrice",
           keywords = EXCLUDED.keywords,
           tags = EXCLUDED.tags,
-          batchId = EXCLUDED.batchId,
-          analysisVersion = product_opportunity_analysis.analysisVersion + 1,
-          updatedAt = NOW()
+          "batchId" = EXCLUDED."batchId",
+          "analysisVersion" = product_opportunity_analysis."analysisVersion" + 1,
+          "updatedAt" = NOW()
       `, [
         input.productId, input.niche,
         analysis.opportunityScore, analysis.trendScore, analysis.marginScore,
@@ -414,9 +399,9 @@ export const opportunityRadarRouter = router({
       // Get products without analysis or with outdated analysis
       const [productRows] = await pool.execute(`
         SELECT p.id FROM products p
-        LEFT JOIN product_opportunity_analysis poa ON poa.productId = p.id AND poa.niche = ?
+        LEFT JOIN product_opportunity_analysis poa ON poa."productId" = p.id AND poa.niche = ?
         WHERE p.status = 'active'
-          AND (poa.id IS NULL OR poa.batchId != ?)
+          AND (poa.id IS NULL OR poa."batchId" != ?)
         LIMIT ?
       `, [input.niche, input.batchId, input.limit]) as any[];
 
@@ -428,11 +413,11 @@ export const opportunityRadarRouter = router({
         try {
           // Fetch full product data
           const [rows] = await pool.execute(`
-            SELECT p.*, pd.priceMin, pd.priceMax, pd.moq, pd.material, pd.features, pd.leadTimeDays,
+            SELECT p.*, pd."priceMin", pd."priceMax", pd.moq, pd.material, pd.features, pd."leadTimeDays",
                    f.name as factoryName, f.country as factoryCountry,
                    f.overallScore as factoryScore, f.certificationStatus
             FROM products p
-            LEFT JOIN product_details pd ON pd.productId = p.id
+            LEFT JOIN product_details pd ON pd."productId" = p.id
             LEFT JOIN factories f ON f.id = p.factoryId
             WHERE p.id = ?
           `, [id]) as any[];
@@ -449,20 +434,20 @@ export const opportunityRadarRouter = router({
 
           await pool.execute(`
             INSERT INTO product_opportunity_analysis
-              (productId, niche, opportunityScore, trendScore, marginScore, competitionScore, demandScore,
-               headline, whyNow, targetAudience, suggestedPlatforms, actionSteps, risks,
-               estimatedMargin, suggestedRetailPrice, keywords, tags, batchId, isActive, createdAt, updatedAt)
+              (productId, niche, "opportunityScore", "trendScore", "marginScore", competitionScore, demandScore,
+               headline, "whyNow", targetAudience, "suggestedPlatforms", "actionSteps", risks,
+               estimatedMargin, "suggestedRetailPrice", keywords, tags, "batchId", "isActive", "createdAt", "updatedAt")
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-            ON CONFLICT (productId) DO UPDATE SET
-              opportunityScore = EXCLUDED.opportunityScore, trendScore = EXCLUDED.trendScore,
-              marginScore = EXCLUDED.marginScore, competitionScore = EXCLUDED.competitionScore,
-              demandScore = EXCLUDED.demandScore, headline = EXCLUDED.headline,
-              whyNow = EXCLUDED.whyNow, targetAudience = EXCLUDED.targetAudience,
-              suggestedPlatforms = EXCLUDED.suggestedPlatforms, actionSteps = EXCLUDED.actionSteps,
-              risks = EXCLUDED.risks, estimatedMargin = EXCLUDED.estimatedMargin,
-              suggestedRetailPrice = EXCLUDED.suggestedRetailPrice,
+            ON CONFLICT ("productId") DO UPDATE SET
+              "opportunityScore" = EXCLUDED."opportunityScore", "trendScore" = EXCLUDED."trendScore",
+              "marginScore" = EXCLUDED."marginScore", competitionScore = EXCLUDED."competitionScore",
+              demandScore = EXCLUDED."demandScore", headline = EXCLUDED.headline,
+              "whyNow" = EXCLUDED."whyNow", targetAudience = EXCLUDED."targetAudience",
+              "suggestedPlatforms" = EXCLUDED."suggestedPlatforms", "actionSteps" = EXCLUDED."actionSteps",
+              risks = EXCLUDED.risks, "estimatedMargin" = EXCLUDED."estimatedMargin",
+              "suggestedRetailPrice" = EXCLUDED."suggestedRetailPrice",
               keywords = EXCLUDED.keywords, tags = EXCLUDED.tags,
-              batchId = EXCLUDED.batchId, analysisVersion = product_opportunity_analysis.analysisVersion + 1, updatedAt = NOW()
+              "batchId" = EXCLUDED."batchId", "analysisVersion" = product_opportunity_analysis."analysisVersion" + 1, "updatedAt" = NOW()
           `, [
             id, input.niche,
             analysis.opportunityScore, analysis.trendScore, analysis.marginScore,
@@ -482,9 +467,9 @@ export const opportunityRadarRouter = router({
 
       // Update/create batch record
       await pool.execute(`
-        INSERT INTO radar_batches (id, niche, productCount, isPublished, publishedAt, createdAt)
+        INSERT INTO radar_batches (id, niche, "productCount", "isPublished", "publishedAt", "createdAt")
         VALUES (?, ?, ?, 1, NOW(), NOW())
-        ON CONFLICT (id) DO UPDATE SET productCount = radar_batches.productCount + ?, updatedAt = NOW()
+        ON CONFLICT (id) DO UPDATE SET "productCount" = radar_batches.productCount + ?, "updatedAt" = NOW()
       `, [input.batchId, input.niche, analyzed, analyzed]);
 
       return { success: true, analyzed, failed, total: products.length };
@@ -496,7 +481,7 @@ export const opportunityRadarRouter = router({
     .query(async ({ ctx, input }) => {
       const pool = await getDb();
       const [batchRows] = await pool.execute(
-        'SELECT * FROM radar_batches WHERE niche = ? AND isPublished = 1 ORDER BY publishedAt DESC LIMIT 1',
+        'SELECT * FROM radar_batches WHERE niche = ? AND "isPublished" = 1 ORDER BY "publishedAt" DESC LIMIT 1',
         [input.niche]
       ) as any[];
       const batch = (batchRows as any[])[0] || null;
@@ -505,7 +490,7 @@ export const opportunityRadarRouter = router({
       let hasNewOpportunities = false;
       if (batch) {
         const [prefRows] = await pool.execute(
-          'SELECT lastSeenBatchId FROM user_radar_preferences WHERE userId = ?',
+          'SELECT "lastSeenBatchId" FROM user_radar_preferences WHERE "userId" = ?',
           [ctx.user.id]
         ) as any[];
         const lastSeen = (prefRows as any[])[0]?.lastSeenBatchId;
@@ -515,9 +500,9 @@ export const opportunityRadarRouter = router({
       // Count new opportunities for user
       const [countRows] = await pool.execute(`
         SELECT COUNT(*) as count FROM product_opportunity_analysis poa
-        JOIN products p ON p.id = poa.productId
-        WHERE poa.niche = ? AND poa.isActive = 1 AND p.status = 'active'
-          AND poa.batchId = ?
+        JOIN products p ON p.id = poa."productId"
+        WHERE poa.niche = ? AND poa."isActive" = 1 AND p.status = 'active'
+          AND poa."batchId" = ?
       `, [input.niche, batch?.id || '']) as any[];
 
       return {
@@ -533,9 +518,9 @@ export const opportunityRadarRouter = router({
     .mutation(async ({ input, ctx }) => {
       const pool = await getDb();
       await pool.execute(`
-        INSERT INTO user_radar_preferences (userId, lastSeenBatchId, createdAt, updatedAt)
+        INSERT INTO user_radar_preferences ("userId", "lastSeenBatchId", "createdAt", "updatedAt")
         VALUES (?, ?, NOW(), NOW())
-        ON CONFLICT (userId) DO UPDATE SET lastSeenBatchId = EXCLUDED.lastSeenBatchId, updatedAt = NOW()
+        ON CONFLICT ("userId") DO UPDATE SET "lastSeenBatchId" = EXCLUDED."lastSeenBatchId", "updatedAt" = NOW()
       `, [ctx.user.id, input.batchId]);
       return { success: true };
     }),
@@ -551,7 +536,7 @@ export const opportunityRadarRouter = router({
 
       // Get user preferences to personalize
       const [prefRows] = await pool.execute(
-        'SELECT * FROM user_radar_preferences WHERE userId = ?',
+        'SELECT * FROM user_radar_preferences WHERE "userId" = ?',
         [ctx.user.id]
       ) as any[];
       const prefs = (prefRows as any[])[0];
@@ -561,30 +546,30 @@ export const opportunityRadarRouter = router({
 
       let query = `
         SELECT p.id, p.name, p.coverImage, p.category,
-               pd.priceMin, pd.priceMax, pd.moq,
+               pd."priceMin", pd."priceMax", pd.moq,
                f.name as factoryName, f.country as factoryCountry,
-               poa.opportunityScore, poa.headline, poa.whyNow,
-               poa.estimatedMargin, poa.suggestedRetailPrice,
-               poa.actionSteps, poa.tags, poa.batchId
+               poa."opportunityScore", poa.headline, poa."whyNow",
+               poa."estimatedMargin", poa."suggestedRetailPrice",
+               poa."actionSteps", poa.tags, poa."batchId"
         FROM product_opportunity_analysis poa
-        JOIN products p ON p.id = poa.productId
-        LEFT JOIN product_details pd ON pd.productId = p.id
+        JOIN products p ON p.id = poa."productId"
+        LEFT JOIN product_details pd ON pd."productId" = p.id
         LEFT JOIN factories f ON f.id = p.factoryId
-        WHERE poa.niche = ? AND poa.isActive = 1 AND p.status = 'active'
-          AND poa.opportunityScore >= ?
+        WHERE poa.niche = ? AND poa."isActive" = 1 AND p.status = 'active'
+          AND poa."opportunityScore" >= ?
           AND p.id NOT IN (
-            SELECT productId FROM user_radar_interactions
-            WHERE userId = ? AND action = 'dismissed'
+            SELECT "productId" FROM user_radar_interactions
+            WHERE "userId" = ? AND action = 'dismissed'
           )
       `;
       const params: any[] = [input.niche, minScore, ctx.user.id];
 
       if (priceMax) {
-        query += ' AND (pd.priceMax <= ? OR pd.priceMax IS NULL)';
+        query += ' AND (pd."priceMax" <= ? OR pd."priceMax" IS NULL)';
         params.push(priceMax);
       }
 
-      query += ' ORDER BY poa.opportunityScore DESC LIMIT ?';
+      query += ' ORDER BY poa."opportunityScore" DESC LIMIT ?';
       params.push(input.limit);
 
       const [rows] = await pool.execute(query, params) as any[];

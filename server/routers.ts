@@ -629,7 +629,7 @@ export const appRouter = router({
         try {
           const { getPool } = await import('./db');
           const pool = await getPool();
-          const [rows] = await pool.execute('SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1', [ctx.user.id]);
+          const [rows] = await pool.execute('SELECT * FROM user_business_profiles WHERE "userId" = ? LIMIT 1', [ctx.user.id]);
           const profile = (rows as any[])[0];
           if (profile) {
             const niches = (() => { try { return JSON.parse(profile.interestedNiches || '[]'); } catch { return []; } })();
@@ -670,12 +670,7 @@ IMPORTANT: Use this profile to personalize all responses. Address their specific
 6. 在回复末尾用 <!--STATE: {...} --> 格式返回状态更新
 
 JSON 格式示例：
-<!--STATE: {
-  "nextPhase": "price",
-  "progressPercent": 15,
-  "extractedPrefs": {
-    "productName": "口红管",
-    "productCategory": "美妆个护"
+<!--STATE: { nextPhase: "price", progressPercent: 15, extractedPrefs: { productName: "口红管", productCategory: "美妆个护"
   }
 } -->`;
 
@@ -1004,18 +999,10 @@ ${highlightText}
 ${transcriptSample}
 
 请生成一个 JSON 格式的脚本，包含以下字段:
-{
-  "hook": "开场钩子文案（3秒内抓住注意力）",
-  "segments": [
-    {
-      "timeRange": "0-3s",
-      "visual": "画面描述",
-      "voiceover": "配音文案",
-      "text": "字幕文字"
+{ hook: "开场钩子文案（3秒内抓住注意力）", segments: [
+    { timeRange: "0-3s", visual: "画面描述", voiceover: "配音文案", text: "字幕文字"
     }
-  ],
-  "cta": "行动号召文案",
-  "hashtags": ["相关标签"]
+  ], cta: "行动号召文案", hashtags: ["相关标签"]
 }
 
 要求:
@@ -3605,7 +3592,7 @@ Respond ONLY with valid JSON, no markdown.`;
         const { getPool } = await import('./db');
         const pool = await getPool();
         const [rows] = await pool.execute(
-          'SELECT slug, name, nameEn, parentSlug, level, description FROM product_categories WHERE isActive=1 ORDER BY level, name'
+          'SELECT slug, name, "nameEn", "parentSlug", level, description FROM product_categories WHERE "isActive"=1 ORDER BY level, name'
         );
         return rows;
       }),
@@ -3617,10 +3604,10 @@ Respond ONLY with valid JSON, no markdown.`;
         const pool = await getPool();
         const [rows] = await pool.execute(
           `SELECT
-             (SELECT COUNT(*) FROM product_categories WHERE isActive=1) as totalCategories,
-             (SELECT COUNT(*) FROM product_knowledge WHERE isActive=1) as totalKnowledge,
-             (SELECT COUNT(*) FROM product_knowledge WHERE isActive=1 AND embeddingVector IS NOT NULL) as vectorized,
-             (SELECT COUNT(DISTINCT knowledgeType) FROM product_knowledge WHERE isActive=1) as knowledgeTypes,
+             (SELECT COUNT(*) FROM product_categories WHERE "isActive"=1) as totalCategories,
+             (SELECT COUNT(*) FROM product_knowledge WHERE "isActive"=1) as totalKnowledge,
+             (SELECT COUNT(*) FROM product_knowledge WHERE "isActive"=1 AND "embeddingVector" IS NOT NULL) as vectorized,
+             (SELECT COUNT(DISTINCT knowledgeType) FROM product_knowledge WHERE "isActive"=1) as knowledgeTypes,
              (SELECT COALESCE(SUM(viewCount),0) FROM product_knowledge) as totalViews`
         );
         return rows[0];
@@ -3682,15 +3669,15 @@ Respond ONLY with valid JSON, no markdown.`;
       .query(async ({ input }) => {
         const { getPool } = await import('./db');
         const pool = await getPool();
-        const categoryFilter = input.categorySlug ? 'AND categorySlug = ?' : '';
+        const categoryFilter = input.categorySlug ? 'AND "categorySlug" = ?' : '';
         const params: any[] = input.categorySlug
           ? [input.categorySlug, input.limit]
           : [input.limit];
         const [rows] = await pool.execute(
-          `SELECT id, categorySlug, knowledgeType, title, content, confidence, viewCount
+          `SELECT id, "categorySlug", "knowledgeType", title, content, confidence, "viewCount"
            FROM product_knowledge
-           WHERE isActive=1 ${categoryFilter}
-           ORDER BY viewCount DESC, confidence DESC
+           WHERE "isActive"=1 ${categoryFilter}
+           ORDER BY "viewCount" DESC, confidence DESC
            LIMIT ?`,
           params
         );
@@ -4475,17 +4462,17 @@ Respond ONLY with valid JSON, no markdown.`;
         const pool = await getPool();
         await pool.execute(
           `INSERT INTO user_business_profiles
-            (userId, ambition, businessStage, targetPlatforms, interestedNiches, budget, mainChallenge, onboardingCompletedAt, createdAt, updatedAt)
+            ("userId", ambition, "businessStage", "targetPlatforms", "interestedNiches", budget, "mainChallenge", "onboardingCompletedAt", "createdAt", "updatedAt")
            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
-           ON CONFLICT (userId) DO UPDATE SET
+           ON CONFLICT ("userId") DO UPDATE SET
             ambition = EXCLUDED.ambition,
-            businessStage = EXCLUDED.businessStage,
-            targetPlatforms = EXCLUDED.targetPlatforms,
-            interestedNiches = EXCLUDED.interestedNiches,
+            "businessStage" = EXCLUDED."businessStage",
+            "targetPlatforms" = EXCLUDED."targetPlatforms",
+            "interestedNiches" = EXCLUDED."interestedNiches",
             budget = EXCLUDED.budget,
-            mainChallenge = EXCLUDED.mainChallenge,
-            onboardingCompletedAt = NOW(),
-            updatedAt = NOW()`,
+            "mainChallenge" = EXCLUDED."mainChallenge",
+            "onboardingCompletedAt" = NOW(),
+            "updatedAt" = NOW()`,
           [
             ctx.user.id,
             input.ambition,
@@ -4506,7 +4493,7 @@ Respond ONLY with valid JSON, no markdown.`;
       const { getPool } = await import('./db');
       const pool = await getPool();
       const [rows] = await pool.execute(
-        'SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1',
+        'SELECT * FROM user_business_profiles WHERE "userId" = ? LIMIT 1',
         [ctx.user.id]
       );
       return (rows as any[])[0] || null;
@@ -4517,7 +4504,7 @@ Respond ONLY with valid JSON, no markdown.`;
         const { getPool } = await import('./db');
         const pool = await getPool();
         await pool.execute(
-          'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(), updatedAt = NOW() WHERE userId = ?',
+          'UPDATE user_business_profiles SET "aiSummary" = ?, "lastInteractedAt" = NOW(), "updatedAt" = NOW() WHERE "userId" = ?',
           [input.aiSummary, ctx.user.id]
         );
         return { success: true };

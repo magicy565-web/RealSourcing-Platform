@@ -342,7 +342,7 @@ export async function calculateFtgiScore(factoryId: number): Promise<FtgiScoreRe
   const database = await getDb();
   await database.insert(schema.factoryFtgiScores)
     .values({ factoryId, status: "calculating", updatedAt: new Date() })
-    .onDuplicateKeyUpdate({ set: { status: "calculating", updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: schema.factoryFtgiScores.factoryId, set: { status: "calculating", updatedAt: new Date() } });
 
   try {
     // 2. 收集工厂所有数据
@@ -396,7 +396,8 @@ export async function calculateFtgiScore(factoryId: number): Promise<FtgiScoreRe
         calculatedAt:  new Date(),
         updatedAt:     new Date(),
       })
-      .onDuplicateKeyUpdate({
+      .onConflictDoUpdate({
+        target: schema.factoryFtgiScores.factoryId,
         set: {
           d1Trust:       String(dimensionScores.d1Trust.score),
           d2Fulfillment: String(dimensionScores.d2Fulfillment.score),
@@ -427,7 +428,7 @@ export async function calculateFtgiScore(factoryId: number): Promise<FtgiScoreRe
     const database = await getDb();
     await database.insert(schema.factoryFtgiScores)
       .values({ factoryId, status: "failed", errorMessage: errorMsg, updatedAt: new Date() })
-      .onDuplicateKeyUpdate({ set: { status: "failed", errorMessage: errorMsg, updatedAt: new Date() } });
+      .onConflictDoUpdate({ target: schema.factoryFtgiScores.factoryId, set: { status: "failed", errorMessage: errorMsg, updatedAt: new Date() } });
     console.error(`[FTGI] Score calculation failed for factory ${factoryId}:`, err);
     throw err;
   }

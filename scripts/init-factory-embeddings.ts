@@ -195,7 +195,8 @@ async function main() {
           primaryCategory: normalizedCategory,
           isActive:        1,
           embeddingAt:     new Date(),
-        }).onDuplicateKeyUpdate({
+        }).onConflictDoUpdate({
+          target: schema.factoryCapabilityEmbeddings.factoryId,
           set: {
             capabilityText,
             embeddingVector: JSON.stringify(vector),
