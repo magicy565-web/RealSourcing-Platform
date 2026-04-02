@@ -1,25 +1,41 @@
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, like, or } from "drizzle-orm";
 
-let pool: mysql.Pool;
+let pool: pg.Pool;
 let db: ReturnType<typeof drizzle<typeof schema>>;
 
 async function initDb() {
   if (!pool) {
-    pool = mysql.createPool(process.env.DATABASE_URL!);
-    db = drizzle(pool, { schema, mode: "default" }) as any;
+    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL! });
+    db = drizzle(pool, { schema }) as any;
   }
   return db;
 }
 
 const dbPromise = initDb();
 
-// 获取底层 mysql2 pool（用于执行原始 SQL）
-export async function getPool(): Promise<mysql.Pool> {
-  await dbPromise; // 确保 pool 已初始化
-  return pool;
+// 获取底层 pg pool（用于执行原始 SQL）— 兼容层：返回对象带 execute/query 方法，自动将 ? 占位符转为 $1,$2,...
+function convertPlaceholders(sqlStr: string): string {
+  let i = 0;
+  return sqlStr.replace(/\?/g, () => `$${++i}`);
+}
+
+export async function getPool() {
+  await dbPromise;
+  // 返回兼容 mysql2 的 execute/query 接口
+  return {
+    async execute(sqlStr: string, params?: any[]): Promise<[any[], any]> {
+      const res = await pool.query(convertPlaceholders(sqlStr), params);
+      return [res.rows, res.fields];
+    },
+    async query(sqlStr: string, params?: any[]): Promise<[any[], any]> {
+      const res = await pool.query(convertPlaceholders(sqlStr), params);
+      return [res.rows, res.fields];
+    },
+    end: () => pool.end(),
+  };
 }
 
 export { db, dbPromise };

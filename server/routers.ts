@@ -627,10 +627,9 @@ export const appRouter = router({
         // 读取用户商业画像，注入 AI 上下文
         let userProfileContext = '';
         try {
-          const mysql = require('mysql2/promise');
-          const conn = await mysql.createConnection(process.env.DATABASE_URL);
-          const [rows] = await conn.execute('SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1', [ctx.user.id]);
-          await conn.end();
+          const { getPool } = await import('./db');
+          const pool = await getPool();
+          const [rows] = await pool.execute('SELECT * FROM user_business_profiles WHERE userId = ? LIMIT 1', [ctx.user.id]);
           const profile = (rows as any[])[0];
           if (profile) {
             const niches = (() => { try { return JSON.parse(profile.interestedNiches || '[]'); } catch { return []; } })();
@@ -3603,39 +3602,20 @@ Respond ONLY with valid JSON, no markdown.`;
     // 获取所有产品类目（公开）
     getCategories: publicProcedure
       .query(async () => {
-        const { createConnection } = await import('mysql2/promise');
-        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing. Set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME environment variables.' });
-        }
-        const conn = await createConnection({
-          host: process.env.DB_HOST,
-          port: 3306,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          database: process.env.DB_NAME,
-        });
-        const [rows] = await conn.execute<any[]>(
+        const { getPool } = await import('./db');
+        const pool = await getPool();
+        const [rows] = await pool.execute(
           'SELECT slug, name, nameEn, parentSlug, level, description FROM product_categories WHERE isActive=1 ORDER BY level, name'
         );
-        await conn.end();
         return rows;
       }),
 
     // 获取知识库统计（需登录）
     getStats: protectedProcedure
       .query(async () => {
-        const { createConnection } = await import('mysql2/promise');
-        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing.' });
-        }
-        const conn = await createConnection({
-          host: process.env.DB_HOST,
-          port: 3306,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          database: process.env.DB_NAME,
-        });
-        const [rows] = await conn.execute<any[]>(
+        const { getPool } = await import('./db');
+        const pool = await getPool();
+        const [rows] = await pool.execute(
           `SELECT
              (SELECT COUNT(*) FROM product_categories WHERE isActive=1) as totalCategories,
              (SELECT COUNT(*) FROM product_knowledge WHERE isActive=1) as totalKnowledge,
@@ -3643,7 +3623,6 @@ Respond ONLY with valid JSON, no markdown.`;
              (SELECT COUNT(DISTINCT knowledgeType) FROM product_knowledge WHERE isActive=1) as knowledgeTypes,
              (SELECT COALESCE(SUM(viewCount),0) FROM product_knowledge) as totalViews`
         );
-        await conn.end();
         return rows[0];
       }),
 
@@ -3701,22 +3680,13 @@ Respond ONLY with valid JSON, no markdown.`;
         categorySlug: z.string().optional(),
       }))
       .query(async ({ input }) => {
-        const { createConnection } = await import('mysql2/promise');
-        if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database configuration missing.' });
-        }
-        const conn = await createConnection({
-          host: process.env.DB_HOST,
-          port: 3306,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          database: process.env.DB_NAME,
-        });
+        const { getPool } = await import('./db');
+        const pool = await getPool();
         const categoryFilter = input.categorySlug ? 'AND categorySlug = ?' : '';
         const params: any[] = input.categorySlug
           ? [input.categorySlug, input.limit]
           : [input.limit];
-        const [rows] = await conn.execute<any[]>(
+        const [rows] = await pool.execute(
           `SELECT id, categorySlug, knowledgeType, title, content, confidence, viewCount
            FROM product_knowledge
            WHERE isActive=1 ${categoryFilter}
@@ -3724,7 +3694,6 @@ Respond ONLY with valid JSON, no markdown.`;
            LIMIT ?`,
           params
         );
-        await conn.end();
         return rows;
       }),
 
@@ -4507,16 +4476,16 @@ Respond ONLY with valid JSON, no markdown.`;
         await pool.execute(
           `INSERT INTO user_business_profiles
             (userId, ambition, businessStage, targetPlatforms, interestedNiches, budget, mainChallenge, onboardingCompletedAt, createdAt, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3), NOW(3))
-           ON DUPLICATE KEY UPDATE
-            ambition = VALUES(ambition),
-            businessStage = VALUES(businessStage),
-            targetPlatforms = VALUES(targetPlatforms),
-            interestedNiches = VALUES(interestedNiches),
-            budget = VALUES(budget),
-            mainChallenge = VALUES(mainChallenge),
-            onboardingCompletedAt = NOW(3),
-            updatedAt = NOW(3)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
+           ON CONFLICT (userId) DO UPDATE SET
+            ambition = EXCLUDED.ambition,
+            businessStage = EXCLUDED.businessStage,
+            targetPlatforms = EXCLUDED.targetPlatforms,
+            interestedNiches = EXCLUDED.interestedNiches,
+            budget = EXCLUDED.budget,
+            mainChallenge = EXCLUDED.mainChallenge,
+            onboardingCompletedAt = NOW(),
+            updatedAt = NOW()`,
           [
             ctx.user.id,
             input.ambition,
@@ -4548,7 +4517,7 @@ Respond ONLY with valid JSON, no markdown.`;
         const { getPool } = await import('./db');
         const pool = await getPool();
         await pool.execute(
-          'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(3), updatedAt = NOW(3) WHERE userId = ?',
+          'UPDATE user_business_profiles SET aiSummary = ?, lastInteractedAt = NOW(), updatedAt = NOW() WHERE userId = ?',
           [input.aiSummary, ctx.user.id]
         );
         return { success: true };

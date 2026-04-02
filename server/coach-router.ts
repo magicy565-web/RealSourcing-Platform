@@ -350,7 +350,7 @@ export const coachRouter = router({
       if (sessionId) {
         await pool.execute(
           `UPDATE ai_coach_sessions 
-           SET messages = ?, topicsDiscussed = ?, updatedAt = NOW(3)
+           SET messages = ?, topicsDiscussed = ?, updatedAt = NOW()
            WHERE id = ? AND userId = ?`,
           [
             JSON.stringify(updatedMessages),
@@ -363,7 +363,7 @@ export const coachRouter = router({
         const [result] = await pool.execute(
           `INSERT INTO ai_coach_sessions 
            (userId, niche, coachName, messages, profileSnapshot, topicsDiscussed, createdAt, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
+           VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
             ctx.user.id,
             primaryNiche,
@@ -446,7 +446,7 @@ export const coachRouter = router({
       // Insert feedback record
       await pool.execute(
         `INSERT INTO ai_coach_feedback (sessionId, userId, messageIdx, feedback, comment, createdAt)
-         VALUES (?, ?, ?, ?, ?, NOW(3))`,
+         VALUES (?, ?, ?, ?, ?, NOW())`,
         [input.sessionId, ctx.user.id, input.messageIdx, input.feedback, input.comment || null]
       );
 
@@ -475,8 +475,8 @@ export const coachRouter = router({
       const pool = await getPool();
       await pool.execute(
         `INSERT INTO ai_coach_settings (userId, coachName, createdAt, updatedAt)
-         VALUES (?, ?, NOW(3), NOW(3))
-         ON DUPLICATE KEY UPDATE coachName = VALUES(coachName), updatedAt = NOW(3)`,
+         VALUES (?, ?, NOW(), NOW())
+         ON CONFLICT (userId) DO UPDATE SET coachName = EXCLUDED.coachName, updatedAt = NOW()`,
         [ctx.user.id, input.coachName]
       );
       return { success: true };

@@ -134,7 +134,7 @@ export const opportunityRadarRouter = router({
         'poa.isActive = 1',
         'poa.niche = ?',
         'poa.opportunityScore >= ?',
-        'p.status = "active"',
+        "p.status = 'active'",
       ];
       const params: any[] = [input.niche, input.minScore];
 
@@ -281,20 +281,20 @@ export const opportunityRadarRouter = router({
            targetPlatforms, preferredStyles, preferredMaterials,
            maxMoq, maxLeadTimeDays, showNewOnly, sortBy, notifyOnNewBatch,
            createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))
-        ON DUPLICATE KEY UPDATE
-          priceRangeMin = VALUES(priceRangeMin),
-          priceRangeMax = VALUES(priceRangeMax),
-          minOpportunityScore = VALUES(minOpportunityScore),
-          targetPlatforms = VALUES(targetPlatforms),
-          preferredStyles = VALUES(preferredStyles),
-          preferredMaterials = VALUES(preferredMaterials),
-          maxMoq = VALUES(maxMoq),
-          maxLeadTimeDays = VALUES(maxLeadTimeDays),
-          showNewOnly = VALUES(showNewOnly),
-          sortBy = VALUES(sortBy),
-          notifyOnNewBatch = VALUES(notifyOnNewBatch),
-          updatedAt = NOW(3)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON CONFLICT (userId) DO UPDATE SET
+          priceRangeMin = EXCLUDED.priceRangeMin,
+          priceRangeMax = EXCLUDED.priceRangeMax,
+          minOpportunityScore = EXCLUDED.minOpportunityScore,
+          targetPlatforms = EXCLUDED.targetPlatforms,
+          preferredStyles = EXCLUDED.preferredStyles,
+          preferredMaterials = EXCLUDED.preferredMaterials,
+          maxMoq = EXCLUDED.maxMoq,
+          maxLeadTimeDays = EXCLUDED.maxLeadTimeDays,
+          showNewOnly = EXCLUDED.showNewOnly,
+          sortBy = EXCLUDED.sortBy,
+          notifyOnNewBatch = EXCLUDED.notifyOnNewBatch,
+          updatedAt = NOW()
       `, [
         ctx.user.id,
         input.priceRangeMin ?? null,
@@ -321,7 +321,7 @@ export const opportunityRadarRouter = router({
     .mutation(async ({ input, ctx }) => {
       const pool = await getDb();
       await pool.execute(
-        'INSERT INTO user_radar_interactions (userId, productId, action, createdAt) VALUES (?, ?, ?, NOW(3))',
+        'INSERT INTO user_radar_interactions (userId, productId, action, createdAt) VALUES (?, ?, ?, NOW())',
         [ctx.user.id, input.productId, input.action]
       );
       return { success: true };
@@ -365,26 +365,26 @@ export const opportunityRadarRouter = router({
           (productId, niche, opportunityScore, trendScore, marginScore, competitionScore, demandScore,
            headline, whyNow, targetAudience, suggestedPlatforms, actionSteps, risks,
            estimatedMargin, suggestedRetailPrice, keywords, tags, batchId, isActive, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(3), NOW(3))
-        ON DUPLICATE KEY UPDATE
-          opportunityScore = VALUES(opportunityScore),
-          trendScore = VALUES(trendScore),
-          marginScore = VALUES(marginScore),
-          competitionScore = VALUES(competitionScore),
-          demandScore = VALUES(demandScore),
-          headline = VALUES(headline),
-          whyNow = VALUES(whyNow),
-          targetAudience = VALUES(targetAudience),
-          suggestedPlatforms = VALUES(suggestedPlatforms),
-          actionSteps = VALUES(actionSteps),
-          risks = VALUES(risks),
-          estimatedMargin = VALUES(estimatedMargin),
-          suggestedRetailPrice = VALUES(suggestedRetailPrice),
-          keywords = VALUES(keywords),
-          tags = VALUES(tags),
-          batchId = VALUES(batchId),
-          analysisVersion = analysisVersion + 1,
-          updatedAt = NOW(3)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+        ON CONFLICT (productId) DO UPDATE SET
+          opportunityScore = EXCLUDED.opportunityScore,
+          trendScore = EXCLUDED.trendScore,
+          marginScore = EXCLUDED.marginScore,
+          competitionScore = EXCLUDED.competitionScore,
+          demandScore = EXCLUDED.demandScore,
+          headline = EXCLUDED.headline,
+          whyNow = EXCLUDED.whyNow,
+          targetAudience = EXCLUDED.targetAudience,
+          suggestedPlatforms = EXCLUDED.suggestedPlatforms,
+          actionSteps = EXCLUDED.actionSteps,
+          risks = EXCLUDED.risks,
+          estimatedMargin = EXCLUDED.estimatedMargin,
+          suggestedRetailPrice = EXCLUDED.suggestedRetailPrice,
+          keywords = EXCLUDED.keywords,
+          tags = EXCLUDED.tags,
+          batchId = EXCLUDED.batchId,
+          analysisVersion = product_opportunity_analysis.analysisVersion + 1,
+          updatedAt = NOW()
       `, [
         input.productId, input.niche,
         analysis.opportunityScore, analysis.trendScore, analysis.marginScore,
@@ -452,17 +452,17 @@ export const opportunityRadarRouter = router({
               (productId, niche, opportunityScore, trendScore, marginScore, competitionScore, demandScore,
                headline, whyNow, targetAudience, suggestedPlatforms, actionSteps, risks,
                estimatedMargin, suggestedRetailPrice, keywords, tags, batchId, isActive, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(3), NOW(3))
-            ON DUPLICATE KEY UPDATE
-              opportunityScore = VALUES(opportunityScore), trendScore = VALUES(trendScore),
-              marginScore = VALUES(marginScore), competitionScore = VALUES(competitionScore),
-              demandScore = VALUES(demandScore), headline = VALUES(headline),
-              whyNow = VALUES(whyNow), targetAudience = VALUES(targetAudience),
-              suggestedPlatforms = VALUES(suggestedPlatforms), actionSteps = VALUES(actionSteps),
-              risks = VALUES(risks), estimatedMargin = VALUES(estimatedMargin),
-              suggestedRetailPrice = VALUES(suggestedRetailPrice),
-              keywords = VALUES(keywords), tags = VALUES(tags),
-              batchId = VALUES(batchId), analysisVersion = analysisVersion + 1, updatedAt = NOW(3)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+            ON CONFLICT (productId) DO UPDATE SET
+              opportunityScore = EXCLUDED.opportunityScore, trendScore = EXCLUDED.trendScore,
+              marginScore = EXCLUDED.marginScore, competitionScore = EXCLUDED.competitionScore,
+              demandScore = EXCLUDED.demandScore, headline = EXCLUDED.headline,
+              whyNow = EXCLUDED.whyNow, targetAudience = EXCLUDED.targetAudience,
+              suggestedPlatforms = EXCLUDED.suggestedPlatforms, actionSteps = EXCLUDED.actionSteps,
+              risks = EXCLUDED.risks, estimatedMargin = EXCLUDED.estimatedMargin,
+              suggestedRetailPrice = EXCLUDED.suggestedRetailPrice,
+              keywords = EXCLUDED.keywords, tags = EXCLUDED.tags,
+              batchId = EXCLUDED.batchId, analysisVersion = product_opportunity_analysis.analysisVersion + 1, updatedAt = NOW()
           `, [
             id, input.niche,
             analysis.opportunityScore, analysis.trendScore, analysis.marginScore,
@@ -483,8 +483,8 @@ export const opportunityRadarRouter = router({
       // Update/create batch record
       await pool.execute(`
         INSERT INTO radar_batches (id, niche, productCount, isPublished, publishedAt, createdAt)
-        VALUES (?, ?, ?, 1, NOW(3), NOW(3))
-        ON DUPLICATE KEY UPDATE productCount = productCount + ?, updatedAt = NOW(3)
+        VALUES (?, ?, ?, 1, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET productCount = radar_batches.productCount + ?, updatedAt = NOW()
       `, [input.batchId, input.niche, analyzed, analyzed]);
 
       return { success: true, analyzed, failed, total: products.length };
@@ -534,8 +534,8 @@ export const opportunityRadarRouter = router({
       const pool = await getDb();
       await pool.execute(`
         INSERT INTO user_radar_preferences (userId, lastSeenBatchId, createdAt, updatedAt)
-        VALUES (?, ?, NOW(3), NOW(3))
-        ON DUPLICATE KEY UPDATE lastSeenBatchId = VALUES(lastSeenBatchId), updatedAt = NOW(3)
+        VALUES (?, ?, NOW(), NOW())
+        ON CONFLICT (userId) DO UPDATE SET lastSeenBatchId = EXCLUDED.lastSeenBatchId, updatedAt = NOW()
       `, [ctx.user.id, input.batchId]);
       return { success: true };
     }),
