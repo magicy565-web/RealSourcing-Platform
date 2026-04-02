@@ -385,7 +385,7 @@ export const coachRouter = router({
           const [oppRows] = await pool.execute(
             `SELECT oi.id, oi.name, oi."opportunityScore", oi."estimatedMargin",
                     oi."priceMin", oi."priceMax", oi.moq, oi.headline, oi."coverImage", oi.tags,
-                    f.name as factoryName
+                    f.name as "factoryName"
              FROM opportunity_items oi
              LEFT JOIN opportunity_batches ob ON oi."batchId" = ob.id
              LEFT JOIN factories f ON oi."factoryId" = f.id

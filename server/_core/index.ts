@@ -128,6 +128,11 @@ async function startServer() {
   // Open Claw Agent REST API (心跳上报 + RFQ 回调)
   app.use('/api/v1', clawAgentRouter);
 
+  // Daily Automation Pipeline (localhost only)
+  const { createAutomationRouter } = await import('./automation');
+  app.use('/api/internal', createAutomationRouter());
+  console.log('[Automation] Internal API registered at /api/internal/*');
+
   // Agora Cloud Recording Webhook
   // 声网录制完成后回调，提取真实 S3 URL 写入数据库
   const { updateMeeting } = await import("../db");
